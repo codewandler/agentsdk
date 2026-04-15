@@ -1,0 +1,17 @@
+# core packages
+
+tool/              - Tool interface, Result types, error handling
+markdown/          - Frontmatter parsing, instruction file loading
+instructions/      - AGENTS.md / CLAUDE.md loader
+plugin/            - Minimal plugin interfaces (ToolsPlugin only)
+skill/             - Skill metadata & discovery
+tools/
+  ├─ filesystem/   - file_read, file_write, glob, grep, edit, tree, stat, delete
+  ├─ shell/        - bash execution
+  ├─ git/          - git_status, git_diff
+  ├─ web/          - web_fetch, web_search (optional)
+  ├─ notify/       - notifications, TTS
+  ├─ toolmgmt/     - tool management utilities
+  └─ turn/         - turn/session helpers
+internal/          - Internal helpers (humanize, diff)
+examples/          - Usage examples
