@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentcore/tool"
-	rttool "github.com/codewandler/flai/runtime/tool"
+	"github.com/codewandler/agentcore/interfaces"
 )
 
 // KeyActivationState is the Extra() key under which tools_* look up the ActivationState.
@@ -29,12 +29,12 @@ type ToolDeactivateParams struct {
 
 // activation extracts the ActivationState from ctx.Extra(), returning a clear
 // error when it is missing (mis-configured injection).
-func activation(ctx tool.Ctx) (*rttool.ActivationState, error) {
+func activation(ctx tool.Ctx) (interfaces.ActivationState, error) {
 	v, ok := ctx.Extra()[KeyActivationState]
 	if !ok {
 		return nil, fmt.Errorf("tools_* tools require flai.activation_state in Extra(); check agent wiring")
 	}
-	state, ok := v.(*rttool.ActivationState)
+	state, ok := v.(interfaces.ActivationState)
 	if !ok {
 		return nil, fmt.Errorf("flai.activation_state has unexpected type %T", v)
 	}

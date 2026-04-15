@@ -13,7 +13,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 
 	"github.com/codewandler/agentcore/tool"
-	"github.com/codewandler/flai/core/websearch"
+	"github.com/codewandler/agentcore/interfaces"
 	"github.com/codewandler/agentcore/internal/humanize"
 )
 
@@ -61,7 +61,7 @@ type WebSearchParams struct {
 
 // Tools returns the web tools.
 // If provider is nil, web_search is omitted from the returned slice.
-func Tools(provider websearch.Provider) []tool.Tool {
+func Tools(provider interfaces.WebSearchProvider) []tool.Tool {
 	tools := []tool.Tool{webFetch()}
 	if provider != nil {
 		tools = append(tools, webSearch(provider))
@@ -168,7 +168,7 @@ func webFetch() tool.Tool {
 
 // ── web_search ────────────────────────────────────────────────────────────────
 
-func webSearch(provider websearch.Provider) tool.Tool {
+func webSearch(provider interfaces.WebSearchProvider) tool.Tool {
 	desc := fmt.Sprintf("Search the web using %s. Returns titles, URLs, and snippets.", provider.Name())
 	return tool.New("web_search", desc,
 		func(ctx tool.Ctx, p WebSearchParams) (tool.Result, error) {
@@ -182,7 +182,7 @@ func webSearch(provider websearch.Provider) tool.Tool {
 			if n > maxSearchResults {
 				n = maxSearchResults
 			}
-			results, err := provider.Search(ctx, p.Query, websearch.SearchOptions{MaxResults: n})
+			results, err := provider.Search(ctx, p.Query, interfaces.SearchOptions{MaxResults: n})
 			if err != nil {
 				return tool.Errorf("search failed: %v", err), nil
 			}
@@ -226,7 +226,7 @@ func (r *fetchResult) MarshalJSON() ([]byte, error) {
 
 type searchResult struct {
 	Query   string             `json:"query"`
-	Results []websearch.Result `json:"results"`
+	Results []interfaces.Result `json:"results"`
 }
 
 func (r *searchResult) IsError() bool { return false }

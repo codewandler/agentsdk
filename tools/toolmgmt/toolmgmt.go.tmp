@@ -1,0 +1,11 @@
+func activation(ctx tool.Ctx) (interfaces.ActivationState, error) {
+	v, ok := ctx.Extra()[KeyActivationState]
+	if !ok {
+		return nil, fmt.Errorf("tools_* tools require flai.activation_state in Extra(); check agent wiring")
+	}
+	state, ok := v.(*interfaces.ActivationState)
+	if !ok {
+		return nil, fmt.Errorf("flai.activation_state has unexpected type %T", v)
+	}
+	return state, nil
+}
