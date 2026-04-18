@@ -1,5 +1,5 @@
-// Package frontmatter provides shared YAML frontmatter parsing for flai.
-package frontmatter
+// Package markdown provides markdown-related helpers, including YAML frontmatter parsing and streaming block buffering.
+package markdown
 
 import (
 	"bufio"

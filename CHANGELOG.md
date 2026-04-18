@@ -2,6 +2,28 @@
 
 All notable changes to codewandler/agentcore are documented in this file.
 
+## [0.2.0] - 2026-04-18
+
+### Added
+- Streaming markdown buffer in 
+- Callback-based stable top-level markdown block emission
+- Buffer API: , , , , , and 
+- Configurable markdown parser injection via 
+- Extensive regression tests for streaming markdown behavior
+- Markdown buffer implementation plan in 
+
+### Changed
+- Cleaned up the  package to consistently use 
+- Renamed frontmatter files to  and 
+- Hardened markdown buffer concurrency behavior with serialized callback delivery
+- Improved writer semantics so accepted writes return  on internal failure
+- Documented the markdown buffer emission contract and streaming behavior
+
+### Fixed
+- Preserved whitespace-only buffered tails on 
+- Prevented invalid buffer internal state from panicking by returning a proper error
+- Added conservative fenced-code handling for partial streaming markdown
+
 ## [0.1.0] - 2025-04-16
 
 ### Initial Release
@@ -104,4 +126,5 @@ See `MIGRATION_PLAN.md` in flai repository for integration steps.
 - v0.3.0: Additional tool categories, plugin framework improvements
 - v1.0.0: Stable API, flai integration complete
 
+[0.2.0]: https://github.com/codewandler/agentcore/releases/tag/v0.2.0
 [0.1.0]: https://github.com/codewandler/agentcore/releases/tag/v0.1.0
