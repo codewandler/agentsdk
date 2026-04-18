@@ -15,8 +15,8 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	ignore "github.com/sabhiram/go-gitignore"
 
-	"github.com/codewandler/agentcore/tool"
 	"github.com/codewandler/agentcore/internal/humanize"
+	"github.com/codewandler/agentcore/tool"
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -67,8 +67,9 @@ type FileReadParams struct {
 }
 
 type FileWriteParams struct {
-	Path    string `json:"path" jsonschema:"description=File path to write,required"`
-	Content string `json:"content" jsonschema:"description=Complete file content,required"`
+	Path      string `json:"path" jsonschema:"description=File path to write,required"`
+	Content   string `json:"content" jsonschema:"description=Complete file content,required"`
+	Overwrite bool   `json:"overwrite,omitempty" jsonschema:"description=Overwrite file if it already exists (default false)"`
 }
 
 type FileStatParams struct {
@@ -539,7 +540,7 @@ func readRanges(allLines []string, ranges []LineRange, defLimit int, rangesWereS
 
 func fileWrite() tool.Tool {
 	return tool.New("file_write",
-		"Write content to a file, creating it if it doesn't exist. Creates parent directories as needed.",
+		"Write content to a file, creating it if it doesn't exist. Fails if file exists unless overwrite=true. Creates parent directories as needed.",
 		func(ctx tool.Ctx, p FileWriteParams) (tool.Result, error) {
 			if p.Path == "" {
 				return tool.Error("path cannot be empty"), nil
@@ -548,6 +549,10 @@ func fileWrite() tool.Tool {
 				return tool.Errorf("content too large (%s, max 1MB)", humanize.Size(int64(len(p.Content)))), nil
 			}
 			path := resolvePath(p.Path, ctx.WorkDir())
+			// Check if file exists and overwrite is not set
+			if _, err := os.Stat(path); err == nil && !p.Overwrite {
+				return tool.Errorf("file already exists: %s (use overwrite=true to replace)", path), nil
+			}
 			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 				return nil, fmt.Errorf("create dirs: %w", err)
 			}
@@ -922,8 +927,6 @@ func countFileLines(path string) (int, error) {
 	}
 	return n, scanner.Err()
 }
-
-
 
 func humanTime(t time.Time) string {
 	return humanDuration(time.Since(t))
