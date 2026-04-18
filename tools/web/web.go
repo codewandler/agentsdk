@@ -12,9 +12,9 @@ import (
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 
-	"github.com/codewandler/agentcore/tool"
 	"github.com/codewandler/agentcore/interfaces"
 	"github.com/codewandler/agentcore/internal/humanize"
+	"github.com/codewandler/agentcore/tool"
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ func (r *fetchResult) MarshalJSON() ([]byte, error) {
 }
 
 type searchResult struct {
-	Query   string             `json:"query"`
+	Query   string              `json:"query"`
 	Results []interfaces.Result `json:"results"`
 }
 
@@ -263,4 +263,3 @@ func simplifyMIME(ct string) string {
 	}
 	return ct
 }
-

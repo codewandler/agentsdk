@@ -42,6 +42,28 @@ for _, t := range append(fsTools, todoTools...) {
 }
 ```
 
+## Web tools
+
+The `tools/web` package provides:
+
+- `web_fetch` — always available when you register the web tools
+- `web_search` — available when you pass a search provider
+
+Agentcore also includes a Tavily provider at `github.com/codewandler/agentcore/tools/web/tavily` and a small env-based selector:
+
+```go
+provider := web.DefaultSearchProviderFromEnv()
+webTools := web.Tools(provider)
+```
+
+Environment variables:
+
+- `TAVILY_API_KEY` — enables the default Tavily-backed web search provider
+- `WEBSEARCH_PROVIDER=tavily` — explicitly select Tavily
+- `WEBSEARCH_PROVIDER=none` — disable web search while keeping `web_fetch` available
+
+This keeps provider selection centralized and makes future provider swaps easy for consumers.
+
 ## Status
 
 🚧 Under development — extracted from flai as a portable foundation.

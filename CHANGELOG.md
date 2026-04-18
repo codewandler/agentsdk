@@ -2,6 +2,17 @@
 
 All notable changes to codewandler/agentcore are documented in this file.
 
+## [0.2.1] - 2026-04-19
+
+### Added
+- Tavily web search provider at `tools/web/tavily` with request/response mapping to `interfaces.WebSearchProvider`
+- Env-based default provider selector via `web.DefaultSearchProviderFromEnv()`
+- Focused tests for Tavily provider behavior and default provider selection
+
+### Changed
+- Centralized default web search provider wiring in `tools/web` so consumers can enable a default backend without hardcoding provider construction
+- Default provider policy now supports `TAVILY_API_KEY`, `WEBSEARCH_PROVIDER=tavily`, and `WEBSEARCH_PROVIDER=none`
+
 ## [0.2.0] - 2026-04-18
 
 ### Added
