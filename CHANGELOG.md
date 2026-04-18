@@ -2,6 +2,28 @@
 
 All notable changes to codewandler/agentcore are documented in this file.
 
+## [0.2.0] - 2026-04-18
+
+### Added
+- Streaming markdown buffer in 
+- Callback-based stable top-level markdown block emission
+- Buffer API: , , , , , and 
+- Configurable markdown parser injection via 
+- Extensive regression tests for streaming markdown behavior
+- Markdown buffer implementation plan in 
+
+### Changed
+- Cleaned up the  package to consistently use 
+- Renamed frontmatter files to  and 
+- Hardened markdown buffer concurrency behavior with serialized callback delivery
+- Improved writer semantics so accepted writes return  on internal failure
+- Documented the markdown buffer emission contract and streaming behavior
+
+### Fixed
+- Preserved whitespace-only buffered tails on 
+- Prevented invalid buffer internal state from panicking by returning a proper error
+- Added conservative fenced-code handling for partial streaming markdown
+
 ## [0.1.0] - 2025-04-16
 
 ### Initial Release
@@ -21,12 +43,12 @@ This is the first public release of codewandler/agentcore, extracted from flai a
 - Markdown file reading and parsing utilities
 
 #### Standard Tools (7 categories, 8+ tools)
-- **Filesystem** (8 tools): `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `dir_list`, `dir_tree`, `file_stat`, `file_delete`
-- **Shell**: `bash` execution tool
-- **Git**: `git_status`, `git_diff` 
-- **Web**: `web_fetch`, `web_search` (with pluggable provider interface)
+- **Filesystem** (8 tools): , , , , , , , , 
+- **Shell**:  execution tool
+- **Git**: , 
+- **Web**: ,  (with pluggable provider interface)
 - **Notifications**: System notifications, audio alerts, TTS support
-- **Tool Management**: `tools_list`, `tools_activate`, `tools_deactivate`
+- **Tool Management**: , , 
 - **Utilities**: Turn/session helpers
 
 #### Skill System
@@ -35,9 +57,9 @@ This is the first public release of codewandler/agentcore, extracted from flai a
 - Skill reference resolution
 
 #### Portable Interfaces (NEW)
-- `interfaces/ActivationState` - Tool activation/deactivation contract
-- `interfaces/WebSearchProvider` - Web search provider interface
-- `interfaces/SearchOptions` & `interfaces/Result` - Web search types
+-  - Tool activation/deactivation contract
+-  - Web search provider interface
+-  &  - Web search types
 - Enables agentcore tools to work with any runtime implementation
 
 #### Internal Utilities
@@ -54,33 +76,46 @@ This is the first public release of codewandler/agentcore, extracted from flai a
 
 ### Key Design Decisions
 
-1. **Removed**: `plugin/plugin.go` - Plugin system is SDK concern, moved to flai
-2. **Created**: `interfaces/` package - Portable contracts for runtime features
+1. **Removed**:  - Plugin system is SDK concern, moved to flai
+2. **Created**:  package - Portable contracts for runtime features
 3. **Decoupled**: All tools use interfaces instead of importing flai packages
 
 ### Commit History
 
-- `2bbc7c5` - refactor: Remove all flai dependencies, create portable interfaces
-- `0a3d220` - Fix: Update to correct module path github.com/codewandler/agentcore
-- `f7ab5ff` - Fix: Update module name to github.com/codewandler/agentcore
-- `0250bfb` - Initial commit: Extract core tool system from flai
+-  - refactor: Remove all flai dependencies, create portable interfaces
+-  - Fix: Update to correct module path github.com/codewandler/agentcore
+-  - Fix: Update module name to github.com/codewandler/agentcore
+-  - Initial commit: Extract core tool system from flai
 
 ### Dependencies
 
 **Runtime** (5 packages):
-- `gopkg.in/yaml.v3` - YAML frontmatter parsing
-- `github.com/invopop/jsonschema` - Tool schema generation
-- `github.com/bmatcuk/doublestar/v4` - Glob pattern matching
-- `github.com/sabhiram/go-gitignore` - .gitignore handling
+-  - YAML frontmatter parsing
+-  - Tool schema generation
+-  - Glob pattern matching
+-  - .gitignore handling
 
 **Testing** (1 package):
-- `github.com/stretchr/testify` - Assertion and testing utilities
+-  - Assertion and testing utilities
 
 ### Testing
 
 - All 60+ tests passing
-- Build verified: `go build ./...` ✓
-- Tests verified: `go test ./...` ✓
+- Build verified:  ✓
+- Tests verified: ?   	github.com/codewandler/agentcore/interfaces	[no test files]
+ok  	github.com/codewandler/agentcore/internal/diff	(cached)
+ok  	github.com/codewandler/agentcore/internal/humanize	(cached)
+ok  	github.com/codewandler/agentcore/markdown	(cached)
+ok  	github.com/codewandler/agentcore/skill	(cached)
+ok  	github.com/codewandler/agentcore/tool	(cached)
+ok  	github.com/codewandler/agentcore/tools/filesystem	(cached)
+ok  	github.com/codewandler/agentcore/tools/git	(cached)
+ok  	github.com/codewandler/agentcore/tools/notify	(cached)
+ok  	github.com/codewandler/agentcore/tools/shell	(cached)
+ok  	github.com/codewandler/agentcore/tools/todo	(cached)
+ok  	github.com/codewandler/agentcore/tools/toolmgmt	(cached)
+ok  	github.com/codewandler/agentcore/tools/turn	(cached)
+ok  	github.com/codewandler/agentcore/tools/web	(cached) ✓
 
 ### Status
 
@@ -89,12 +124,12 @@ This is the first public release of codewandler/agentcore, extracted from flai a
 ### Migration to flai
 
 This package is designed to be integrated into flai, which will:
-1. Implement `interfaces/ActivationState` in its runtime
-2. Implement `interfaces/WebSearchProvider` in its adapters
-3. Provide implementations via `ctx.Extra()` to tools
+1. Implement  in its runtime
+2. Implement  in its adapters
+3. Provide implementations via  to tools
 4. Result: Tools work seamlessly with flai's orchestration
 
-See `MIGRATION_PLAN.md` in flai repository for integration steps.
+See  in flai repository for integration steps.
 
 ---
 
@@ -104,4 +139,5 @@ See `MIGRATION_PLAN.md` in flai repository for integration steps.
 - v0.3.0: Additional tool categories, plugin framework improvements
 - v1.0.0: Stable API, flai integration complete
 
+[0.2.0]: https://github.com/codewandler/agentcore/releases/tag/v0.2.0
 [0.1.0]: https://github.com/codewandler/agentcore/releases/tag/v0.1.0
