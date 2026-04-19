@@ -58,8 +58,8 @@ func WithMarkdown(md goldmark.Markdown) BufferOption {
 // Emission contract:
 //   - Output is append-only: once a block has been emitted it will never be retracted.
 //   - Emitted items are whole top-level markdown blocks, never inline fragments.
-//   - Emitted block markdown preserves the original source slice and may include
-//     trailing blank lines up to the next emitted block boundary.
+//   - Emitted block markdown is normalized for standalone rendering: inter-block
+//     trailing blank lines are trimmed while intrinsic block content is preserved.
 //   - [Write] is conservative and may keep a trailing incomplete block buffered.
 //   - [Flush] is end-of-stream behavior and emits the remaining buffered tail
 //     best-effort, even if it would normally be held back during streaming.
@@ -211,7 +211,7 @@ func (b *Buffer) extractStableBlocks(src string, force bool) ([]Block, string, e
 			continue
 		}
 		blocks = append(blocks, Block{
-			Markdown: src[starts[i]:end],
+			Markdown: trimTrailingBlankLines(src[starts[i]:end]),
 			Kind:     blockKind(nodes[i]),
 		})
 	}
@@ -275,6 +275,21 @@ func endsWithBlankLine(src string) bool {
 		return false
 	}
 	return strings.TrimSpace(trimmed[lastNL+1:]) == ""
+}
+
+func trimTrailingBlankLines(s string) string {
+	if s == "" || !strings.HasSuffix(s, "\n") {
+		return s
+	}
+	lines := splitLinesKeepNewline(s)
+	keep := len(lines)
+	for keep > 0 && strings.TrimSpace(strings.TrimSuffix(lines[keep-1], "\n")) == "" {
+		keep--
+	}
+	if keep == len(lines) || keep == 0 {
+		return s
+	}
+	return strings.Join(lines[:keep], "")
 }
 
 // firstUnclosedFenceStart returns the byte offset of the first still-open fence

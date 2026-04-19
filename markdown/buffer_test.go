@@ -24,7 +24,7 @@ func TestBuffer_ParagraphNeedsBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockParagraph, got[0].Kind)
-	require.Equal(t, "Hello world\n\n", got[0].Markdown)
+	require.Equal(t, "Hello world\n", got[0].Markdown)
 	require.Equal(t, "", b.Pending())
 }
 
@@ -48,7 +48,7 @@ func TestBuffer_OpenFenceHeldUntilClosed(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockParagraph, got[0].Kind)
-	require.Equal(t, "Before\n\n", got[0].Markdown)
+	require.Equal(t, "Before\n", got[0].Markdown)
 	require.Equal(t, "```go\nfmt.Println(\"hi\")\n", b.Pending())
 
 	_, err = b.WriteString("```\n")
@@ -178,7 +178,7 @@ func TestBuffer_ListNeedsClosingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockList, got[0].Kind)
-	require.Equal(t, "- one\n- two\n\n", got[0].Markdown)
+	require.Equal(t, "- one\n- two\n", got[0].Markdown)
 	require.Empty(t, b.Pending())
 }
 
@@ -194,7 +194,7 @@ func TestBuffer_NestedListNeedsClosingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockList, got[0].Kind)
-	require.Equal(t, "- parent\n  - child\n\n", got[0].Markdown)
+	require.Equal(t, "- parent\n  - child\n", got[0].Markdown)
 }
 
 func TestBuffer_ListContinuationParagraphStaysInSameBlock(t *testing.T) {
@@ -209,7 +209,7 @@ func TestBuffer_ListContinuationParagraphStaysInSameBlock(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockList, got[0].Kind)
-	require.Equal(t, "- item\n\n  continuation\n\n", got[0].Markdown)
+	require.Equal(t, "- item\n\n  continuation\n", got[0].Markdown)
 }
 
 func TestBuffer_ParagraphThenListAcrossChunks(t *testing.T) {
@@ -231,7 +231,7 @@ func TestBuffer_ParagraphThenListAcrossChunks(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	require.Equal(t, BlockList, got[1].Kind)
-	require.Equal(t, "- item\n\n", got[1].Markdown)
+	require.Equal(t, "- item\n", got[1].Markdown)
 }
 
 func TestBuffer_BlockquoteNeedsClosingBoundary(t *testing.T) {
@@ -247,7 +247,7 @@ func TestBuffer_BlockquoteNeedsClosingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockBlockquote, got[0].Kind)
-	require.Equal(t, "> a\n\n", got[0].Markdown)
+	require.Equal(t, "> a\n", got[0].Markdown)
 }
 
 func TestBuffer_NestedBlockquoteNeedsClosingBoundary(t *testing.T) {
@@ -262,7 +262,7 @@ func TestBuffer_NestedBlockquoteNeedsClosingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockBlockquote, got[0].Kind)
-	require.Equal(t, "> outer\n> > inner\n\n", got[0].Markdown)
+	require.Equal(t, "> outer\n> > inner\n", got[0].Markdown)
 }
 
 func TestBuffer_BlockquoteLazyContinuationStaysBuffered(t *testing.T) {
@@ -276,7 +276,7 @@ func TestBuffer_BlockquoteLazyContinuationStaysBuffered(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockBlockquote, got[0].Kind)
-	require.Equal(t, "> quote\ncontinuation\n\n", got[0].Markdown)
+	require.Equal(t, "> quote\ncontinuation\n", got[0].Markdown)
 }
 
 func TestBuffer_HTMLBlockNeedsClosingBoundary(t *testing.T) {
@@ -291,7 +291,7 @@ func TestBuffer_HTMLBlockNeedsClosingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, BlockHTML, got[0].Kind)
-	require.Equal(t, "<div>\nhello\n</div>\n\n", got[0].Markdown)
+	require.Equal(t, "<div>\nhello\n</div>\n", got[0].Markdown)
 }
 
 func TestBuffer_IncompleteHTMLFlushesAtEnd(t *testing.T) {
@@ -349,8 +349,21 @@ func TestBuffer_MultipleBlocksOneWrite(t *testing.T) {
 	require.Len(t, got, 3)
 	require.Equal(t, []BlockKind{BlockHeading, BlockParagraph, BlockList}, []BlockKind{got[0].Kind, got[1].Kind, got[2].Kind})
 	require.Equal(t, "# Title\n", got[0].Markdown)
-	require.Equal(t, "Paragraph one.\n\n", got[1].Markdown)
-	require.Equal(t, "- a\n- b\n\n", got[2].Markdown)
+	require.Equal(t, "Paragraph one.\n", got[1].Markdown)
+	require.Equal(t, "- a\n- b\n", got[2].Markdown)
+}
+
+func TestBuffer_MultipleBlocksRemainConcatenableWhenSeparatorsAreProvidedByConsumer(t *testing.T) {
+	var got []Block
+	b := NewBuffer(func(blocks []Block) { got = append(got, blocks...) })
+
+	src := "Paragraph one.\n\n- a\n- b\n\n"
+	_, err := b.WriteString(src)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "Paragraph one.\n", got[0].Markdown)
+	require.Equal(t, "- a\n- b\n", got[1].Markdown)
+	require.Equal(t, src, got[0].Markdown+"\n"+got[1].Markdown+"\n")
 }
 
 func TestBuffer_ByteByByteFence(t *testing.T) {
@@ -366,7 +379,7 @@ func TestBuffer_ByteByByteFence(t *testing.T) {
 		_, err := b.Write([]byte{src[i]})
 		require.NoError(t, err)
 	}
-	require.Equal(t, src, emitted.String())
+	require.Equal(t, "Text\n```txt\nabc\n```\n", emitted.String())
 	require.Empty(t, b.Pending())
 }
 

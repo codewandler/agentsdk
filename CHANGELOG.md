@@ -2,6 +2,12 @@
 
 All notable changes to codewandler/agentcore are documented in this file.
 
+## [0.2.2] - "$date"
+
+### Changed
+- Markdown buffer now emits standalone renderable blocks by trimming inter-block trailing blank lines while preserving stable streaming behavior
+- Updated markdown buffer tests to assert independently renderable block payloads and stable concatenation semantics
+
 ## [0.2.1] - 2026-04-19
 
 ### Added
