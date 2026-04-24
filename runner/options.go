@@ -2,20 +2,34 @@ package runner
 
 import (
 	"context"
+	"time"
 
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/llmadapter/unified"
 )
 
 type Options struct {
 	MaxSteps         int
 	Tools            []tool.Tool
 	ToolCtx          tool.Ctx
+	ToolTimeout      time.Duration
+	ToolExecutor     ToolExecutor
 	ProviderIdentity conversation.ProviderIdentity
 	OnEvent          EventHandler
 }
 
 type Option func(*Options)
+
+type ToolExecutor interface {
+	ExecuteTool(ctx context.Context, call unified.ToolCall) unified.ToolResult
+}
+
+type ToolExecutorFunc func(ctx context.Context, call unified.ToolCall) unified.ToolResult
+
+func (f ToolExecutorFunc) ExecuteTool(ctx context.Context, call unified.ToolCall) unified.ToolResult {
+	return f(ctx, call)
+}
 
 func WithMaxSteps(max int) Option {
 	return func(o *Options) {
@@ -34,6 +48,20 @@ func WithTools(tools []tool.Tool) Option {
 func WithToolCtx(ctx tool.Ctx) Option {
 	return func(o *Options) {
 		o.ToolCtx = ctx
+	}
+}
+
+func WithToolTimeout(timeout time.Duration) Option {
+	return func(o *Options) {
+		if timeout > 0 {
+			o.ToolTimeout = timeout
+		}
+	}
+}
+
+func WithToolExecutor(executor ToolExecutor) Option {
+	return func(o *Options) {
+		o.ToolExecutor = executor
 	}
 }
 

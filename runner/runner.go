@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/conversation"
-	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -27,16 +27,16 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 		return Result{}, fmt.Errorf("runner: client is required")
 	}
 	options := applyOptions(opts)
-	toolMap := make(map[string]tool.Tool, len(options.Tools))
-	for _, t := range options.Tools {
-		toolMap[t.Name()] = t
-	}
 	if options.ToolCtx == nil {
 		options.ToolCtx = &basicToolCtx{
 			Context:   ctx,
 			sessionID: string(session.SessionID()),
 			extra:     map[string]any{},
 		}
+	}
+	executor := options.ToolExecutor
+	if executor == nil {
+		executor = newDefaultToolExecutor(options.Tools, options.ToolCtx, options.ToolTimeout)
 	}
 
 	var result Result
@@ -60,6 +60,7 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 			emit(ErrorEvent{Err: err})
 			return result, err
 		}
+		emit(StepStartEvent{Step: result.Steps, MaxSteps: options.MaxSteps, Model: wireReq.Model})
 		events, err := client.Request(ctx, wireReq)
 		if err != nil {
 			fragment.Fail(err)
@@ -67,12 +68,24 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 			return result, err
 		}
 
-		assistant, finishReason, usage, toolCalls, messageID, err := consumeEvents(ctx, events, emit)
+		assistant, finishReason, usage, toolCalls, messageID, err := consumeEvents(ctx, events, emit, eventContext{
+			step:             result.Steps,
+			model:            wireReq.Model,
+			providerIdentity: options.ProviderIdentity,
+		})
 		if err != nil {
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
 		}
+		emit(StepDoneEvent{
+			Step:             result.Steps,
+			MaxSteps:         options.MaxSteps,
+			Model:            wireReq.Model,
+			ProviderIdentity: options.ProviderIdentity,
+			Usage:            usage,
+			FinishReason:     finishReason,
+		})
 		if messageID != "" {
 			assistant.ID = messageID
 			fragment.AddContinuation(conversation.NewProviderContinuation(options.ProviderIdentity, messageID, unified.Extensions{}))
@@ -87,19 +100,34 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 				emit(ErrorEvent{Err: err})
 				return result, err
 			}
-			emit(CompletedEvent{FinishReason: finishReason})
+			emit(CompletedEvent{Step: result.Steps, FinishReason: finishReason})
 			return result, nil
 		}
 
 		transcript = append(transcript, assistant)
 		results := make([]unified.ToolResult, 0, len(toolCalls))
+		canceled := false
 		for _, call := range toolCalls {
-			toolResult := executeTool(ctx, options.ToolCtx, toolMap, call)
+			var toolResult unified.ToolResult
+			if canceled || ctx.Err() != nil {
+				canceled = true
+				toolResult = toolResultFromContext(call, context.Canceled)
+			} else {
+				toolResult = executor.ExecuteTool(ctx, call)
+				if ctx.Err() != nil || toolResultOutput(toolResult) == canceledToolOutput || toolResultOutput(toolResult) == timedOutToolOutput {
+					canceled = true
+				}
+			}
 			results = append(results, toolResult)
 			output := textFromParts(toolResult.Content)
 			emit(ToolResultEvent{CallID: toolResult.ToolCallID, Name: toolResult.Name, Output: output, IsError: toolResult.IsError})
 		}
 		transcript = append(transcript, unified.Message{Role: unified.RoleTool, ToolResults: results})
+		if err := ctx.Err(); err != nil {
+			fragment.Fail(err)
+			emit(ErrorEvent{Err: err})
+			return result, err
+		}
 	}
 
 	err := ErrMaxStepsReached
@@ -108,13 +136,21 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 	return result, err
 }
 
-func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(Event)) (unified.Message, unified.FinishReason, unified.Usage, []unified.ToolCall, string, error) {
+type eventContext struct {
+	step             int
+	model            string
+	providerIdentity conversation.ProviderIdentity
+}
+
+func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(Event), meta eventContext) (unified.Message, unified.FinishReason, unified.Usage, []unified.ToolCall, string, error) {
 	var text strings.Builder
 	var reasoning strings.Builder
 	var usage unified.Usage
 	var toolCalls []unified.ToolCall
+	toolBuilders := map[int]*toolCallBuilder{}
 	finishReason := unified.FinishReasonUnknown
 	var messageID string
+	var sawCompleted bool
 
 	for {
 		select {
@@ -122,6 +158,9 @@ func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(E
 			return unified.Message{}, "", unified.Usage{}, nil, "", ctx.Err()
 		case event, ok := <-events:
 			if !ok {
+				if !sawCompleted {
+					return unified.Message{}, "", unified.Usage{}, nil, "", fmt.Errorf("runner: stream ended without completed event")
+				}
 				return assistantMessage(messageID, text.String(), reasoning.String(), toolCalls), finishReason, usage, toolCalls, messageID, nil
 			}
 			switch ev := event.(type) {
@@ -131,22 +170,44 @@ func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(E
 				}
 			case unified.TextDeltaEvent:
 				text.WriteString(ev.Text)
-				emit(TextDeltaEvent{Text: ev.Text})
+				emit(TextDeltaEvent{Step: meta.step, Text: ev.Text})
 			case unified.ReasoningDeltaEvent:
 				reasoning.WriteString(ev.Text)
-				emit(ReasoningDeltaEvent{Text: ev.Text})
+				emit(ReasoningDeltaEvent{Step: meta.step, Text: ev.Text})
 			case unified.ToolCallStartEvent:
 				call := unified.ToolCall{ID: ev.ID, Name: ev.Name, Index: ev.Index}
+				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
+				builder.id = firstNonEmpty(ev.ID, builder.id)
+				builder.name = firstNonEmpty(ev.Name, builder.name)
 				toolCalls = append(toolCalls, call)
-				emit(ToolCallEvent{Call: call})
+				emit(ToolCallEvent{Step: meta.step, Call: call})
+			case unified.ToolCallArgsDeltaEvent:
+				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
+				builder.id = firstNonEmpty(ev.ID, builder.id)
+				builder.args.WriteString(ev.Delta)
+				if ev.ID != "" || ev.Delta != "" {
+					updateToolCallArgs(&toolCalls, ev.Index, ev.ID, builder.name, builder.args.Bytes())
+				}
+				emit(ToolCallArgsDeltaEvent{Step: meta.step, Index: ev.Index, ID: ev.ID, Name: builder.name, Delta: ev.Delta})
 			case unified.ToolCallDoneEvent:
+				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
+				builder.id = firstNonEmpty(ev.ID, builder.id)
+				builder.name = firstNonEmpty(ev.Name, builder.name)
+				args := ev.Args
+				if len(args) == 0 {
+					args = builder.args.Bytes()
+				}
 				call := unified.ToolCall{ID: ev.ID, Name: ev.Name, Arguments: ev.Args, Index: ev.Index}
+				call.ID = firstNonEmpty(call.ID, builder.id)
+				call.Name = firstNonEmpty(call.Name, builder.name)
+				call.Arguments = append(json.RawMessage(nil), args...)
 				upsertToolCall(&toolCalls, call)
-				emit(ToolCallEvent{Call: call})
+				emit(ToolCallEvent{Step: meta.step, Call: call})
 			case unified.UsageEvent:
 				usage = mergeUsage(usage, ev.Usage())
-				emit(UsageEvent{Usage: ev.Usage()})
+				emit(UsageEvent{Step: meta.step, Model: meta.model, ProviderIdentity: meta.providerIdentity, Usage: ev.Usage()})
 			case unified.CompletedEvent:
+				sawCompleted = true
 				finishReason = ev.FinishReason
 				if ev.MessageID != "" {
 					messageID = ev.MessageID
@@ -156,6 +217,10 @@ func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(E
 					return unified.Message{}, "", unified.Usage{}, nil, "", ev.Err
 				}
 				return unified.Message{}, "", unified.Usage{}, nil, "", fmt.Errorf("runner: provider stream error")
+			case unified.WarningEvent:
+				emit(WarningEvent{Step: meta.step, Warning: ev})
+			case unified.RawEvent:
+				emit(RawEvent{Step: meta.step, Raw: ev})
 			}
 		}
 	}
@@ -177,33 +242,6 @@ func assistantMessage(id, text, reasoning string, toolCalls []unified.ToolCall) 
 	}
 }
 
-func executeTool(ctx context.Context, toolCtx tool.Ctx, tools map[string]tool.Tool, call unified.ToolCall) unified.ToolResult {
-	t, ok := tools[call.Name]
-	if !ok {
-		return toolResult(call, fmt.Sprintf("tool %q not found", call.Name), true)
-	}
-	if err := ctx.Err(); err != nil {
-		return toolResult(call, err.Error(), true)
-	}
-	res, err := t.Execute(toolCtx, call.Arguments)
-	if err != nil {
-		return toolResult(call, err.Error(), true)
-	}
-	if res == nil {
-		return toolResult(call, "", false)
-	}
-	return toolResult(call, res.String(), res.IsError())
-}
-
-func toolResult(call unified.ToolCall, output string, isError bool) unified.ToolResult {
-	return unified.ToolResult{
-		ToolCallID: call.ID,
-		Name:       call.Name,
-		Content:    []unified.ContentPart{unified.TextPart{Text: output}},
-		IsError:    isError,
-	}
-}
-
 func upsertToolCall(calls *[]unified.ToolCall, call unified.ToolCall) {
 	for i, existing := range *calls {
 		if existing.Index == call.Index || (call.ID != "" && existing.ID == call.ID) {
@@ -212,6 +250,45 @@ func upsertToolCall(calls *[]unified.ToolCall, call unified.ToolCall) {
 		}
 	}
 	*calls = append(*calls, call)
+}
+
+func updateToolCallArgs(calls *[]unified.ToolCall, index int, id string, name string, args []byte) {
+	for i, existing := range *calls {
+		if existing.Index == index || (id != "" && existing.ID == id) {
+			if id != "" {
+				existing.ID = id
+			}
+			if name != "" {
+				existing.Name = name
+			}
+			existing.Arguments = append(json.RawMessage(nil), args...)
+			(*calls)[i] = existing
+			return
+		}
+	}
+	*calls = append(*calls, unified.ToolCall{ID: id, Name: name, Index: index, Arguments: append(json.RawMessage(nil), args...)})
+}
+
+type toolCallBuilder struct {
+	id   string
+	name string
+	args bytes.Buffer
+}
+
+func ensureToolCallBuilder(builders map[int]*toolCallBuilder, index int) *toolCallBuilder {
+	builder, ok := builders[index]
+	if !ok {
+		builder = &toolCallBuilder{}
+		builders[index] = builder
+	}
+	return builder
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func mergeUsage(a, b unified.Usage) unified.Usage {
@@ -223,12 +300,6 @@ func mergeUsage(a, b unified.Usage) unified.Usage {
 	return a
 }
 
-func textFromParts(parts []unified.ContentPart) string {
-	var out []string
-	for _, part := range parts {
-		if text, ok := part.(unified.TextPart); ok {
-			out = append(out, text.Text)
-		}
-	}
-	return strings.Join(out, "\n")
+func toolResultOutput(result unified.ToolResult) string {
+	return textFromParts(result.Content)
 }

@@ -18,9 +18,17 @@ type defaults struct {
 	model           string
 	maxOutputTokens *int
 	temperature     *float64
+	topP            *float64
+	topK            *int
+	stop            []string
+	seed            *int64
+	responseFormat  *unified.ResponseFormat
+	reasoning       *unified.ReasoningConfig
+	safety          *unified.SafetyConfig
 	instructions    []unified.Instruction
 	tools           []unified.Tool
 	toolChoice      *unified.ToolChoice
+	user            string
 }
 
 type Option func(*Session)
@@ -68,6 +76,34 @@ func WithTemperature(v float64) Option {
 	return func(s *Session) { s.defaults.temperature = &v }
 }
 
+func WithTopP(v float64) Option {
+	return func(s *Session) { s.defaults.topP = &v }
+}
+
+func WithTopK(v int) Option {
+	return func(s *Session) { s.defaults.topK = &v }
+}
+
+func WithStop(stop ...string) Option {
+	return func(s *Session) { s.defaults.stop = append([]string(nil), stop...) }
+}
+
+func WithSeed(seed int64) Option {
+	return func(s *Session) { s.defaults.seed = &seed }
+}
+
+func WithResponseFormat(format unified.ResponseFormat) Option {
+	return func(s *Session) { s.defaults.responseFormat = &format }
+}
+
+func WithReasoning(reasoning unified.ReasoningConfig) Option {
+	return func(s *Session) { s.defaults.reasoning = &reasoning }
+}
+
+func WithSafety(safety unified.SafetyConfig) Option {
+	return func(s *Session) { s.defaults.safety = &safety }
+}
+
 func WithInstructions(instructions ...unified.Instruction) Option {
 	return func(s *Session) { s.defaults.instructions = append([]unified.Instruction(nil), instructions...) }
 }
@@ -85,6 +121,10 @@ func WithTools(tools []unified.Tool) Option {
 
 func WithToolChoice(choice unified.ToolChoice) Option {
 	return func(s *Session) { s.defaults.toolChoice = &choice }
+}
+
+func WithUser(user string) Option {
+	return func(s *Session) { s.defaults.user = user }
 }
 
 func (s *Session) ConversationID() ConversationID { return s.conversationID }
@@ -137,12 +177,23 @@ func (s *Session) BuildRequest(req Request) (unified.Request, error) {
 		Model:           firstNonEmpty(req.Model, s.defaults.model),
 		MaxOutputTokens: firstIntPtr(req.MaxOutputTokens, s.defaults.maxOutputTokens),
 		Temperature:     firstFloatPtr(req.Temperature, s.defaults.temperature),
+		TopP:            firstFloatPtr(req.TopP, s.defaults.topP),
+		TopK:            firstIntPtr(req.TopK, s.defaults.topK),
+		Stop:            append([]string(nil), s.defaults.stop...),
+		Seed:            firstInt64Ptr(req.Seed, s.defaults.seed),
+		ResponseFormat:  firstResponseFormatPtr(req.ResponseFormat, s.defaults.responseFormat),
+		Reasoning:       firstReasoningPtr(req.Reasoning, s.defaults.reasoning),
+		Safety:          firstSafetyPtr(req.Safety, s.defaults.safety),
 		Instructions:    append(append([]unified.Instruction(nil), s.defaults.instructions...), req.Instructions...),
 		Tools:           append([]unified.Tool(nil), s.defaults.tools...),
 		ToolChoice:      s.defaults.toolChoice,
 		Messages:        messages,
 		Stream:          req.Stream,
+		User:            firstNonEmpty(req.User, s.defaults.user),
 		Extensions:      req.Extensions,
+	}
+	if len(req.Stop) > 0 {
+		out.Stop = append([]string(nil), req.Stop...)
 	}
 	if len(req.Tools) > 0 {
 		out.Tools = append([]unified.Tool(nil), req.Tools...)
@@ -179,6 +230,34 @@ func firstIntPtr(a, b *int) *int {
 }
 
 func firstFloatPtr(a, b *float64) *float64 {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func firstInt64Ptr(a, b *int64) *int64 {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func firstResponseFormatPtr(a, b *unified.ResponseFormat) *unified.ResponseFormat {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func firstReasoningPtr(a, b *unified.ReasoningConfig) *unified.ReasoningConfig {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func firstSafetyPtr(a, b *unified.SafetyConfig) *unified.SafetyConfig {
 	if a != nil {
 		return a
 	}

@@ -10,6 +10,18 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-04-24
+
+### Added
+
+- Added runner support for streamed tool-call argument deltas, warning/raw event passthrough, custom tool executors, and per-tool execution timeouts.
+- Added runner step lifecycle events, provider/model dimensions on usage events, and a helper for decoding tool-call arguments for display.
+- Added conversation request/default support for reasoning, response formats, sampling controls, stop sequences, user IDs, and safety config.
+
+### Changed
+
+- Hardened runner tool execution so context cancellation emits canceled results for remaining tool calls and incomplete/error streams do not commit conversation history.
+
 ## [0.5.0] - 2026-04-24
 
 ### Added
