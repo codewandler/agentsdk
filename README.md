@@ -55,6 +55,7 @@ import (
 
     "github.com/codewandler/agentsdk/runner"
     "github.com/codewandler/agentsdk/runtime"
+    "github.com/codewandler/agentsdk/tool"
     "github.com/codewandler/agentsdk/tools/standard"
     "github.com/codewandler/llmadapter/adapterconfig"
     "github.com/codewandler/llmadapter/adapt"
@@ -72,12 +73,16 @@ if err != nil {
 }
 
 tools := standard.Tools(standard.Options{IncludeToolManagement: true})
+workDir := "."
 agent, err := runtime.New(auto.Client,
     runtime.WithModel("default"),
     runtime.WithSystem("You are a concise coding assistant."),
     runtime.WithTools(tools),
     runtime.WithToolChoice(unified.ToolChoice{Mode: unified.ToolChoiceAuto}),
     runtime.WithMaxSteps(8),
+    runtime.WithToolContextFactory(func(ctx context.Context) tool.Ctx {
+        return runtime.NewToolContext(ctx, runtime.WithToolWorkDir(workDir))
+    }),
     runtime.WithEventHandler(func(event runner.Event) {
         // Render text/tool/usage events in your application.
     }),

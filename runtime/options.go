@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"time"
 
 	"github.com/codewandler/agentsdk/conversation"
@@ -71,6 +72,10 @@ func WithStream(stream bool) Option {
 	return func(a *Agent) { a.request.Stream = stream }
 }
 
+func WithRequestDefaults(req conversation.Request) Option {
+	return func(a *Agent) { a.request = cloneRequest(req) }
+}
+
 func WithMaxSteps(max int) Option {
 	return func(a *Agent) {
 		if max > 0 {
@@ -81,6 +86,10 @@ func WithMaxSteps(max int) Option {
 
 func WithToolCtx(ctx tool.Ctx) Option {
 	return func(a *Agent) { a.toolCtx = ctx }
+}
+
+func WithToolContextFactory(factory func(context.Context) tool.Ctx) Option {
+	return func(a *Agent) { a.toolCtxFactory = factory }
 }
 
 func WithToolTimeout(timeout time.Duration) Option {
@@ -112,6 +121,7 @@ type TurnConfig struct {
 	ToolCtx          tool.Ctx
 	ToolTimeout      time.Duration
 	ToolExecutor     runner.ToolExecutor
+	ToolCtxFactory   func(context.Context) tool.Ctx
 	ProviderIdentity conversation.ProviderIdentity
 	OnEvent          runner.EventHandler
 }
@@ -129,6 +139,10 @@ func WithTurnTools(tools []tool.Tool) TurnOption {
 
 func WithTurnToolCtx(ctx tool.Ctx) TurnOption {
 	return func(c *TurnConfig) { c.ToolCtx = ctx }
+}
+
+func WithTurnToolContextFactory(factory func(context.Context) tool.Ctx) TurnOption {
+	return func(c *TurnConfig) { c.ToolCtxFactory = factory }
 }
 
 func WithTurnEventHandler(handler runner.EventHandler) TurnOption {

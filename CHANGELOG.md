@@ -10,6 +10,13 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-24
+
+### Added
+
+- Added `runtime.WithToolContextFactory` and per-turn `WithTurnToolContextFactory` so consumers can derive tool contexts from each turn context without manually passing `WithTurnToolCtx`.
+- Added `runtime.WithRequestDefaults` for setting reusable request defaults in one option.
+
 ## [0.8.0] - 2026-04-24
 
 ### Added

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
@@ -96,6 +97,58 @@ func TestNewToolContextCarriesRuntimeFields(t *testing.T) {
 	require.Equal(t, "sess_1", ctx.SessionID())
 	require.Equal(t, "v", ctx.Extra()["k"])
 	require.NoError(t, ctx.Err())
+}
+
+func TestRunTurnUsesToolContextFactory(t *testing.T) {
+	client := &fakeClient{events: [][]unified.Event{
+		{
+			unified.ToolCallDoneEvent{Index: 0, ID: "call_1", Name: "cwd", Args: json.RawMessage(`{}`)},
+			unified.CompletedEvent{FinishReason: unified.FinishReasonToolCall},
+		},
+		{
+			unified.TextDeltaEvent{Text: "done"},
+			unified.CompletedEvent{FinishReason: unified.FinishReasonStop},
+		},
+	}}
+	cwd := tool.New("cwd", "print cwd", func(ctx tool.Ctx, _ struct{}) (tool.Result, error) {
+		return tool.Text(ctx.WorkDir()), nil
+	})
+	agent, err := New(client,
+		WithTools([]tool.Tool{cwd}),
+		WithMaxSteps(2),
+		WithToolContextFactory(func(ctx context.Context) tool.Ctx {
+			return NewToolContext(ctx, WithToolWorkDir("/factory"))
+		}),
+	)
+	require.NoError(t, err)
+
+	result, err := agent.RunTurn(context.Background(), "use cwd")
+	require.NoError(t, err)
+	var toolResult runner.ToolResultEvent
+	for _, event := range result.Events {
+		if ev, ok := event.(runner.ToolResultEvent); ok {
+			toolResult = ev
+			break
+		}
+	}
+	require.Equal(t, "/factory", toolResult.Output)
+}
+
+func TestWithRequestDefaults(t *testing.T) {
+	client := &fakeClient{}
+	max := 123
+	agent, err := New(client, WithRequestDefaults(conversation.Request{
+		Model:           "default",
+		MaxOutputTokens: &max,
+		Stream:          true,
+	}))
+	require.NoError(t, err)
+
+	_, err = agent.RunTurn(context.Background(), "hi")
+	require.NoError(t, err)
+	require.Equal(t, "default", client.requests[0].Model)
+	require.Equal(t, 123, *client.requests[0].MaxOutputTokens)
+	require.True(t, client.requests[0].Stream)
 }
 
 func requireEventType[T runner.Event](t *testing.T, events []runner.Event) T {

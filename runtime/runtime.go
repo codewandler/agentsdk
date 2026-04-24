@@ -19,6 +19,7 @@ type Agent struct {
 	tools            []tool.Tool
 	maxSteps         int
 	toolCtx          tool.Ctx
+	toolCtxFactory   func(context.Context) tool.Ctx
 	toolTimeout      time.Duration
 	toolExecutor     runner.ToolExecutor
 	providerIdentity conversation.ProviderIdentity
@@ -86,6 +87,9 @@ func (a *Agent) RunTurn(ctx context.Context, user string, opts ...TurnOption) (r
 			Content: []unified.ContentPart{unified.TextPart{Text: user}},
 		})
 	}
+	if cfg.ToolCtx == nil && cfg.ToolCtxFactory != nil {
+		cfg.ToolCtx = cfg.ToolCtxFactory(ctx)
+	}
 	return runner.RunTurn(ctx, a.session, a.client, cfg.Request, cfg.runnerOptions()...)
 }
 
@@ -95,6 +99,7 @@ func (a *Agent) turnConfig() TurnConfig {
 		MaxSteps:         a.maxSteps,
 		Tools:            append([]tool.Tool(nil), a.tools...),
 		ToolCtx:          a.toolCtx,
+		ToolCtxFactory:   a.toolCtxFactory,
 		ToolTimeout:      a.toolTimeout,
 		ToolExecutor:     a.toolExecutor,
 		ProviderIdentity: a.providerIdentity,
