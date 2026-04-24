@@ -10,6 +10,12 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-04-25
+
+### Fixed
+
+- Stripped OpenAI Responses `resp_...` assistant ids during message projection so older persisted sessions can still be continued.
+
 ## [0.11.1] - 2026-04-25
 
 ### Fixed

@@ -11,7 +11,7 @@ func TestSessionReplayProjection(t *testing.T) {
 	s := New(WithModel("model-a"), WithSystem("system"))
 	_, err := s.AddUser("hello")
 	require.NoError(t, err)
-	_, err = s.AppendMessage(unified.Message{Role: unified.RoleAssistant, Content: []unified.ContentPart{unified.TextPart{Text: "hi"}}})
+	_, err = s.AppendMessage(unified.Message{Role: unified.RoleAssistant, ID: "resp_1", Content: []unified.ContentPart{unified.TextPart{Text: "hi"}}})
 	require.NoError(t, err)
 
 	req, err := s.BuildRequest(NewRequest().User("next").Stream(true).Build())
@@ -23,6 +23,7 @@ func TestSessionReplayProjection(t *testing.T) {
 	require.Len(t, req.Messages, 3)
 	require.Equal(t, unified.RoleUser, req.Messages[0].Role)
 	require.Equal(t, unified.RoleAssistant, req.Messages[1].Role)
+	require.Empty(t, req.Messages[1].ID)
 	require.Equal(t, unified.RoleUser, req.Messages[2].Role)
 }
 
