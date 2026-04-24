@@ -1,7 +1,9 @@
 package conversation
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -12,6 +14,7 @@ type Session struct {
 	branch         BranchID
 	tree           *Tree
 	defaults       defaults
+	store          EventStore
 }
 
 type defaults struct {
@@ -48,12 +51,86 @@ func New(opts ...Option) *Session {
 	return s
 }
 
+func Resume(ctx context.Context, store EventStore, conversationID ConversationID, opts ...Option) (*Session, error) {
+	if store == nil {
+		return nil, fmt.Errorf("conversation: store is required")
+	}
+	events, err := store.LoadEvents(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if len(events) == 0 {
+		return nil, fmt.Errorf("conversation: no events found")
+	}
+	s := &Session{
+		branch: MainBranch,
+		tree:   NewTree(),
+		store:  store,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	for _, event := range events {
+		if s.conversationID == "" {
+			s.conversationID = event.ConversationID
+		}
+		if s.sessionID == "" {
+			s.sessionID = event.SessionID
+		}
+		switch event.Kind {
+		case StructuralConversationCreated:
+			if event.BranchID != "" {
+				s.branch = event.BranchID
+			}
+		case StructuralBranchCreated:
+			if event.BranchID != "" {
+				if err := s.tree.MoveHead(event.BranchID, event.NodeID); err != nil {
+					_ = s.tree.Fork(MainBranch, event.BranchID)
+					_ = s.tree.MoveHead(event.BranchID, event.NodeID)
+				}
+			}
+		case StructuralNodeAppended:
+			if event.Payload == nil {
+				return nil, fmt.Errorf("conversation: node event %q has no payload", event.NodeID)
+			}
+			if err := s.tree.InsertNode(event.BranchID, Node{
+				ID:        event.NodeID,
+				Parent:    event.ParentNodeID,
+				Payload:   event.Payload,
+				CreatedAt: event.At,
+			}); err != nil {
+				return nil, err
+			}
+		case StructuralHeadMoved:
+			if err := s.tree.MoveHead(event.BranchID, event.NodeID); err != nil {
+				return nil, err
+			}
+			if event.BranchID != "" {
+				s.branch = event.BranchID
+			}
+		}
+	}
+	if s.conversationID == "" {
+		s.conversationID = conversationID
+	}
+	if s.sessionID == "" {
+		s.sessionID = NewSessionID()
+	}
+	return s, nil
+}
+
 func WithConversationID(id ConversationID) Option {
 	return func(s *Session) {
 		if id != "" {
 			s.conversationID = id
 		}
 	}
+}
+
+func WithStore(store EventStore) Option {
+	return func(s *Session) { s.store = store }
 }
 
 func WithSessionID(id SessionID) Option {
@@ -141,15 +218,34 @@ func (s *Session) Checkout(branch BranchID) error {
 }
 
 func (s *Session) Fork(to BranchID) error {
+	from := s.branch
 	if err := s.tree.Fork(s.branch, to); err != nil {
 		return err
 	}
 	s.branch = to
+	if s.store != nil {
+		head, _ := s.tree.Head(s.branch)
+		if err := s.store.AppendEvents(context.Background(), Event{
+			Kind:           StructuralBranchCreated,
+			ConversationID: s.conversationID,
+			SessionID:      s.sessionID,
+			BranchID:       s.branch,
+			FromBranchID:   from,
+			NodeID:         head,
+			At:             time.Now(),
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (s *Session) Append(payload Payload) (NodeID, error) {
-	return s.tree.Append(s.branch, payload)
+	ids, err := s.appendPayloads(payload)
+	if err != nil {
+		return "", err
+	}
+	return ids[0], nil
 }
 
 func (s *Session) AppendMessage(msg unified.Message) (NodeID, error) {
@@ -212,7 +308,40 @@ func (s *Session) CommitFragment(fragment *TurnFragment) ([]NodeID, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.tree.AppendMany(s.branch, payloads...)
+	return s.appendPayloads(payloads...)
+}
+
+func (s *Session) appendPayloads(payloads ...Payload) ([]NodeID, error) {
+	parent, _ := s.tree.Head(s.branch)
+	ids, err := s.tree.AppendMany(s.branch, payloads...)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return ids, nil
+	}
+	events := make([]Event, 0, len(ids))
+	for i, id := range ids {
+		node, ok := s.tree.Node(id)
+		if !ok {
+			return nil, fmt.Errorf("conversation: node %q not found after append", id)
+		}
+		events = append(events, Event{
+			Kind:           StructuralNodeAppended,
+			ConversationID: s.conversationID,
+			SessionID:      s.sessionID,
+			BranchID:       s.branch,
+			NodeID:         id,
+			ParentNodeID:   parent,
+			Payload:        payloads[i],
+			At:             node.CreatedAt,
+		})
+		parent = id
+	}
+	if err := s.store.AppendEvents(context.Background(), events...); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 func firstNonEmpty(a, b string) string {

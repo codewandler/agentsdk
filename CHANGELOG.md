@@ -10,6 +10,15 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-25
+
+### Added
+
+- Added payload-bearing conversation event storage with `conversation.WithStore` and `conversation.Resume` for durable session replay.
+- Added `conversation/jsonlstore` for append-only JSONL conversation persistence.
+- Added JSON-safe payload encoding for unified messages, assistant turns, tool calls, tool results, continuations, usage, and supported content parts.
+- Added local `AGENTS.md` notes covering the llmadapter -> agentsdk -> miniagent dependency update process.
+
 ## [0.10.1] - 2026-04-25
 
 ### Changed

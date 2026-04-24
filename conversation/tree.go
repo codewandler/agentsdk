@@ -63,6 +63,44 @@ func (t *Tree) AppendMany(branch BranchID, payloads ...Payload) ([]NodeID, error
 	return ids, nil
 }
 
+func (t *Tree) InsertNode(branch BranchID, node Node) error {
+	if branch == "" {
+		branch = MainBranch
+	}
+	if node.ID == "" {
+		return fmt.Errorf("conversation: node id is required")
+	}
+	if node.Payload == nil {
+		return fmt.Errorf("conversation: payload is required")
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, exists := t.nodes[node.ID]; exists {
+		return fmt.Errorf("conversation: node %q already exists", node.ID)
+	}
+	if node.Parent != "" {
+		if _, ok := t.nodes[node.Parent]; !ok {
+			return fmt.Errorf("conversation: parent node %q not found", node.Parent)
+		}
+	}
+	if node.CreatedAt.IsZero() {
+		node.CreatedAt = time.Now()
+	}
+	t.nodes[node.ID] = node
+	if _, ok := t.branches[branch]; !ok {
+		t.branches[branch] = ""
+	}
+	t.branches[branch] = node.ID
+	return nil
+}
+
+func (t *Tree) Node(id NodeID) (Node, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	node, ok := t.nodes[id]
+	return node, ok
+}
+
 func (t *Tree) Fork(from BranchID, to BranchID) error {
 	if from == "" {
 		from = MainBranch
