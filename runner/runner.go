@@ -87,7 +87,11 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 			FinishReason:     finishReason,
 		})
 		if messageID != "" {
-			assistant.ID = messageID
+			if reusableMessageID(messageID) {
+				assistant.ID = messageID
+			} else {
+				assistant.ID = ""
+			}
 			fragment.AddContinuation(conversation.NewProviderContinuation(providerIdentity, messageID, unified.Extensions{}))
 		}
 
@@ -253,6 +257,10 @@ func assistantMessage(id, text, reasoning string, toolCalls []unified.ToolCall) 
 		Content:   content,
 		ToolCalls: append([]unified.ToolCall(nil), toolCalls...),
 	}
+}
+
+func reusableMessageID(id string) bool {
+	return !strings.HasPrefix(id, "resp_")
 }
 
 func upsertToolCall(calls *[]unified.ToolCall, call unified.ToolCall) {

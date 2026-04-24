@@ -10,6 +10,12 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-04-25
+
+### Fixed
+
+- Prevented OpenAI Responses `resp_...` continuation IDs from being replayed as assistant message IDs in future requests.
+
 ## [0.11.0] - 2026-04-25
 
 ### Added

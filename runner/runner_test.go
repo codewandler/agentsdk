@@ -60,6 +60,7 @@ func TestRunTurnCommitsOnlyAfterFinalResponse(t *testing.T) {
 	require.Len(t, messages, 2)
 	require.Equal(t, unified.RoleUser, messages[0].Role)
 	require.Equal(t, unified.RoleAssistant, messages[1].Role)
+	require.Empty(t, messages[1].ID)
 
 	continuation, ok, err := conversation.ContinuationAtHead(sess.Tree(), sess.Branch(), conversation.ProviderIdentity{ProviderName: "openai"})
 	require.NoError(t, err)
