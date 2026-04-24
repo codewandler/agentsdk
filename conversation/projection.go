@@ -21,6 +21,10 @@ func ProjectMessages(tree *Tree, branch BranchID) ([]unified.Message, error) {
 			out = append(out, ev.Message)
 		case *MessageEvent:
 			out = append(out, ev.Message)
+		case AssistantTurnEvent:
+			out = append(out, ev.Message)
+		case *AssistantTurnEvent:
+			out = append(out, ev.Message)
 		}
 	}
 	return out, nil

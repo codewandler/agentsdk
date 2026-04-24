@@ -11,6 +11,7 @@ type Request struct {
 	ToolChoice      *unified.ToolChoice
 	Messages        []unified.Message
 	Stream          bool
+	Extensions      unified.Extensions
 }
 
 type Builder struct {
@@ -59,4 +60,8 @@ func (b *Builder) ToolResult(callID, name, output string, isError bool) *Builder
 	})
 }
 func (b *Builder) Stream(stream bool) *Builder { b.req.Stream = stream; return b }
-func (b *Builder) Build() Request              { return b.req }
+func (b *Builder) Extension(key string, value any) *Builder {
+	_ = b.req.Extensions.Set(key, value)
+	return b
+}
+func (b *Builder) Build() Request { return b.req }

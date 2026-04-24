@@ -1,6 +1,4 @@
-// Package interfaces defines contracts that agentsdk depends on.
-// Implementations are provided by integrating systems (e.g., flai SDK).
+// Package interfaces contains deprecated compatibility aliases.
 //
-// This keeps agentsdk free of external runtime dependencies while
-// allowing tools to require certain capabilities.
+// Deprecated: use domain packages such as activation and websearch.
 package interfaces

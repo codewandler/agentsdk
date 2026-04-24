@@ -142,6 +142,7 @@ func (s *Session) BuildRequest(req Request) (unified.Request, error) {
 		ToolChoice:      s.defaults.toolChoice,
 		Messages:        messages,
 		Stream:          req.Stream,
+		Extensions:      req.Extensions,
 	}
 	if len(req.Tools) > 0 {
 		out.Tools = append([]unified.Tool(nil), req.Tools...)
@@ -150,6 +151,17 @@ func (s *Session) BuildRequest(req Request) (unified.Request, error) {
 		out.ToolChoice = req.ToolChoice
 	}
 	return out, nil
+}
+
+func (s *Session) CommitFragment(fragment *TurnFragment) ([]NodeID, error) {
+	if fragment == nil {
+		return nil, fmt.Errorf("conversation: turn fragment is nil")
+	}
+	payloads, err := fragment.Payloads()
+	if err != nil {
+		return nil, err
+	}
+	return s.tree.AppendMany(s.branch, payloads...)
 }
 
 func firstNonEmpty(a, b string) string {

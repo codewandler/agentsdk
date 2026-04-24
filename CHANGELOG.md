@@ -10,6 +10,19 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-24
+
+### Added
+
+- Added a `websearch` package to own web search provider contracts outside the deprecated `interfaces` compatibility package.
+- Added conversation provider continuation metadata, structural storage event types, transactional turn fragments, and atomic fragment commits.
+- Added a `runner` package for running model/tool loops over `llmadapter/unified.Client` with event emission and safe end-of-turn conversation commits.
+
+### Changed
+
+- Moved web tools, Tavily, and standard tool bundle wiring from `interfaces.WebSearchProvider` to `websearch.Provider`.
+- Kept `interfaces` as deprecated compatibility aliases for activation and web search contracts.
+
 ## [0.4.0] - 2026-04-24
 
 ### Added

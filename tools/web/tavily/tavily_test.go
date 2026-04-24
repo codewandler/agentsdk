@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codewandler/agentsdk/interfaces"
+	"github.com/codewandler/agentsdk/websearch"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,14 +28,14 @@ func (r *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 func TestProvider_Search_NoAPIKey(t *testing.T) {
 	p := New()
-	_, err := p.Search(context.Background(), "golang", interfaces.SearchOptions{})
+	_, err := p.Search(context.Background(), "golang", websearch.Options{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "API key not configured")
 }
 
 func TestProvider_Search_EmptyQuery(t *testing.T) {
 	p := New(WithAPIKey("test-key"))
-	_, err := p.Search(context.Background(), "", interfaces.SearchOptions{})
+	_, err := p.Search(context.Background(), "", websearch.Options{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "query cannot be empty")
 }
@@ -52,7 +52,7 @@ func TestProvider_Search_Success(t *testing.T) {
 		WithHTTPClient(&http.Client{Transport: &redirectTransport{to: ts.URL}}),
 	)
 
-	results, err := p.Search(context.Background(), "golang", interfaces.SearchOptions{MaxResults: 3})
+	results, err := p.Search(context.Background(), "golang", websearch.Options{MaxResults: 3})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	require.Equal(t, "Go Blog", results[0].Title)
@@ -72,7 +72,7 @@ func TestProvider_Search_Non200Response(t *testing.T) {
 		WithHTTPClient(&http.Client{Transport: &redirectTransport{to: ts.URL}}),
 	)
 
-	_, err := p.Search(context.Background(), "golang", interfaces.SearchOptions{})
+	_, err := p.Search(context.Background(), "golang", websearch.Options{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "429")
 	require.Contains(t, err.Error(), "rate limited")
@@ -90,7 +90,7 @@ func TestProvider_Search_InvalidJSON(t *testing.T) {
 		WithHTTPClient(&http.Client{Transport: &redirectTransport{to: ts.URL}}),
 	)
 
-	_, err := p.Search(context.Background(), "golang", interfaces.SearchOptions{})
+	_, err := p.Search(context.Background(), "golang", websearch.Options{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "decode response")
 }
@@ -117,7 +117,7 @@ func TestProvider_Search_MaxResultsClamped(t *testing.T) {
 		WithHTTPClient(&http.Client{Transport: &redirectTransport{to: ts.URL}}),
 	)
 
-	_, err := p.Search(context.Background(), "golang", interfaces.SearchOptions{MaxResults: 99})
+	_, err := p.Search(context.Background(), "golang", websearch.Options{MaxResults: 99})
 	require.NoError(t, err)
 	require.Equal(t, 10, capturedMaxResults)
 }

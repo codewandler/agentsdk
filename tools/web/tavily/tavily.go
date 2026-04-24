@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/codewandler/agentsdk/interfaces"
+	"github.com/codewandler/agentsdk/websearch"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 	maxResults     = 10
 )
 
-// Provider implements interfaces.WebSearchProvider using the Tavily API.
+// Provider implements websearch.Provider using the Tavily API.
 type Provider struct {
 	apiKey      string
 	searchDepth string // "basic" or "advanced"
@@ -58,11 +58,11 @@ func New(opts ...Option) *Provider {
 	return p
 }
 
-// Name satisfies interfaces.WebSearchProvider.
+// Name satisfies websearch.Provider.
 func (p *Provider) Name() string { return "tavily" }
 
-// Search satisfies interfaces.WebSearchProvider.
-func (p *Provider) Search(ctx context.Context, query string, opts interfaces.SearchOptions) ([]interfaces.Result, error) {
+// Search satisfies websearch.Provider.
+func (p *Provider) Search(ctx context.Context, query string, opts websearch.Options) ([]websearch.Result, error) {
 	if p.apiKey == "" {
 		return nil, fmt.Errorf("tavily: API key not configured (set TAVILY_API_KEY)")
 	}
@@ -112,14 +112,14 @@ func (p *Provider) Search(ctx context.Context, query string, opts interfaces.Sea
 		return nil, fmt.Errorf("tavily: decode response: %w", err)
 	}
 
-	results := make([]interfaces.Result, len(sr.Results))
+	results := make([]websearch.Result, len(sr.Results))
 	for i, r := range sr.Results {
-		results[i] = interfaces.Result{Title: r.Title, URL: r.URL, Snippet: r.Content}
+		results[i] = websearch.Result{Title: r.Title, URL: r.URL, Snippet: r.Content}
 	}
 	return results, nil
 }
 
-var _ interfaces.WebSearchProvider = (*Provider)(nil)
+var _ websearch.Provider = (*Provider)(nil)
 
 type searchRequest struct {
 	APIKey            string `json:"api_key"`

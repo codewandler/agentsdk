@@ -4,8 +4,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/codewandler/agentsdk/interfaces"
 	"github.com/codewandler/agentsdk/tools/web/tavily"
+	"github.com/codewandler/agentsdk/websearch"
 )
 
 const envWebSearchProvider = "WEBSEARCH_PROVIDER"
@@ -16,7 +16,7 @@ const envWebSearchProvider = "WEBSEARCH_PROVIDER"
 //   - WEBSEARCH_PROVIDER unset or "tavily": use Tavily when TAVILY_API_KEY is set
 //   - WEBSEARCH_PROVIDER "none": disable web search
 //   - unknown provider values disable web search for now
-func DefaultSearchProviderFromEnv() interfaces.WebSearchProvider {
+func DefaultSearchProviderFromEnv() websearch.Provider {
 	provider := strings.ToLower(strings.TrimSpace(os.Getenv(envWebSearchProvider)))
 	if provider == "none" {
 		return nil

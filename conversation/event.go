@@ -5,9 +5,10 @@ import "github.com/codewandler/llmadapter/unified"
 type PayloadKind string
 
 const (
-	PayloadMessage    PayloadKind = "message"
-	PayloadCompaction PayloadKind = "compaction"
-	PayloadAnnotation PayloadKind = "annotation"
+	PayloadMessage       PayloadKind = "message"
+	PayloadAssistantTurn PayloadKind = "assistant_turn"
+	PayloadCompaction    PayloadKind = "compaction"
+	PayloadAnnotation    PayloadKind = "annotation"
 )
 
 type Payload interface {
@@ -19,6 +20,15 @@ type MessageEvent struct {
 }
 
 func (MessageEvent) Kind() PayloadKind { return PayloadMessage }
+
+type AssistantTurnEvent struct {
+	Message       unified.Message        `json:"message"`
+	FinishReason  unified.FinishReason   `json:"finish_reason,omitempty"`
+	Usage         unified.Usage          `json:"usage,omitempty"`
+	Continuations []ProviderContinuation `json:"continuations,omitempty"`
+}
+
+func (AssistantTurnEvent) Kind() PayloadKind { return PayloadAssistantTurn }
 
 type CompactionEvent struct {
 	Summary  string   `json:"summary"`

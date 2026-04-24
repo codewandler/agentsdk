@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/codewandler/agentsdk/interfaces"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/websearch"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ func TestWebFetch_Non2xxStatusNotAnError(t *testing.T) {
 // ── web_search tests ──────────────────────────────────────────────────────────
 
 func TestWebSearch_ReturnsFormattedResults(t *testing.T) {
-	provider := &stubProvider{results: []interfaces.Result{
+	provider := &stubProvider{results: []websearch.Result{
 		{Title: "Go Tutorial", URL: "https://go.dev/doc", Snippet: "Learn Go"},
 		{Title: "Effective Go", URL: "https://go.dev/doc/effective_go", Snippet: "Best practices"},
 	}}
@@ -206,11 +206,11 @@ func TestTools_WithProviderIncludesWebSearch(t *testing.T) {
 // ── stub provider ─────────────────────────────────────────────────────────────
 
 type stubProvider struct {
-	results []interfaces.Result
+	results []websearch.Result
 	err     error
 }
 
 func (s *stubProvider) Name() string { return "stub" }
-func (s *stubProvider) Search(_ context.Context, _ string, _ interfaces.SearchOptions) ([]interfaces.Result, error) {
+func (s *stubProvider) Search(_ context.Context, _ string, _ websearch.Options) ([]websearch.Result, error) {
 	return s.results, s.err
 }

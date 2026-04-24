@@ -2,7 +2,6 @@
 package standard
 
 import (
-	"github.com/codewandler/agentsdk/interfaces"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/filesystem"
 	"github.com/codewandler/agentsdk/tools/git"
@@ -12,11 +11,12 @@ import (
 	"github.com/codewandler/agentsdk/tools/toolmgmt"
 	"github.com/codewandler/agentsdk/tools/turn"
 	"github.com/codewandler/agentsdk/tools/web"
+	"github.com/codewandler/agentsdk/websearch"
 )
 
 // Options configures a standard tool bundle.
 type Options struct {
-	WebSearchProvider interfaces.WebSearchProvider
+	WebSearchProvider websearch.Provider
 
 	IncludeGit            bool
 	IncludeNotify         bool

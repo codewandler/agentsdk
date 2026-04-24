@@ -27,8 +27,21 @@ func NewTree() *Tree {
 }
 
 func (t *Tree) Append(branch BranchID, payload Payload) (NodeID, error) {
-	if payload == nil {
-		return "", fmt.Errorf("conversation: payload is required")
+	ids, err := t.AppendMany(branch, payload)
+	if err != nil {
+		return "", err
+	}
+	return ids[0], nil
+}
+
+func (t *Tree) AppendMany(branch BranchID, payloads ...Payload) ([]NodeID, error) {
+	if len(payloads) == 0 {
+		return nil, fmt.Errorf("conversation: at least one payload is required")
+	}
+	for _, payload := range payloads {
+		if payload == nil {
+			return nil, fmt.Errorf("conversation: payload is required")
+		}
 	}
 	if branch == "" {
 		branch = MainBranch
@@ -37,12 +50,17 @@ func (t *Tree) Append(branch BranchID, payload Payload) (NodeID, error) {
 	defer t.mu.Unlock()
 	parent, ok := t.branches[branch]
 	if !ok {
-		return "", fmt.Errorf("conversation: branch %q not found", branch)
+		return nil, fmt.Errorf("conversation: branch %q not found", branch)
 	}
-	id := NewNodeID()
-	t.nodes[id] = Node{ID: id, Parent: parent, Payload: payload, CreatedAt: time.Now()}
-	t.branches[branch] = id
-	return id, nil
+	ids := make([]NodeID, 0, len(payloads))
+	for _, payload := range payloads {
+		id := NewNodeID()
+		t.nodes[id] = Node{ID: id, Parent: parent, Payload: payload, CreatedAt: time.Now()}
+		parent = id
+		ids = append(ids, id)
+	}
+	t.branches[branch] = parent
+	return ids, nil
 }
 
 func (t *Tree) Fork(from BranchID, to BranchID) error {
