@@ -10,6 +10,12 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-24
+
+### Added
+
+- Added a `runtime` package that wraps `conversation.Session` and `runner.RunTurn` with reusable request defaults, session reset support, and per-turn overrides for tools, tool context, event handlers, route identity, and max steps.
+
 ## [0.6.0] - 2026-04-24
 
 ### Added
