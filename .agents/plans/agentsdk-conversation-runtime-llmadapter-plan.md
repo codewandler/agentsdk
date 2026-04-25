@@ -233,6 +233,24 @@ pending user/tool messages only
 
 Only use when the branch head has a matching provider continuation.
 
+Native continuation and replay budgeting must be treated as different request
+economics:
+
+- If the provider supports a valid branch-head native continuation such as
+  `previous_response_id`, do not apply projection trimming/compaction to the
+  committed history before choosing that continuation. Sending only the pending
+  user/tool messages plus the provider continuation is already the intended
+  projection.
+- Token/context budgeting is primarily for replay-only providers or fallback
+  paths where the full canonical history would otherwise be resent.
+- Trimming replay messages for a native-continuation route usually does not save
+  money in the way replay trimming does, because provider-side state/cache is
+  still the continuity mechanism. It can instead break provider cache behavior,
+  continuity semantics, or branch-head assumptions.
+- Prompt-cache usage returned by providers should be used for observability and
+  estimator calibration, not as the pre-request budgeting source. Usage arrives
+  after projection has already been chosen.
+
 ### Provider Session ID
 
 For providers with a session/conversation field, such as OpenRouter `session_id`.
@@ -1206,6 +1224,12 @@ Adaptation:
 - apply decay during `agentsdk/conversation` projection, not during tree storage
 - preserve original event-log nodes even when projection emits a compacted/cleared view
 - make decay optional and disabled by default in v1
+- only apply budget/decay to replay projections and replay fallback paths; do
+  not compact committed history when a valid provider-native continuation is
+  being used
+- use provider usage response data to calibrate future token estimates per
+  provider/model/session, but keep a preflight estimator because request usage is
+  only known after the call completes
 
 Do not copy initially:
 
