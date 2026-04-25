@@ -234,6 +234,61 @@ func TestSessionMessageBudgetProjectionKeepsRecentMessages(t *testing.T) {
 	requireText(t, req.Messages[2], "four")
 }
 
+func TestSessionTokenBudgetProjectionCompactsOldMessages(t *testing.T) {
+	s := New(WithProjectionPolicy(NewBudgetProjectionPolicy(DefaultProjectionPolicy(), BudgetOptions{
+		MaxTokens:               12,
+		ProtectedRecentMessages: 1,
+		CompactionSummary:       "Earlier messages were compacted.",
+	})))
+	_, err := s.AddUser("one one one one one one one one one one one one")
+	require.NoError(t, err)
+	_, err = s.AddUser("two two two two two two two two two two two two")
+	require.NoError(t, err)
+
+	req, err := s.BuildRequest(NewRequest().User("three").Build())
+	require.NoError(t, err)
+
+	require.Len(t, req.Messages, 2)
+	require.Equal(t, unified.RoleSystem, req.Messages[0].Role)
+	requireText(t, req.Messages[0], "Earlier messages were compacted.")
+	requireText(t, req.Messages[1], "three")
+}
+
+func TestSessionTokenBudgetProjectionPreservesToolBoundary(t *testing.T) {
+	s := New(WithProjectionPolicy(NewBudgetProjectionPolicy(DefaultProjectionPolicy(), BudgetOptions{
+		MaxTokens: 2,
+		Estimator: func(unified.Message) int {
+			return 1
+		},
+	})))
+	_, err := s.AppendMessage(unified.Message{
+		Role:    unified.RoleAssistant,
+		Content: []unified.ContentPart{unified.TextPart{Text: "call"}},
+		ToolCalls: []unified.ToolCall{{
+			ID:   "call_1",
+			Name: "echo",
+		}},
+	})
+	require.NoError(t, err)
+	_, err = s.AppendMessage(unified.Message{
+		Role: unified.RoleTool,
+		ToolResults: []unified.ToolResult{{
+			ToolCallID: "call_1",
+			Name:       "echo",
+			Content:    []unified.ContentPart{unified.TextPart{Text: "result"}},
+		}},
+	})
+	require.NoError(t, err)
+
+	req, err := s.BuildRequest(NewRequest().User("next").Build())
+	require.NoError(t, err)
+
+	require.Len(t, req.Messages, 3)
+	require.Equal(t, unified.RoleAssistant, req.Messages[0].Role)
+	require.Equal(t, unified.RoleTool, req.Messages[1].Role)
+	require.Equal(t, unified.RoleUser, req.Messages[2].Role)
+}
+
 func TestSessionForkUsesSelectedBranchPath(t *testing.T) {
 	s := New()
 	_, err := s.AddUser("root")

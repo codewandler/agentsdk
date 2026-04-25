@@ -230,6 +230,10 @@ func WithMessageBudget(maxMessages int) Option {
 	return WithProjectionPolicy(NewMessageBudgetProjectionPolicy(maxMessages))
 }
 
+func WithTokenBudget(maxTokens int) Option {
+	return WithProjectionPolicy(NewTokenBudgetProjectionPolicy(maxTokens))
+}
+
 func (s *Session) ConversationID() ConversationID { return s.conversationID }
 func (s *Session) SessionID() SessionID           { return s.sessionID }
 func (s *Session) Branch() BranchID               { return s.branch }

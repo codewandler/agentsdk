@@ -10,6 +10,14 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-25
+
+### Added
+
+- Added approximate token-aware projection budgeting with protected recent messages and tool-boundary repair.
+- Added projection-time compaction summaries that replace omitted history in the request without mutating the conversation tree.
+- Added `conversation.WithTokenBudget`, `runtime.WithTokenBudget`, `conversation.NewTokenBudgetProjectionPolicy`, and exported message token estimation.
+
 ## [0.13.0] - 2026-04-25
 
 ### Added
