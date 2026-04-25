@@ -10,6 +10,12 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.11.5] - 2026-04-25
+
+### Changed
+
+- Updated `github.com/codewandler/llmadapter` to `v0.48.7`.
+
 ## [0.11.4] - 2026-04-25
 
 ### Added
