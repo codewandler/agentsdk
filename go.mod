@@ -7,7 +7,7 @@ require (
 	github.com/amitybell/piper v0.0.0-20250621082041-2bb74e3a4a55
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
-	github.com/codewandler/llmadapter v0.48.10
+	github.com/codewandler/llmadapter v0.48.22
 	github.com/invopop/jsonschema v0.13.0
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
