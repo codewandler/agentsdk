@@ -10,6 +10,21 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-04-26
+
+### Added
+
+- Added terminal UI regression tests covering streamed markdown buffering, usage formatting, trimming, and truncation behavior.
+
+## [0.20.0] - 2026-04-26
+
+### Added
+
+- Added app, plugin bundle, command, skill, and agent directory abstractions for loading agents from resource directories.
+- Added `agentsdk run` plus reusable `terminal/cli`, `terminal/repl`, and `terminal/ui` packages for slim agent CLIs.
+- Added `runtime.Engine` as the execution engine naming boundary.
+- Added workspace and home skill source discovery for `.agents/skills` and `.claude/skills`.
+
 ## [0.19.2] - 2026-04-25
 
 ### Changed
