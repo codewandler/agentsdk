@@ -10,6 +10,8 @@ go run ./cmd/agentsdk run examples/engineer
 ```
 
 The bundled `main` agent is configured with `max-steps: 100` so longer multi-step coding and review sessions do not stop at the SDK default of 30.
+
+This example also includes an `agentsdk.app.json` manifest that enables global user skill discovery, so `~/.agents/skills` and `~/.claude/skills` participate in `/skills` without requiring `--include-global`.
 ## Tools
 
 The agent has access to filesystem, shell, git, and web tools:
@@ -45,7 +47,9 @@ The agent has access to filesystem, shell, git, and web tools:
 | `/design` | Produce a lightweight architecture design for a feature       |
 | `/deploy` | Create a deployment checklist for a service or change         |
 
-## Skills
+## Bundled skills
+
+These skills are bundled with the example and discoverable through `/skills`, but they are not activated automatically. Activate them during a session with `/skill <name>` or the model-side `skill` tool.
 
 | Skill          | Description                                              |
 | -------------- | -------------------------------------------------------- |

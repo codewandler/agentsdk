@@ -16,7 +16,7 @@ tools:
   - git_diff
   - web_fetch
   - web_search
-skills: [architecture, code-review, devops]
+  - skill
 commands: [review, design, deploy]
 capabilities: [planner]
 max-steps: 100
