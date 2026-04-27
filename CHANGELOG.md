@@ -10,6 +10,41 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-04-27
+
+### Added
+
+- Added the thread-backed runtime foundation with capability attachment/replay, context render events, and high-level create/open/resume engine helpers.
+- Added manager-owned context providers, context fragment diffing, render record persistence, and runtime hooks for custom thread context providers.
+- Added baseline environment and time context providers.
+- Added conversation item normalization before provider projection, including support for contextual messages and item-level compaction.
+- Added thread runtime compaction APIs and durable runtime documentation.
+- Added model compatibility policy tooling for provider continuation behavior.
+
+### Changed
+
+- Updated `github.com/codewandler/llmadapter` to `v1.0.0-rc.8`.
+- Projected provider requests from normalized conversation items instead of direct message history.
+- Polished public runtime/context API documentation and thread-safety notes.
+- Renamed remaining runtime-facing `flai` defaults and context keys to `agentsdk`.
+
+### Fixed
+
+- Fixed context render lifecycle handling and branch replay.
+- Hardened `StringSliceParam` JSON null handling.
+
+## [0.21.0] - 2026-04-26
+
+### Added
+
+- Added agent resource discovery architecture for agent directories, external resources, and resource resolution.
+- Added `.agents` resource layout documentation for agent, command, plugin, and skill compatibility formats.
+- Added terminal CLI resource-loading support and regression coverage.
+
+### Changed
+
+- Expanded README guidance for agent resource discovery and runtime wiring.
+
 ## [0.20.1] - 2026-04-26
 
 ### Added
