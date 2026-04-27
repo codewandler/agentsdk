@@ -10,6 +10,14 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-04-27
+
+### Changed
+
+- Updated `github.com/codewandler/llmadapter` to `v1.0.0-rc.11`, including
+  `modeldb v0.13.2` so the default `codex/gpt-5.5` route resolves through
+  `codex_responses`.
+
 ## [0.24.1] - 2026-04-27
 
 ### Added

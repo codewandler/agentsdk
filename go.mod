@@ -8,8 +8,8 @@ require (
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
-	github.com/codewandler/llmadapter v1.0.0-rc.8
-	github.com/codewandler/modeldb v0.13.1
+	github.com/codewandler/llmadapter v1.0.0-rc.11
+	github.com/codewandler/modeldb v0.13.2
 	github.com/invopop/jsonschema v0.13.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2

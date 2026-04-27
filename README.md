@@ -48,7 +48,7 @@ import (
     "github.com/codewandler/llmadapter/unified"
 )
 
-model := "codex/gpt-5.4"
+model := "codex/gpt-5.5"
 sourceAPI := adapt.ApiOpenAIResponses
 
 auto, err := runtime.AutoMuxClient(model, sourceAPI, nil)

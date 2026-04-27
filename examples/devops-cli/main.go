@@ -16,7 +16,7 @@ var resources embed.FS
 
 func main() {
 	inference := agent.DefaultInferenceOptions()
-	inference.Model = "codex/gpt-5.4"
+	inference.Model = "codex/gpt-5.5"
 	inference.Effort = unified.ReasoningEffortMedium
 
 	cmd := cli.NewCommand(cli.CommandConfig{

@@ -39,7 +39,7 @@ type InferenceOptions struct {
 // DefaultInferenceOptions returns conservative defaults for a terminal agent.
 func DefaultInferenceOptions() InferenceOptions {
 	return InferenceOptions{
-		Model:       "codex/gpt-5.4",
+		Model:       "codex/gpt-5.5",
 		MaxTokens:   16_000,
 		Thinking:    ThinkingModeAuto,
 		Effort:      unified.ReasoningEffortMedium,

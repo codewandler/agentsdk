@@ -469,7 +469,7 @@ func completeModels(completer ModelCompleter, toComplete string) []string {
 	if completer != nil {
 		return completer(toComplete)
 	}
-	models := []string{"default", "fast", "powerful", "codex/gpt-5.4"}
+	models := []string{"default", "fast", "powerful", "codex/gpt-5.5"}
 	var matches []string
 	for _, model := range models {
 		if strings.Contains(strings.ToLower(model), strings.ToLower(toComplete)) {
