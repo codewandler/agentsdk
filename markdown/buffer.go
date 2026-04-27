@@ -25,6 +25,10 @@ const (
 	BlockOther      BlockKind = "other"
 )
 
+// maxPendingBytes is the soft upper bound for buffered content before forcing
+// a paragraph split. This prevents O(n²) re-parsing on very long single blocks.
+const maxPendingBytes = 4096
+
 // Block is a stable top-level markdown block extracted from the stream.
 type Block struct {
 	Markdown string
@@ -241,11 +245,15 @@ func stableBlockCount(src string, nodes []ast.Node, starts []int, force bool) in
 	if endsWithBlankLine(src) {
 		return len(nodes)
 	}
-	if !strings.HasSuffix(src, "\n") {
-		return max(0, len(nodes)-1)
-	}
 	if len(nodes) == 0 {
 		return 0
+	}
+	// Force-split very long pending buffers to avoid O(n²) re-parsing.
+	if len(src) > maxPendingBytes {
+		return len(nodes)
+	}
+	if !strings.HasSuffix(src, "\n") {
+		return max(0, len(nodes)-1)
 	}
 	if lastBlockStableWithoutBlankLine(nodes[len(nodes)-1]) {
 		return len(nodes)

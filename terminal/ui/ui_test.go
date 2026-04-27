@@ -257,6 +257,53 @@ func TestStepDisplay(t *testing.T) {
 		assert.Contains(t, buf.String(), "`not a fence")
 	})
 
+	t.Run("inline code on fast path is colored", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplayWithRenderer(&buf, plain)
+
+		sd.WriteText("Use the `config.SetTimeout` method.")
+
+		out := buf.String()
+		assert.Contains(t, out, "Use the ")
+		assert.Contains(t, out, CodePink+"config.SetTimeout"+Reset)
+		assert.Contains(t, out, " method.")
+	})
+
+	t.Run("inline code across chunks is colored", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplayWithRenderer(&buf, plain)
+
+		sd.WriteText("Call `foo")
+		sd.WriteText("Bar` now")
+
+		out := buf.String()
+		assert.Contains(t, out, CodePink+"fooBar"+Reset)
+	})
+
+	t.Run("triple backtick inline code colored", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplayWithRenderer(&buf, plain)
+
+		// Closing run must be exactly 3 backticks (same as opening)
+		sd.WriteText("Use ```code `nested` ``` here")
+
+		out := buf.String()
+		assert.Contains(t, out, CodePink+"code `nested`"+Reset)
+		assert.Contains(t, out, " here")
+	})
+
+	t.Run("inline emphasis on fast path is styled", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplayWithRenderer(&buf, plain)
+
+		sd.WriteText("Use *italic* and **bold** and ***both***")
+
+		out := buf.String()
+		assert.Contains(t, out, Italic+"italic"+Reset)
+		assert.Contains(t, out, Bold+"bold"+Reset)
+		assert.Contains(t, out, Bold+Italic+"both"+Reset)
+	})
+
 	t.Run("tool call flushes pending markdown", func(t *testing.T) {
 		var buf strings.Builder
 		sd := NewStepDisplayWithRenderer(&buf, plain)

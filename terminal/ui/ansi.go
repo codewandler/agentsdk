@@ -9,6 +9,8 @@ const (
 	BrightGreen  = "\033[92m"
 	BrightYellow = "\033[93m"
 	BrightCyan   = "\033[96m"
+	CodePink     = "\033[38;2;203;166;247m"
+	Italic       = "\033[3m"
 )
 
 // Truncate returns s shortened to max bytes with an ASCII ellipsis marker.

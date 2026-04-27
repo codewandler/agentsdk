@@ -29,6 +29,7 @@ type StepDisplay struct {
 	atLineStart    bool
 	fenceCandidate string
 	code           *streamingCodeBlock
+	inlineBuf      string
 }
 
 type streamingCodeBlock struct {
@@ -139,7 +140,7 @@ func (d *StepDisplay) writeTextChunk(chunk string) {
 			n = idx + 1
 		}
 		part := chunk[:n]
-		fmt.Fprint(d.w, part)
+		d.writeFastPathWithInline(part)
 		d.atLineStart = strings.HasSuffix(part, "\n")
 		chunk = chunk[n:]
 	}
@@ -213,6 +214,10 @@ func (d *StepDisplay) flushText() {
 	if d.code != nil {
 		d.flushCode()
 	}
+	if d.inlineBuf != "" {
+		fmt.Fprint(d.w, d.inlineBuf)
+		d.inlineBuf = ""
+	}
 	_ = d.buffer.Flush()
 }
 
@@ -281,6 +286,10 @@ func couldBeFenceOpening(s string) bool {
 	}
 	run := countLeadingByte(trimmed, marker)
 	if run >= 3 {
+		// Backtick fences cannot contain backticks in the info string.
+		if marker == '`' && strings.Contains(trimmed[run:], "`") {
+			return false
+		}
 		return true
 	}
 	return run == len(trimmed)
@@ -322,4 +331,118 @@ func startsOrderedList(s string) bool {
 		}
 	}
 	return len(s) <= 9
+}
+
+// writeFastPathWithInline styles inline code spans on the fast path.
+// It tracks backtick runs and emits ANSI-colored spans for matched pairs.
+// Unmatched backticks at line/stream end are buffered and carried forward.
+func (d *StepDisplay) writeFastPathWithInline(s string) {
+	d.inlineBuf += s
+	d.inlineBuf = flushInlineStyles(d.inlineBuf, d.w)
+}
+
+func flushInlineStyles(buf string, w io.Writer) string {
+	keep := 0
+	for keep < len(buf) {
+		codeIdx := strings.IndexByte(buf[keep:], '`')
+		emphIdx := -1
+		for i := keep; i < len(buf); i++ {
+			if buf[i] == '*' || buf[i] == '_' {
+				emphIdx = i - keep
+				break
+			}
+		}
+		var start int
+		var isCode bool
+		if codeIdx >= 0 && (emphIdx < 0 || codeIdx < emphIdx) {
+			start = keep + codeIdx
+			isCode = true
+		} else if emphIdx >= 0 {
+			start = keep + emphIdx
+			isCode = false
+		} else {
+			fmt.Fprint(w, buf[keep:])
+			return ""
+		}
+		run := 1
+		for start+run < len(buf) && buf[start+run] == buf[start] {
+			run++
+		}
+		if isCode {
+			closeIdx := findBacktickRun(buf[start+run:], run)
+			if closeIdx < 0 {
+				if start > keep {
+					fmt.Fprint(w, buf[keep:start])
+				}
+				return buf[start:]
+			}
+			if start > keep {
+				fmt.Fprint(w, buf[keep:start])
+			}
+			contentStart := start + run
+			contentEnd := start + run + closeIdx
+			fmt.Fprint(w, CodePink+strings.TrimSpace(buf[contentStart:contentEnd])+Reset)
+			keep = contentEnd + run
+		} else {
+			closeIdx := findEmphasisRun(buf[start+run:], buf[start], run)
+			if closeIdx < 0 {
+				if start > keep {
+					fmt.Fprint(w, buf[keep:start])
+				}
+				return buf[start:]
+			}
+			if start > keep {
+				fmt.Fprint(w, buf[keep:start])
+			}
+			contentStart := start + run
+			contentEnd := start + run + closeIdx
+			text := strings.TrimSpace(buf[contentStart:contentEnd])
+			var style string
+			switch run {
+			case 1:
+				style = Italic + text + Reset
+			case 2:
+				style = Bold + text + Reset
+			default:
+				style = Bold + Italic + text + Reset
+			}
+			fmt.Fprint(w, style)
+			keep = contentEnd + run
+		}
+	}
+	return ""
+}
+
+func findBacktickRun(s string, want int) int {
+	for i := 0; i <= len(s)-want; i++ {
+		if s[i] != '`' {
+			continue
+		}
+		actual := 1
+		for i+actual < len(s) && s[i+actual] == '`' {
+			actual++
+		}
+		if actual == want {
+			return i
+		}
+		i += actual - 1
+	}
+	return -1
+}
+
+func findEmphasisRun(s string, marker byte, want int) int {
+	for i := 0; i <= len(s)-want; i++ {
+		if s[i] != marker {
+			continue
+		}
+		actual := 1
+		for i+actual < len(s) && s[i+actual] == marker {
+			actual++
+		}
+		if actual == want {
+			return i
+		}
+		i += actual - 1
+	}
+	return -1
 }

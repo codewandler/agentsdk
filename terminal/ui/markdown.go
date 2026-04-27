@@ -390,7 +390,7 @@ func (r nativeMarkdownRenderer) renderInline(n ast.Node, source []byte) string {
 	case *ast.String:
 		return string(node.Value)
 	case *ast.CodeSpan:
-		return "\x1b[38;2;203;166;247m" + strings.TrimSpace(string(node.Text(source))) + Reset
+		return CodePink + strings.TrimSpace(string(node.Text(source))) + Reset
 	case *ast.Emphasis:
 		text := r.renderInlineChildren(node, source)
 		if node.Level >= 2 {

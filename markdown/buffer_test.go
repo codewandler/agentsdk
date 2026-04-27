@@ -401,6 +401,18 @@ func TestBuffer_WriteReturnsLenOnInternalError(t *testing.T) {
 	require.Equal(t, len("hello"), n)
 }
 
+func TestBuffer_ForceSplitsVeryLongPendingBlocks(t *testing.T) {
+	var got []Block
+	b := NewBuffer(func(blocks []Block) { got = append(got, blocks...) })
+
+	// Write a long paragraph without any blank line.
+	long := strings.Repeat("word ", 900) // ~4500 bytes
+	_, err := b.WriteString(long)
+	require.NoError(t, err)
+	require.NotEmpty(t, got, "long block should have been force-emitted")
+	require.Equal(t, BlockParagraph, got[len(got)-1].Kind)
+}
+
 func TestBuffer_CallbackDeliveryIsSerialized(t *testing.T) {
 	var active int32
 	var overlap int32
