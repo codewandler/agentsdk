@@ -9,6 +9,7 @@ Run it from the agentsdk repository root:
 go run ./cmd/agentsdk run examples/engineer
 ```
 
+The bundled `main` agent is configured with `max-steps: 100` so longer multi-step coding and review sessions do not stop at the SDK default of 30.
 ## Tools
 
 The agent has access to filesystem, shell, git, and web tools:

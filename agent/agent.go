@@ -37,67 +37,69 @@ var ErrMaxStepsReached = errors.New("maximum steps reached")
 // Spec describes an agent identity/configuration independent of a running
 // conversation session.
 type Spec struct {
-	Name         string
-	Description  string
-	System       string
-	Inference    InferenceOptions
-	MaxSteps     int
-	Tools        []string
-	Skills       []string
-	SkillSources []skill.Source
-	Commands     []string
-	ResourceID   string
-	ResourceFrom string
-	Capabilities []capability.AttachSpec
+	Name             string
+	Description      string
+	System           string
+	Inference        InferenceOptions
+	MaxSteps         int
+	Tools            []string
+	Skills           []string
+	SkillSources     []skill.Source
+	Commands         []string
+	InstructionPaths []string
+	ResourceID       string
+	ResourceFrom     string
+	Capabilities     []capability.AttachSpec
 }
 
 // Instance is a running session-backed agent built from a Spec and runtime
 // options.
 type Instance struct {
-	client              unified.Client
-	autoMux             func(adapterconfig.AutoOptions) (adapterconfig.AutoResult, error)
-	autoResult          adapterconfig.AutoResult
-	providerIdentity    conversation.ProviderIdentity
-	resolvedProvider    string
-	resolvedModel       string
-	sourceAPI           adapt.ApiKind
-	sourceAPIExplicit   bool
-	modelPolicy         ModelPolicy
-	modelCompatibility  modelCompatibilityState
-	runtime             *agentruntime.Engine
-	tracker             *usage.Tracker
-	toolset             *standard.Toolset
-	inference           InferenceOptions
-	maxSteps            int
-	out                 io.Writer
-	terminalUI          bool
-	workspace           string
-	toolTimeout         time.Duration
-	system              string
-	systemBuilder       func(workspace, prompt string) string
-	sessionID           string
-	history             *agentruntime.History
-	sessionStoreDir     string
-	resumeSession       string
-	sessionStorePath    string
-	cacheKeyPrefix      string
-	verbose             bool
-	initErrs            []error
-	eventHandlerFactory func(*Instance, int) runner.EventHandler
-	toolCtxFactory      func(context.Context) tool.Ctx
-	specName            string
-	specDescription     string
-	specTools           []string
-	specSkills          []string
-	specSkillSources    []skill.Source
-	specCommands        []string
-	specResourceID      string
-	specResourceFrom    string
-	skillRepo           *skill.Repository
-	materializedSystem  string
-	capabilitySpecs     []capability.AttachSpec
-	capabilityRegistry  capability.Registry
-	threadRuntime       *agentruntime.ThreadRuntime
+	client               unified.Client
+	autoMux              func(adapterconfig.AutoOptions) (adapterconfig.AutoResult, error)
+	autoResult           adapterconfig.AutoResult
+	providerIdentity     conversation.ProviderIdentity
+	resolvedProvider     string
+	resolvedModel        string
+	sourceAPI            adapt.ApiKind
+	sourceAPIExplicit    bool
+	modelPolicy          ModelPolicy
+	modelCompatibility   modelCompatibilityState
+	runtime              *agentruntime.Engine
+	tracker              *usage.Tracker
+	toolset              *standard.Toolset
+	inference            InferenceOptions
+	maxSteps             int
+	out                  io.Writer
+	terminalUI           bool
+	workspace            string
+	toolTimeout          time.Duration
+	system               string
+	systemBuilder        func(workspace, prompt string) string
+	sessionID            string
+	history              *agentruntime.History
+	sessionStoreDir      string
+	resumeSession        string
+	sessionStorePath     string
+	cacheKeyPrefix       string
+	verbose              bool
+	initErrs             []error
+	eventHandlerFactory  func(*Instance, int) runner.EventHandler
+	toolCtxFactory       func(context.Context) tool.Ctx
+	specName             string
+	specDescription      string
+	specTools            []string
+	specSkills           []string
+	specSkillSources     []skill.Source
+	specCommands         []string
+	specInstructionPaths []string
+	specResourceID       string
+	specResourceFrom     string
+	skillRepo            *skill.Repository
+	materializedSystem   string
+	capabilitySpecs      []capability.AttachSpec
+	capabilityRegistry   capability.Registry
+	threadRuntime        *agentruntime.ThreadRuntime
 }
 
 func New(opts ...Option) (*Instance, error) {
@@ -201,18 +203,19 @@ func (a *Instance) Spec() Spec {
 		return Spec{}
 	}
 	return Spec{
-		Name:         a.specName,
-		Description:  a.specDescription,
-		System:       a.system,
-		Inference:    a.inference,
-		MaxSteps:     a.maxSteps,
-		Tools:        append([]string(nil), a.specTools...),
-		Skills:       append([]string(nil), a.specSkills...),
-		SkillSources: append([]skill.Source(nil), a.specSkillSources...),
-		Commands:     append([]string(nil), a.specCommands...),
-		ResourceID:   a.specResourceID,
-		ResourceFrom: a.specResourceFrom,
-		Capabilities: append([]capability.AttachSpec(nil), a.capabilitySpecs...),
+		Name:             a.specName,
+		Description:      a.specDescription,
+		System:           a.system,
+		Inference:        a.inference,
+		MaxSteps:         a.maxSteps,
+		Tools:            append([]string(nil), a.specTools...),
+		Skills:           append([]string(nil), a.specSkills...),
+		SkillSources:     append([]skill.Source(nil), a.specSkillSources...),
+		Commands:         append([]string(nil), a.specCommands...),
+		InstructionPaths: append([]string(nil), a.specInstructionPaths...),
+		ResourceID:       a.specResourceID,
+		ResourceFrom:     a.specResourceFrom,
+		Capabilities:     append([]capability.AttachSpec(nil), a.capabilitySpecs...),
 	}
 }
 
@@ -776,6 +779,9 @@ func (a *Instance) contextProviders() []agentcontext.Provider {
 	}
 	if loaded := a.LoadedSkills(); len(loaded) > 0 {
 		providers = append(providers, contextproviders.Skills(loaded...))
+	}
+	if len(a.specInstructionPaths) > 0 {
+		providers = append(providers, contextproviders.AgentsMarkdown(a.specInstructionPaths, contextproviders.AgentsMarkdownOption(contextproviders.WithFileWorkDir(a.workspace))))
 	}
 	return providers
 }

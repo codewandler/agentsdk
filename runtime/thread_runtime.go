@@ -678,6 +678,10 @@ func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragme
 		if content == "" {
 			continue
 		}
+		part := unified.TextPart{Text: content}
+		if cache := cacheControlForContextFragment(fragment); cache != nil {
+			part.CacheControl = cache
+		}
 		if fragment.Authority == agentcontext.AuthorityDeveloper || fragment.Role == unified.RoleSystem {
 			kind := unified.InstructionDeveloper
 			if fragment.Role == unified.RoleSystem {
@@ -686,7 +690,7 @@ func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragme
 			i.Instructions = append(i.Instructions, unified.Instruction{
 				Kind:    kind,
 				Name:    "context",
-				Content: []unified.ContentPart{unified.TextPart{Text: content}},
+				Content: []unified.ContentPart{part},
 				Meta: map[string]any{
 					"context_fragment": string(fragment.Key),
 					"authority":        string(fragment.Authority),
@@ -703,7 +707,7 @@ func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragme
 			Message: unified.Message{
 				Role:    role,
 				Name:    "context",
-				Content: []unified.ContentPart{unified.TextPart{Text: content}},
+				Content: []unified.ContentPart{part},
 				Meta: map[string]any{
 					"context_fragment": string(fragment.Key),
 					"authority":        string(fragment.Authority),
@@ -712,6 +716,13 @@ func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragme
 		})
 	}
 	return i
+}
+
+func cacheControlForContextFragment(fragment agentcontext.ContextFragment) *unified.CacheControl {
+	if !fragment.CachePolicy.Stable {
+		return &unified.CacheControl{Type: unified.CacheControlEphemeral}
+	}
+	return nil
 }
 
 func contextRemovalItems(removed []agentcontext.FragmentRemoved) []conversation.Item {

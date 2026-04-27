@@ -427,6 +427,48 @@ func TestThreadRuntimeRendersDeveloperAuthorityAsInstruction(t *testing.T) {
 	requireNoMessageContaining(t, client.requests[0], "Always preserve durable state.")
 }
 
+func TestThreadRuntimePropagatesEphemeralCacheControlForUnstableContextFragments(t *testing.T) {
+	ctx := context.Background()
+	contexts, err := agentcontext.NewManager(runtimeContextProvider{
+		key: "dynamic",
+		fragments: []agentcontext.ContextFragment{{
+			Key:       "dynamic/current",
+			Content:   "Current volatile state.",
+			Authority: agentcontext.AuthorityUser,
+			CachePolicy: agentcontext.CachePolicy{
+				Scope: agentcontext.CacheTurn,
+			},
+		}},
+	})
+	require.NoError(t, err)
+	store := thread.NewMemoryStore()
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_cache_control"})
+	require.NoError(t, err)
+	registry, err := capability.NewRegistry()
+	require.NoError(t, err)
+	threadRuntime, err := NewThreadRuntime(live, registry, WithContextManager(contexts))
+	require.NoError(t, err)
+	client := &fakeClient{}
+	engine, err := New(client, WithThreadRuntime(threadRuntime))
+	require.NoError(t, err)
+
+	_, err = engine.RunTurn(ctx, "hi")
+	require.NoError(t, err)
+	require.Len(t, client.requests, 1)
+	requireMessageContaining(t, client.requests[0], "Current volatile state.")
+	for _, message := range client.requests[0].Messages {
+		for _, part := range message.Content {
+			text, ok := part.(unified.TextPart)
+			if ok && strings.Contains(text.Text, "Current volatile state.") {
+				require.NotNil(t, text.CacheControl)
+				require.Equal(t, unified.CacheControlEphemeral, text.CacheControl.Type)
+				return
+			}
+		}
+	}
+	t.Fatal("missing context text part")
+}
+
 func TestThreadRuntimeCompactsConversationAndCommitsContextRender(t *testing.T) {
 	ctx := context.Background()
 	store := thread.NewMemoryStore()

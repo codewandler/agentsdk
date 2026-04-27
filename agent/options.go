@@ -89,6 +89,7 @@ func WithSpec(spec Spec) Option {
 		a.specSkills = append([]string(nil), spec.Skills...)
 		a.specSkillSources = append([]skill.Source(nil), spec.SkillSources...)
 		a.specCommands = append([]string(nil), spec.Commands...)
+		a.specInstructionPaths = append([]string(nil), spec.InstructionPaths...)
 		a.specResourceID = spec.ResourceID
 		a.specResourceFrom = spec.ResourceFrom
 		if len(spec.Capabilities) > 0 {

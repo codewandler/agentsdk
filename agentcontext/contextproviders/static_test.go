@@ -3,8 +3,10 @@ package contextproviders
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/skill"
@@ -17,6 +19,9 @@ func TestStaticProvidersRenderCoreContext(t *testing.T) {
 		Model(ModelInfo{Name: "gpt-test", Provider: "openai", ContextWindow: 128000, Effort: "high"}),
 		Permissions("workspace-write"),
 		ProjectInstructions(ProjectInstruction{Path: "AGENTS.md", Content: "follow repo notes"}),
+		AgentsMarkdown([]string{"AGENTS.md"}, AgentsMarkdownOption(WithFileReader(func(path string) ([]byte, fs.FileInfo, error) {
+			return []byte("follow repo notes"), fakeFileInfo{name: path, size: int64(len("follow repo notes")), modTime: time.Unix(1714200000, 0)}, nil
+		}))),
 		Skills(skill.Skill{Name: "planner", Description: "planning", SourceLabel: "repo", Body: "plan carefully"}),
 		Tools(tool.New("search", "search files", func(tool.Ctx, struct{}) (tool.Result, error) {
 			return tool.Text("ok"), nil

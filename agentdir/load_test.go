@@ -51,6 +51,7 @@ You are a coder.`),
 	require.Len(t, bundle.SkillSources, 1)
 	require.Equal(t, ".agents/skills", bundle.SkillSources[0].Root)
 	require.Len(t, bundle.Skills, 1)
+	require.Equal(t, []string{".agents/agents/AGENTS.md", ".agents/AGENTS.md", "AGENTS.md"}, bundle.AgentSpecs[0].InstructionPaths)
 	require.Equal(t, "coder", bundle.Skills[0].Name)
 	require.Equal(t, "Coder skill", bundle.Skills[0].Description)
 }
@@ -146,6 +147,17 @@ func TestAgentResourceIDsIncludeSourcePathWhenNeeded(t *testing.T) {
 	}
 	require.Contains(t, ids, "agents:project:reviewer#.agents/agents/reviewer.md")
 	require.Contains(t, ids, "agents:project:reviewer#agents/reviewer.md")
+
+}
+
+func TestLoadFSPopulatesInstructionPathsForNestedAgent(t *testing.T) {
+	fsys := fstest.MapFS{
+		".agents/agents/reviewer.md": {Data: []byte("---\nname: reviewer\n---\nReview carefully.")},
+	}
+	bundle, err := LoadFS(fsys, ".")
+	require.NoError(t, err)
+	require.Len(t, bundle.AgentSpecs, 1)
+	require.Equal(t, []string{".agents/agents/AGENTS.md", ".agents/AGENTS.md", "AGENTS.md"}, bundle.AgentSpecs[0].InstructionPaths)
 }
 
 func TestResolveDefaultAgentDeduplicatesNames(t *testing.T) {

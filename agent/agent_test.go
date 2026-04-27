@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -60,6 +62,54 @@ func TestAgentMaterializesLoadedSkills(t *testing.T) {
 	require.Contains(t, a.MaterializedSystem(), "Loaded skills:")
 	require.Contains(t, a.MaterializedSystem(), "Use careful edits.")
 	require.Equal(t, []string{"coder"}, a.SkillRepository().LoadedNames())
+}
+
+func TestAgentReadsInstructionPathsFromSpecAndReflectsAgentsMarkdownUpdates(t *testing.T) {
+	workspace := t.TempDir()
+	agentsPath := filepath.Join(workspace, ".agents", "AGENTS.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(agentsPath), 0o755))
+	require.NoError(t, os.WriteFile(agentsPath, []byte("first instructions"), 0o644))
+	client := runnertest.NewClient(runnertest.TextStream("ok"), runnertest.TextStream("ok"))
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(workspace),
+		WithSpec(Spec{
+			Name:             "coder",
+			System:           "Base system.",
+			Inference:        InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000},
+			InstructionPaths: []string{".agents/AGENTS.md"},
+		}),
+	)
+	require.NoError(t, err)
+	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
+	requireRequestContainsText(t, client.RequestAt(0), "first instructions")
+
+	require.NoError(t, os.WriteFile(agentsPath, []byte("updated instructions"), 0o644))
+	require.NoError(t, a.RunTurn(context.Background(), 2, "hello again"))
+	requireRequestContainsText(t, client.RequestAt(1), "updated instructions")
+}
+
+func TestAgentRemovesMissingOptionalAgentsMarkdownFragmentOnNextTurn(t *testing.T) {
+	workspace := t.TempDir()
+	agentsPath := filepath.Join(workspace, "AGENTS.md")
+	require.NoError(t, os.WriteFile(agentsPath, []byte("temporary instructions"), 0o644))
+	client := runnertest.NewClient(runnertest.TextStream("ok"), runnertest.TextStream("ok"))
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(workspace),
+		WithSpec(Spec{
+			Name:             "coder",
+			Inference:        InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000},
+			InstructionPaths: []string{"AGENTS.md"},
+		}),
+	)
+	require.NoError(t, err)
+	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
+	requireRequestContainsText(t, client.RequestAt(0), "temporary instructions")
+
+	require.NoError(t, os.Remove(agentsPath))
+	require.NoError(t, a.RunTurn(context.Background(), 2, "hello again"))
+	requireRequestNotContainsText(t, client.RequestAt(1), "temporary instructions")
 }
 
 func TestAgentPersistsAndResumesSession(t *testing.T) {
@@ -257,6 +307,18 @@ func requireRequestContainsText(t *testing.T, req unified.Request, want string) 
 		}
 	}
 	t.Fatalf("request does not contain text %q in %#v", want, req.Messages)
+}
+
+func requireRequestNotContainsText(t *testing.T, req unified.Request, want string) {
+	t.Helper()
+	for _, msg := range req.Messages {
+		for _, part := range msg.Content {
+			text, ok := part.(unified.TextPart)
+			if ok && strings.Contains(text.Text, want) {
+				t.Fatalf("request unexpectedly contains text %q in %#v", want, req.Messages)
+			}
+		}
+	}
 }
 
 func TestDefaultSpecIncludesPlannerCapability(t *testing.T) {

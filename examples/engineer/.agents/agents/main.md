@@ -19,7 +19,7 @@ tools:
 skills: [architecture, code-review, devops]
 commands: [review, design, deploy]
 capabilities: [planner]
-max-steps: 30
+max-steps: 100
 ---
 You are a senior software engineer working in a terminal. You have direct access
 to the filesystem, shell, git, and the web.

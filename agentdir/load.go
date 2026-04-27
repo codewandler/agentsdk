@@ -19,19 +19,19 @@ import (
 )
 
 type AgentFrontmatter struct {
-	Name         string           `yaml:"name"`
-	Description  string           `yaml:"description"`
-	Model        string           `yaml:"model"`
-	MaxTokens    int              `yaml:"max-tokens"`
-	MaxSteps     int              `yaml:"max-steps"`
-	Temperature  float64          `yaml:"temperature"`
-	Thinking     string           `yaml:"thinking"`
-	Effort       string           `yaml:"effort"`
-	Tools        stringList       `yaml:"tools"`
-	Skills       stringList       `yaml:"skills"`
-	Commands     stringList       `yaml:"commands"`
-	SkillSources stringList       `yaml:"skill-sources"`
-	Capabilities capabilityList   `yaml:"capabilities"`
+	Name         string         `yaml:"name"`
+	Description  string         `yaml:"description"`
+	Model        string         `yaml:"model"`
+	MaxTokens    int            `yaml:"max-tokens"`
+	MaxSteps     int            `yaml:"max-steps"`
+	Temperature  float64        `yaml:"temperature"`
+	Thinking     string         `yaml:"thinking"`
+	Effort       string         `yaml:"effort"`
+	Tools        stringList     `yaml:"tools"`
+	Skills       stringList     `yaml:"skills"`
+	Commands     stringList     `yaml:"commands"`
+	SkillSources stringList     `yaml:"skill-sources"`
+	Capabilities capabilityList `yaml:"capabilities"`
 }
 
 type stringList []string
@@ -221,6 +221,38 @@ func LoadFSWithSource(fsys fs.FS, root string, source resource.SourceRef) (resou
 	return out, nil
 }
 
+func instructionPathsForAgentFile(file string) []string {
+	file = clean(file)
+	if file == "" {
+		return nil
+	}
+	dir := path.Dir(file)
+	if dir == "." || dir == "" {
+		return []string{"AGENTS.md"}
+	}
+	seen := map[string]bool{}
+	var out []string
+	for {
+		candidate := path.Join(dir, "AGENTS.md")
+		if !seen[candidate] {
+			seen[candidate] = true
+			out = append(out, candidate)
+		}
+		if dir == "." || dir == "" || dir == "/" {
+			break
+		}
+		next := path.Dir(dir)
+		if next == dir {
+			break
+		}
+		dir = next
+	}
+	if !seen["AGENTS.md"] {
+		out = append(out, "AGENTS.md")
+	}
+	return out
+}
+
 type loadedAgentSpecs struct {
 	Specs  []agent.Spec
 	Skills []resource.SkillContribution
@@ -255,8 +287,12 @@ func loadAgentSpecs(fsys fs.FS, dir string, source resource.SourceRef) (loadedAg
 			return loadedAgentSpecs{}, err
 		}
 		spec.SkillSources = append(spec.SkillSources, sources...)
+		spec.InstructionPaths = append(spec.InstructionPaths, instructionPathsForAgentFile(file)...)
 		out.Specs = append(out.Specs, spec)
 		out.Skills = append(out.Skills, skills...)
+	}
+	for i := range out.Specs {
+		out.Specs[i].InstructionPaths = uniqueStrings(out.Specs[i].InstructionPaths)
 	}
 	return out, nil
 }
