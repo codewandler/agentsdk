@@ -10,6 +10,49 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-04-27
+
+### Added
+
+- Added `app.ContextProvidersPlugin` interface for plugins that contribute
+  app-scoped, stateless context providers at registration time.
+- Added `app.AgentContextPlugin` interface and `app.AgentContextInfo` for
+  plugins that contribute context providers depending on per-agent runtime
+  state (skill repository, activation state, active tools).
+- Added `agent.WithContextProviders` option for injecting extra context
+  providers into an agent instance with key-set dedup against built-in
+  providers.
+- Added `agent.WithContextProviderFactories` option and
+  `agent.ContextProviderFactory` type for deferred context provider
+  construction that runs after skill and tool initialization.
+- Added `plugins/gitplugin` — bundles git tools (`git_status`, `git_diff`)
+  and the git context provider behind `app.Plugin`.
+- Added `plugins/skillplugin` — bundles the skill activation tool, skill
+  source discovery, and the skill inventory context provider.
+- Added `plugins/toolmgmtplugin` — bundles tool management tools
+  (`tools_list`, `tools_activate`, `tools_deactivate`) and a lazy
+  active-tools context provider that reflects runtime activation changes.
+- Added `plugins/standard` with `Plugins(Options)` and `DefaultPlugins()`
+  for pre-assembled plugin sets, as the plugin-oriented counterpart to
+  `tools/standard.Tools()`.
+- Added `app.App.ContextProviders()` accessor for collected plugin context
+  providers.
+
+### Changed
+
+- `app.App.RegisterPlugin` now detects and wires `ContextProvidersPlugin`
+  and `AgentContextPlugin` facets alongside the existing command, tool,
+  agent spec, and skill source facets.
+- `app.App.InstantiateAgent` forwards plugin context providers and
+  agent-context factories to the agent via the new agent options.
+- `agent.Instance.contextProviders()` skips built-in providers whose keys
+  are already contributed by plugin providers (key-set dedup), allowing
+  plugins to replace built-in context providers.
+
+### Removed
+
+- Removed the empty `plugin/` directory.
+
 ## [0.24.2] - 2026-04-27
 
 ### Changed

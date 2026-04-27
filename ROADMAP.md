@@ -1,5 +1,27 @@
 # Roadmap
 
+## Plugin Architecture
+
+The plugin architecture is implemented. First-party plugins bundle tools,
+context providers, commands, and skill sources behind the `app.Plugin`
+interface.
+
+- `app/plugin.go` — `Plugin`, `ContextProvidersPlugin`, `AgentContextPlugin`,
+  and other facet interfaces.
+- `plugins/gitplugin` — git tools + git context provider.
+- `plugins/skillplugin` — skill tool + skill source discovery + skill inventory
+  context provider.
+- `plugins/toolmgmtplugin` — tool management tools + active-tools context
+  provider.
+- `plugins/standard` — pre-assembled plugin sets (`DefaultPlugins`,
+  `Plugins(Options)`).
+
+Follow-up work:
+
+- Migrate `examples/devops-cli` to use `plugins/standard.DefaultPlugins()`.
+- Plugin lifecycle hooks (init, shutdown) if needed.
+- Remote/external plugin support.
+
 ## Skills
 
 The phase-1 runtime skill feature is complete. The next follow-up work for skills is:

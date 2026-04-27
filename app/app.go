@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/skill"
@@ -30,9 +31,11 @@ type App struct {
 	protected    map[string]bool
 	diagnostics  []resource.Diagnostic
 	defaultAgent string
-	plugins      map[string]Plugin
-	skillSources []skill.Source
-	agentOptions []agent.Option
+	plugins             map[string]Plugin
+	contextProviders    []agentcontext.Provider
+	agentContextPlugins []AgentContextPlugin
+	skillSources       []skill.Source
+	agentOptions       []agent.Option
 	tools        *tool.Catalog
 	defaultTools []tool.Tool
 	turnID       int
@@ -334,6 +337,25 @@ func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instan
 		agent.WithTools(tools),
 		agent.WithSkillRepository(repo),
 	}
+	if len(a.contextProviders) > 0 {
+		base = append(base, agent.WithContextProviders(a.contextProviders...))
+	}
+	if len(a.agentContextPlugins) > 0 {
+		factories := make([]agent.ContextProviderFactory, len(a.agentContextPlugins))
+		for i, acp := range a.agentContextPlugins {
+			factories[i] = func(info agent.ContextProviderFactoryInfo) []agentcontext.Provider {
+				return acp.AgentContextProviders(AgentContextInfo{
+					SkillRepository: info.SkillRepository,
+					SkillState:      info.SkillState,
+					ActiveTools:     info.ActiveTools,
+					Workspace:       info.Workspace,
+					Model:           info.Model,
+					Effort:          info.Effort,
+				})
+			}
+		}
+		base = append(base, agent.WithContextProviderFactories(factories...))
+	}
 	base = append(base, a.agentOptions...)
 	base = append(base, opts...)
 	inst, err := agent.New(base...)
@@ -452,6 +474,12 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 			return fmt.Errorf("app: register plugin %q tools: %w", plugin.Name(), err)
 		}
 	}
+	if cp, ok := plugin.(ContextProvidersPlugin); ok {
+		a.contextProviders = append(a.contextProviders, cp.ContextProviders()...)
+	}
+	if acp, ok := plugin.(AgentContextPlugin); ok {
+		a.agentContextPlugins = append(a.agentContextPlugins, acp)
+	}
 	return nil
 }
 
@@ -491,6 +519,13 @@ func (a *App) Diagnostics() []resource.Diagnostic {
 		return nil
 	}
 	return append([]resource.Diagnostic(nil), a.diagnostics...)
+}
+
+func (a *App) ContextProviders() []agentcontext.Provider {
+	if a == nil {
+		return nil
+	}
+	return append([]agentcontext.Provider(nil), a.contextProviders...)
 }
 
 func (a *App) SkillSources() []skill.Source {

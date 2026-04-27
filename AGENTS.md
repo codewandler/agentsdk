@@ -72,9 +72,31 @@ If `llmadapter resolve <model>` works but `miniagent -m <model>` fails, first
 verify that the installed `miniagent` binary was rebuilt after the dependency
 update. Otherwise the binary may still contain older routing behavior.
 
+## Plugin architecture
+
+First-party plugins live under `plugins/`. Each plugin bundles related tools,
+context providers, and skill sources behind the `app.Plugin` interface.
+
+- `plugins/gitplugin` — git tools + git context provider.
+- `plugins/skillplugin` — skill tool + discovery + skill inventory context.
+- `plugins/toolmgmtplugin` — tool management tools + active-tools context.
+- `plugins/standard` — pre-assembled plugin sets for common configurations.
+
+Plugin interfaces are defined in `app/plugin.go`. There are two context
+provider facets:
+
+- `ContextProvidersPlugin` — app-scoped, stateless providers created at
+  registration time.
+- `AgentContextPlugin` — agent-scoped, factory-based providers that receive
+  per-agent state (skill repo, toolset) during instantiation.
+
+See `.agents/plans/PLAN-plugin-architecture-and-bundling.md` for the full
+design rationale.
+
 ## Cross-references
 
 - `README.md` — public API overview, runtime stack, CLI resource bundles.
 - `CHANGELOG.md` — release history and migration notes.
 - `docs/RESOURCES.md` — external format references and compatibility layouts.
+- `.agents/plans/` — design plans and architecture decisions.
 - `.agents/reviews/` — detailed architecture and implementation review notes.

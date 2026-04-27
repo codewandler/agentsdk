@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runnertest"
@@ -477,4 +478,106 @@ func TestAgentResumesActivatedSkillReferenceAcrossSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, second.MaterializedSystem(), "Review body")
 	require.Len(t, second.SkillActivationState().ActiveReferences("base"), 1)
+}
+
+// ── WithContextProviders tests ──────────────────────────────────────────────
+
+type stubProvider struct {
+	key agentcontext.ProviderKey
+}
+
+func (p stubProvider) Key() agentcontext.ProviderKey { return p.key }
+func (p stubProvider) GetContext(context.Context, agentcontext.Request) (agentcontext.ProviderContext, error) {
+	return agentcontext.ProviderContext{}, nil
+}
+
+func TestWithContextProvidersAddsExtraProviders(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	extra := stubProvider{key: "custom"}
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+		WithContextProviders(extra),
+	)
+	require.NoError(t, err)
+
+	// The extra provider should appear in the context state after a turn.
+	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
+	state := a.ContextState()
+	require.Contains(t, state, "custom")
+}
+
+func TestWithContextProvidersDedupsBuiltinKeys(t *testing.T) {
+	// A plugin provider with key "environment" should replace the built-in.
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	override := stubProvider{key: "environment"}
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+		WithContextProviders(override),
+	)
+	require.NoError(t, err)
+
+	// Run a turn — should not fail with duplicate key error.
+	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
+
+	// The context state should still mention environment (from the override).
+	state := a.ContextState()
+	require.Contains(t, state, "environment")
+}
+
+func TestWithContextProviderFactoriesRunsAfterSkillInit(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	var capturedInfo ContextProviderFactoryInfo
+	factory := func(info ContextProviderFactoryInfo) []agentcontext.Provider {
+		capturedInfo = info
+		return []agentcontext.Provider{stubProvider{key: "factory_test"}}
+	}
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+		WithContextProviderFactories(factory),
+	)
+	require.NoError(t, err)
+
+	// Factory should have been called with populated info.
+	require.NotEmpty(t, capturedInfo.Workspace)
+	require.Equal(t, testProvider+"/"+testModel, capturedInfo.Model)
+
+	// The factory-produced provider should appear in context.
+	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
+	state := a.ContextState()
+	require.Contains(t, state, "factory_test")
+}
+
+func TestWithContextProviderFactoriesSkillStateAvailable(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	fsys := fstest.MapFS{
+		"skills/coder/SKILL.md": {Data: []byte("---\nname: coder\ndescription: Coder\n---\n# Coder")},
+	}
+	var capturedInfo ContextProviderFactoryInfo
+	factory := func(info ContextProviderFactoryInfo) []agentcontext.Provider {
+		capturedInfo = info
+		return nil
+	}
+	_, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithSpec(Spec{
+			Name:         "coder",
+			Inference:    InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000},
+			Skills:       []string{"coder"},
+			SkillSources: []skill.Source{skill.FSSource("test", "test", fsys, "skills", skill.SourceEmbedded, 0)},
+		}),
+		WithContextProviderFactories(factory),
+	)
+	require.NoError(t, err)
+
+	// Factory should see the initialized skill repo and state.
+	require.NotNil(t, capturedInfo.SkillRepository)
+	require.NotNil(t, capturedInfo.SkillState)
+	require.Equal(t, []string{"coder"}, capturedInfo.SkillRepository.LoadedNames())
 }

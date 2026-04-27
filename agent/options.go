@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/skill"
@@ -209,4 +210,45 @@ func WithCapabilities(specs ...capability.AttachSpec) Option {
 // planner factory is created automatically.
 func WithCapabilityRegistry(registry capability.Registry) Option {
 	return func(a *Instance) { a.capabilityRegistry = registry }
+}
+
+// WithContextProviders adds extra context providers that are registered on the
+// agent's context manager alongside the baseline providers. Plugin-contributed
+// providers flow through this option. Provider keys must not collide with the
+// agent's built-in provider keys; if a plugin provider has the same key as a
+// built-in, the built-in is skipped in favor of the plugin provider.
+func WithContextProviders(providers ...agentcontext.Provider) Option {
+	return func(a *Instance) {
+		a.extraContextProviders = append(a.extraContextProviders, providers...)
+	}
+}
+
+// ContextProviderFactoryInfo carries per-agent state available when a
+// [ContextProviderFactory] is called during agent instantiation.
+//
+// This struct mirrors [app.AgentContextInfo]. When adding fields here,
+// update AgentContextInfo and the bridge in [app.App.InstantiateAgent].
+type ContextProviderFactoryInfo struct {
+	SkillRepository *skill.Repository
+	SkillState      *skill.ActivationState
+	ActiveTools     func() []tool.Tool
+	Workspace       string
+	Model           string
+	Effort          string
+}
+
+// ContextProviderFactory creates context providers that depend on per-agent
+// runtime state. Factories are called once during [New], after skill and tool
+// initialization, so the info struct is fully populated.
+type ContextProviderFactory func(ContextProviderFactoryInfo) []agentcontext.Provider
+
+// WithContextProviderFactories adds factories that produce context providers
+// from per-agent runtime state. The factories are called during [New] after
+// skill initialization. The resulting providers are appended to
+// extraContextProviders and participate in the same key-set dedup as
+// [WithContextProviders].
+func WithContextProviderFactories(factories ...ContextProviderFactory) Option {
+	return func(a *Instance) {
+		a.contextProviderFactories = append(a.contextProviderFactories, factories...)
+	}
 }

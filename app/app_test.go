@@ -10,11 +10,13 @@ import (
 	"testing/fstest"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
+	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
 )
@@ -428,4 +430,219 @@ func TestAppSkillBuiltinReportsAlreadyActiveDynamicSkill(t *testing.T) {
 	result, err := app.Commands().Execute(context.Background(), "/skill architecture")
 	require.NoError(t, err)
 	require.Contains(t, result.Text, "already active (dynamic)")
+}
+
+// ── ContextProvidersPlugin tests ─────────────────────────────────────────────
+
+type testContextProvidersPlugin struct {
+	name      string
+	providers []agentcontext.Provider
+}
+
+func (p testContextProvidersPlugin) Name() string { return p.name }
+func (p testContextProvidersPlugin) ContextProviders() []agentcontext.Provider {
+	return append([]agentcontext.Provider(nil), p.providers...)
+}
+
+type stubProvider struct {
+	key agentcontext.ProviderKey
+}
+
+func (p stubProvider) Key() agentcontext.ProviderKey { return p.key }
+func (p stubProvider) GetContext(context.Context, agentcontext.Request) (agentcontext.ProviderContext, error) {
+	return agentcontext.ProviderContext{}, nil
+}
+
+func TestPluginContextProvidersCollected(t *testing.T) {
+	prov := stubProvider{key: "test_ctx"}
+	app, err := New(
+		WithPlugin(testContextProvidersPlugin{
+			name:      "test",
+			providers: []agentcontext.Provider{prov},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	require.Len(t, app.ContextProviders(), 1)
+	require.Equal(t, agentcontext.ProviderKey("test_ctx"), app.ContextProviders()[0].Key())
+}
+
+func TestPluginContextProvidersMultiplePlugins(t *testing.T) {
+	app, err := New(
+		WithPlugin(testContextProvidersPlugin{
+			name:      "alpha",
+			providers: []agentcontext.Provider{stubProvider{key: "alpha_ctx"}},
+		}),
+		WithPlugin(testContextProvidersPlugin{
+			name:      "beta",
+			providers: []agentcontext.Provider{stubProvider{key: "beta_ctx"}},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	require.Len(t, app.ContextProviders(), 2)
+	keys := make([]agentcontext.ProviderKey, len(app.ContextProviders()))
+	for i, p := range app.ContextProviders() {
+		keys[i] = p.Key()
+	}
+	require.Contains(t, keys, agentcontext.ProviderKey("alpha_ctx"))
+	require.Contains(t, keys, agentcontext.ProviderKey("beta_ctx"))
+}
+
+func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	prov := stubProvider{key: "plugin_git"}
+	app, err := New(
+		WithPlugin(testContextProvidersPlugin{
+			name:      "git",
+			providers: []agentcontext.Provider{prov},
+		}),
+		WithAgentSpec(agent.Spec{
+			Name:      "coder",
+			System:    "You code.",
+			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+
+	_, err = app.InstantiateAgent("coder",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+	)
+	require.NoError(t, err)
+
+	// Run a turn and verify the plugin provider's context is included.
+	_, err = app.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	// The context state should mention the plugin provider key.
+	result, err := app.Commands().Execute(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Contains(t, result.Text, "plugin_git")
+}
+
+func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
+	// A plugin that only implements CommandsPlugin should not contribute
+	// context providers.
+	app, err := New(
+		WithPlugin(testCommandsPlugin{name: "cmds"}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	require.Empty(t, app.ContextProviders())
+}
+
+// ── Multi-facet plugin integration test ───────────────────────────────────
+
+// testMultiFacetPlugin implements ToolsPlugin + ContextProvidersPlugin.
+type testMultiFacetPlugin struct {
+	name      string
+	tools     []tool.Tool
+	providers []agentcontext.Provider
+}
+
+func (p testMultiFacetPlugin) Name() string                                  { return p.name }
+func (p testMultiFacetPlugin) Tools() []tool.Tool                            { return p.tools }
+func (p testMultiFacetPlugin) ContextProviders() []agentcontext.Provider     { return p.providers }
+
+func TestMultiFacetPluginRegistersToolsAndContextProviders(t *testing.T) {
+	dummyTool := tool.New("multi_tool", "A multi-facet tool", func(tool.Ctx, struct{}) (tool.Result, error) {
+		return tool.NewResult().Text("ok").Build(), nil
+	})
+	prov := stubProvider{key: "multi_ctx"}
+
+	app, err := New(
+		WithPlugin(testMultiFacetPlugin{
+			name:      "multi",
+			tools:     []tool.Tool{dummyTool},
+			providers: []agentcontext.Provider{prov},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+
+	// Context providers should be collected.
+	require.Len(t, app.ContextProviders(), 1)
+	require.Equal(t, agentcontext.ProviderKey("multi_ctx"), app.ContextProviders()[0].Key())
+
+	// Tool should be registered in the catalog.
+	selected, err := app.ToolCatalog().Select([]string{"multi_tool"})
+	require.NoError(t, err)
+	require.Len(t, selected, 1)
+	require.Equal(t, "multi_tool", selected[0].Name())
+}
+
+// ── AgentContextPlugin tests ──────────────────────────────────────────────
+
+type testAgentContextPlugin struct {
+	name string
+	key  agentcontext.ProviderKey
+}
+
+func (p testAgentContextPlugin) Name() string { return p.name }
+func (p testAgentContextPlugin) AgentContextProviders(info AgentContextInfo) []agentcontext.Provider {
+	if info.SkillRepository == nil {
+		return nil
+	}
+	return []agentcontext.Provider{stubProvider{key: p.key}}
+}
+
+func TestAgentContextPluginForwardedToAgent(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	app, err := New(
+		WithPlugin(testAgentContextPlugin{name: "skill_ctx", key: "test_skills"}),
+		WithAgentSpec(agent.Spec{
+			Name:      "coder",
+			System:    "You code.",
+			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+
+	_, err = app.InstantiateAgent("coder",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+	)
+	require.NoError(t, err)
+
+	// Run a turn and verify the agent-scoped provider is present.
+	_, err = app.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	result, err := app.Commands().Execute(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Contains(t, result.Text, "test_skills")
+}
+
+func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
+	// Even without explicit skill sources, the agent creates an empty skill
+	// repo during initSkills. The factory always receives a non-nil repo.
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	app, err := New(
+		WithPlugin(testAgentContextPlugin{name: "skill_ctx", key: "test_skills"}),
+		WithAgentSpec(agent.Spec{
+			Name:      "coder",
+			System:    "You code.",
+			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+
+	_, err = app.InstantiateAgent("coder",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+	)
+	require.NoError(t, err)
+
+	// Run a turn — the plugin should contribute a provider because the
+	// agent always creates a skill repo (even if empty).
+	_, err = app.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	result, err := app.Commands().Execute(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Contains(t, result.Text, "test_skills")
 }

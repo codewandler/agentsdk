@@ -99,9 +99,11 @@ type Instance struct {
 	skillRepo            *skill.Repository
 	skillState           *skill.ActivationState
 	materializedSystem   string
-	capabilitySpecs      []capability.AttachSpec
-	capabilityRegistry   capability.Registry
-	threadRuntime        *agentruntime.ThreadRuntime
+	capabilitySpecs          []capability.AttachSpec
+	capabilityRegistry       capability.Registry
+	threadRuntime            *agentruntime.ThreadRuntime
+	extraContextProviders    []agentcontext.Provider
+	contextProviderFactories []ContextProviderFactory
 }
 
 func New(opts ...Option) (*Instance, error) {
@@ -143,6 +145,7 @@ func New(opts ...Option) (*Instance, error) {
 	if err := a.initSkills(); err != nil {
 		return nil, err
 	}
+	a.runContextProviderFactories()
 	if err := a.initRuntime(); err != nil {
 		return nil, err
 	}
@@ -891,31 +894,83 @@ func (a *Instance) replaySkillEvents(events []thread.Event) error {
 	return nil
 }
 
-// contextProviders returns the baseline context providers for this agent
-// instance. These are registered on the context manager (thread-backed or
-// standalone) so the model sees current environment, time, model identity,
-// active tools, and loaded skills as diffable context fragments.
-func (a *Instance) contextProviders() []agentcontext.Provider {
-	providers := []agentcontext.Provider{
-		contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
-		contextproviders.Time(time.Minute),
+// runContextProviderFactories calls each registered factory with the current
+// agent state and appends the resulting providers to extraContextProviders.
+// This runs once during New, after initSkills, so skill repo/state and toolset
+// are available.
+func (a *Instance) runContextProviderFactories() {
+	if len(a.contextProviderFactories) == 0 {
+		return
 	}
-	providers = append(providers, contextproviders.Model(contextproviders.ModelInfo{
+	info := ContextProviderFactoryInfo{
+		SkillRepository: a.skillRepo,
+		SkillState:      a.skillState,
+		Workspace:       a.workspace,
+		Model:           a.inference.Model,
+		Effort:          string(a.inference.Effort),
+	}
+	if a.toolset != nil {
+		info.ActiveTools = a.toolset.ActiveTools
+	}
+	for _, factory := range a.contextProviderFactories {
+		if factory != nil {
+			a.extraContextProviders = append(a.extraContextProviders, factory(info)...)
+		}
+	}
+}
+
+// contextProviders returns the context providers for this agent instance.
+// These are registered on the context manager (thread-backed or standalone)
+// so the model sees current environment, time, model identity, active tools,
+// loaded skills, and any plugin-contributed context as diffable fragments.
+//
+// Plugin-contributed providers (extraContextProviders) are appended after the
+// baseline set. If a plugin provider has the same key as a built-in, the
+// built-in is skipped so the plugin can replace it.
+func (a *Instance) contextProviders() []agentcontext.Provider {
+	// Build a key set from extra (plugin) providers so built-ins with
+	// colliding keys are skipped in favor of the plugin contribution.
+	extraKeys := make(map[agentcontext.ProviderKey]bool, len(a.extraContextProviders))
+	for _, p := range a.extraContextProviders {
+		if p != nil {
+			extraKeys[p.Key()] = true
+		}
+	}
+
+	// addIfNotOverridden appends a provider only when no plugin already
+	// contributes the same key.
+	var providers []agentcontext.Provider
+	addIfNotOverridden := func(p agentcontext.Provider) {
+		if !extraKeys[p.Key()] {
+			providers = append(providers, p)
+		}
+	}
+
+	addIfNotOverridden(contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)))
+	addIfNotOverridden(contextproviders.Time(time.Minute))
+	addIfNotOverridden(contextproviders.Model(contextproviders.ModelInfo{
 		Name:     a.resolvedModel,
 		Provider: a.resolvedProvider,
 		Effort:   string(a.inference.Effort),
 	}))
 	if a.toolset != nil {
-		providers = append(providers, contextproviders.Tools(a.toolset.ActiveTools()...))
+		addIfNotOverridden(contextproviders.Tools(a.toolset.ActiveTools()...))
 	}
 	if a.skillRepo != nil || a.skillState != nil {
-		providers = append(providers, contextproviders.SkillInventoryProvider(contextproviders.SkillInventory{
+		addIfNotOverridden(contextproviders.SkillInventoryProvider(contextproviders.SkillInventory{
 			Catalog: a.skillRepo,
 			State:   a.skillState,
 		}))
 	}
 	if len(a.specInstructionPaths) > 0 {
-		providers = append(providers, contextproviders.AgentsMarkdown(a.specInstructionPaths, contextproviders.AgentsMarkdownOption(contextproviders.WithFileWorkDir(a.workspace))))
+		addIfNotOverridden(contextproviders.AgentsMarkdown(a.specInstructionPaths, contextproviders.AgentsMarkdownOption(contextproviders.WithFileWorkDir(a.workspace))))
+	}
+
+	// Append plugin-contributed providers after the baseline set.
+	for _, p := range a.extraContextProviders {
+		if p != nil {
+			providers = append(providers, p)
+		}
 	}
 	return providers
 }
