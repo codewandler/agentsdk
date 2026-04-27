@@ -2,10 +2,7 @@ package contextproviders
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +11,7 @@ import (
 	"github.com/codewandler/llmadapter/unified"
 )
 
+// GitMode controls how much git state is included in context.
 type GitMode string
 
 const (
@@ -28,8 +26,12 @@ const (
 	defaultGitTimeout  = 5 * time.Second
 )
 
+// GitOption configures a GitProvider.
 type GitOption func(*GitProvider)
 
+// GitProvider renders git repository state as context. It delegates the
+// baseline key/value lines (root, branch, head) to a [CmdProvider] and adds
+// dirty state and optional changed-file lists on top.
 type GitProvider struct {
 	key      agentcontext.ProviderKey
 	workDir  string
@@ -37,9 +39,10 @@ type GitProvider struct {
 	maxFiles int
 	maxBytes int
 	timeout  time.Duration
-	runGit   func(context.Context, string, ...string) (string, error)
+	runCmd   func(ctx context.Context, workDir string, name string, args ...string) (string, error)
 }
 
+// Git creates a git context provider.
 func Git(opts ...GitOption) *GitProvider {
 	p := &GitProvider{
 		key:      "git",
@@ -80,6 +83,11 @@ func WithGitTimeout(timeout time.Duration) GitOption {
 	return func(p *GitProvider) { p.timeout = timeout }
 }
 
+// WithGitRunner overrides the command runner for testing.
+func WithGitRunner(run func(ctx context.Context, workDir string, name string, args ...string) (string, error)) GitOption {
+	return func(p *GitProvider) { p.runCmd = run }
+}
+
 func (p *GitProvider) Key() agentcontext.ProviderKey {
 	if p == nil || p.key == "" {
 		return "git"
@@ -87,16 +95,20 @@ func (p *GitProvider) Key() agentcontext.ProviderKey {
 	return p.key
 }
 
-func (p *GitProvider) GetContext(ctx context.Context, _ agentcontext.Request) (agentcontext.ProviderContext, error) {
+func (p *GitProvider) GetContext(ctx context.Context, req agentcontext.Request) (agentcontext.ProviderContext, error) {
+	if p == nil || p.mode == GitOff {
+		return agentcontext.ProviderContext{}, nil
+	}
 	if err := ctx.Err(); err != nil {
 		return agentcontext.ProviderContext{}, err
 	}
-	content, err := p.content(ctx)
+	content, err := p.content(ctx, req)
 	if err != nil {
 		return agentcontext.ProviderContext{}, err
 	}
+	fp := contentFingerprint("git", content)
 	if content == "" {
-		return agentcontext.ProviderContext{Fingerprint: contentFingerprint("git", content)}, nil
+		return agentcontext.ProviderContext{Fingerprint: fp}, nil
 	}
 	return agentcontext.ProviderContext{
 		Fragments: []agentcontext.ContextFragment{{
@@ -108,83 +120,75 @@ func (p *GitProvider) GetContext(ctx context.Context, _ agentcontext.Request) (a
 				Scope: agentcontext.CacheTurn,
 			},
 		}},
-		Fingerprint: contentFingerprint("git", content),
+		Fingerprint: fp,
 	}, nil
 }
 
-func (p *GitProvider) StateFingerprint(ctx context.Context, _ agentcontext.Request) (string, bool, error) {
+func (p *GitProvider) StateFingerprint(ctx context.Context, req agentcontext.Request) (string, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return "", false, err
 	}
-	content, err := p.content(ctx)
+	content, err := p.content(ctx, req)
 	if err != nil {
 		return "", false, err
 	}
 	return contentFingerprint("git", content), true, nil
 }
 
-func (p *GitProvider) content(ctx context.Context) (string, error) {
-	if p == nil || p.mode == GitOff {
-		return "", nil
-	}
-	workDir := p.resolvedWorkDir()
-	inside, err := p.git(ctx, workDir, "rev-parse", "--is-inside-work-tree")
+func (p *GitProvider) content(ctx context.Context, req agentcontext.Request) (string, error) {
+	// Check if we're inside a git repo.
+	inside, err := p.run(ctx, Cmd{Command: "git", Args: []string{"rev-parse", "--is-inside-work-tree"}, Optional: true})
 	if err != nil || strings.TrimSpace(inside) != "true" {
 		return "", nil
 	}
-	root := trimGitOutput(p.git(ctx, workDir, "rev-parse", "--show-toplevel"))
-	branch := trimGitOutput(p.git(ctx, workDir, "rev-parse", "--abbrev-ref", "HEAD"))
-	head := trimGitOutput(p.git(ctx, workDir, "rev-parse", "--short", "HEAD"))
-	status, err := p.git(ctx, workDir, "status", "--porcelain=v1", "--untracked-files=normal")
+
+	// Use CmdProvider for the baseline key/value lines (root, branch, head).
+	base := p.baseCmdProvider()
+	baseResult, err := base.GetContext(ctx, req)
 	if err != nil {
 		return "", err
 	}
+	var content string
+	if len(baseResult.Fragments) > 0 {
+		content = baseResult.Fragments[0].Content
+	}
+
+	// Always add dirty state from git status.
+	status, err := p.run(ctx, Cmd{Command: "git", Args: []string{"status", "--porcelain=v1", "--untracked-files=normal"}})
+	if err != nil {
+		// Degrade gracefully: return base content without dirty/changes.
+		return content, nil
+	}
 	changes := parseGitStatus(status)
 	var b strings.Builder
-	writeLine(&b, "root", root)
-	writeLine(&b, "branch", branch)
-	writeLine(&b, "head", head)
+	b.WriteString(content)
 	writeLine(&b, "dirty", strconv.FormatBool(len(changes) > 0))
+
 	if p.mode == GitChangedFiles && len(changes) > 0 {
 		writeGitChanges(&b, changes, p.maxFilesOrDefault())
 	}
 	return limitGitContent(b.String(), p.maxBytesOrDefault()), nil
 }
 
-func (p *GitProvider) resolvedWorkDir() string {
-	if p != nil && p.workDir != "" {
-		if abs, err := filepath.Abs(p.workDir); err == nil {
-			return abs
-		}
-		return p.workDir
+// baseCmdProvider returns a CmdProvider for the basic git identity lines.
+func (p *GitProvider) baseCmdProvider() *CmdProvider {
+	opts := []CmdProviderOption{
+		WithCmdWorkDir(p.workDir),
+		WithCmdTimeout(p.timeout),
 	}
-	wd, err := filepath.Abs(".")
-	if err != nil {
-		return "."
+	if p.runCmd != nil {
+		opts = append(opts, WithCmdRunner(p.runCmd))
 	}
-	return wd
+	return CmdContext(p.Key(), "git/state", GitMinimalCmds(), opts...)
 }
 
-func (p *GitProvider) git(ctx context.Context, workDir string, args ...string) (string, error) {
-	if p != nil && p.runGit != nil {
-		return p.runGit(ctx, workDir, args...)
+func (p *GitProvider) run(ctx context.Context, cmd Cmd) (string, error) {
+	if p.runCmd != nil {
+		return p.runCmd(ctx, p.workDir, cmd.Command, cmd.Args...)
 	}
-	timeout := defaultGitTimeout
-	if p != nil && p.timeout > 0 {
-		timeout = p.timeout
-	}
-	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "git", args...)
-	cmd.Dir = workDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
-			return "", cmdCtx.Err()
-		}
-		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-	return string(out), nil
+	// Delegate to a temporary CmdProvider for consistent timeout/workdir handling.
+	tmp := CmdContext("", "", nil, WithCmdWorkDir(p.workDir), WithCmdTimeout(p.timeout))
+	return tmp.run(ctx, cmd)
 }
 
 func (p *GitProvider) maxFilesOrDefault() int {
@@ -201,11 +205,15 @@ func (p *GitProvider) maxBytesOrDefault() int {
 	return p.maxBytes
 }
 
-func trimGitOutput(out string, err error) string {
-	if err != nil {
-		return ""
+// GitMinimalCmds returns the Cmd list for a minimal git context provider.
+// Callers can use this with [CmdContext] to build a standalone CmdProvider
+// for git identity without the GitProvider's changed_files/truncation logic.
+func GitMinimalCmds() []Cmd {
+	return []Cmd{
+		{Key: "root", Command: "git", Args: []string{"rev-parse", "--show-toplevel"}, Optional: true},
+		{Key: "branch", Command: "git", Args: []string{"rev-parse", "--abbrev-ref", "HEAD"}, Optional: true},
+		{Key: "head", Command: "git", Args: []string{"rev-parse", "--short", "HEAD"}, Optional: true},
 	}
-	return strings.TrimSpace(out)
 }
 
 func parseGitStatus(status string) []string {
@@ -238,8 +246,7 @@ func writeGitChanges(b *strings.Builder, changes []string, maxFiles int) {
 		b.WriteString(change)
 	}
 	if limit < len(changes) {
-		b.WriteString("\ntruncated_files: ")
-		b.WriteString(strconv.Itoa(len(changes) - limit))
+		fmt.Fprintf(b, "\ntruncated_files: %d", len(changes)-limit)
 	}
 }
 
