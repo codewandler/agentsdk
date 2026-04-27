@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/conversation"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -25,6 +26,11 @@ type History interface {
 	Branch() conversation.BranchID
 	BuildRequestForProvider(conversation.Request, conversation.ProviderIdentity) (unified.Request, error)
 	CommitFragment(*conversation.TurnFragment) ([]conversation.NodeID, error)
+}
+
+type threadEventHistory interface {
+	AppendThreadEvents(context.Context, ...thread.Event) error
+	CommitFragmentWithThreadEvents(context.Context, *conversation.TurnFragment, ...thread.Event) ([]conversation.NodeID, error)
 }
 
 func RunTurn(ctx context.Context, history History, client unified.Client, req conversation.Request, opts ...Option) (Result, error) {
@@ -110,11 +116,6 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			emit(ErrorEvent{Err: err})
 			return result, err
 		}
-		if err := commitPreparedRequest(ctx, prepared); err != nil {
-			fragment.Fail(err)
-			emit(ErrorEvent{Err: err})
-			return result, err
-		}
 		currentProviderIdentity = providerIdentity
 		emit(StepDoneEvent{
 			Step:             result.Steps,
@@ -138,12 +139,18 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			fragment.SetAssistantMessage(assistant)
 			fragment.SetUsage(usage)
 			fragment.Complete(finishReason)
-			if _, err := history.CommitFragment(fragment); err != nil {
+			if _, err := commitFinalFragment(ctx, history, prepared, fragment); err != nil {
 				emit(ErrorEvent{Err: err})
 				return result, err
 			}
 			emit(CompletedEvent{Step: result.Steps, FinishReason: finishReason})
 			return result, nil
+		}
+
+		if err := commitPreparedRequest(ctx, history, prepared); err != nil {
+			fragment.Fail(err)
+			emit(ErrorEvent{Err: err})
+			return result, err
 		}
 
 		transcript = append(transcript, assistant)
@@ -189,11 +196,54 @@ func nativeContinuationAvailable(history History, identity conversation.Provider
 	return ok && continuation.SupportsPublicPreviousResponseID(), nil
 }
 
-func commitPreparedRequest(ctx context.Context, prepared PreparedRequest) error {
+func commitPreparedRequest(ctx context.Context, history History, prepared PreparedRequest) error {
+	if len(prepared.ThreadEvents) > 0 {
+		threadHistory, ok := history.(threadEventHistory)
+		if !ok {
+			rollbackPreparedRequest(ctx, prepared)
+			return fmt.Errorf("runner: prepared thread events require thread-backed history")
+		}
+		if err := threadHistory.AppendThreadEvents(ctx, prepared.ThreadEvents...); err != nil {
+			rollbackPreparedRequest(ctx, prepared)
+			return err
+		}
+	}
 	if prepared.Commit == nil {
 		return nil
 	}
 	return prepared.Commit(ctx)
+}
+
+func commitFinalFragment(ctx context.Context, history History, prepared PreparedRequest, fragment *conversation.TurnFragment) ([]conversation.NodeID, error) {
+	if len(prepared.ThreadEvents) > 0 {
+		threadHistory, ok := history.(threadEventHistory)
+		if !ok {
+			rollbackPreparedRequest(ctx, prepared)
+			return nil, fmt.Errorf("runner: prepared thread events require thread-backed history")
+		}
+		ids, err := threadHistory.CommitFragmentWithThreadEvents(ctx, fragment, prepared.ThreadEvents...)
+		if err != nil {
+			rollbackPreparedRequest(ctx, prepared)
+			return nil, err
+		}
+		if prepared.Commit != nil {
+			if err := prepared.Commit(ctx); err != nil {
+				return ids, err
+			}
+		}
+		return ids, nil
+	}
+	ids, err := history.CommitFragment(fragment)
+	if err != nil {
+		rollbackPreparedRequest(ctx, prepared)
+		return nil, err
+	}
+	if prepared.Commit != nil {
+		if err := prepared.Commit(ctx); err != nil {
+			return ids, err
+		}
+	}
+	return ids, nil
 }
 
 func rollbackPreparedRequest(ctx context.Context, prepared PreparedRequest) {

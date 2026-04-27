@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/tool"
@@ -90,6 +91,9 @@ func WithSpec(spec Spec) Option {
 		a.specCommands = append([]string(nil), spec.Commands...)
 		a.specResourceID = spec.ResourceID
 		a.specResourceFrom = spec.ResourceFrom
+		if len(spec.Capabilities) > 0 {
+			a.capabilitySpecs = append([]capability.AttachSpec(nil), spec.Capabilities...)
+		}
 		if spec.System != "" {
 			a.system = spec.System
 		}
@@ -187,4 +191,21 @@ func WithEventHandlerFactory(factory func(*Instance, int) runner.EventHandler) O
 
 func WithToolContextFactory(factory func(context.Context) tool.Ctx) Option {
 	return func(a *Instance) { a.toolCtxFactory = factory }
+}
+
+// WithCapabilities configures capability instances that are attached to the
+// agent's thread runtime on each turn. Each spec must have a CapabilityName
+// and InstanceID. The default capability registry includes the built-in
+// planner factory; use WithCapabilityRegistry to override.
+func WithCapabilities(specs ...capability.AttachSpec) Option {
+	return func(a *Instance) {
+		a.capabilitySpecs = append(a.capabilitySpecs, specs...)
+	}
+}
+
+// WithCapabilityRegistry overrides the default capability registry used to
+// create capability instances. When nil, a registry containing the built-in
+// planner factory is created automatically.
+func WithCapabilityRegistry(registry capability.Registry) Option {
+	return func(a *Instance) { a.capabilityRegistry = registry }
 }

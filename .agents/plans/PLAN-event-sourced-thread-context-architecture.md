@@ -1,7 +1,8 @@
 # PLAN: Event-Sourced Thread, Context, and Prompt Architecture
 
-Status: proposed  
+Status: active implementation
 Created: 2026-04-27
+Last updated: 2026-04-27
 
 ## Goal
 
@@ -13,6 +14,43 @@ This plan is intentionally greenfield-leaning. It should guide a future
 refactor without requiring every part to land at once. The central principle is
 that the durable source of truth is an event log, while model requests are late
 projections from that log plus current harness state.
+
+## Implementation Status
+
+The first cleanup pass has landed and intentionally breaks compatibility with
+the previous session API:
+
+- `conversation.Session`, `conversation.EventStore`,
+  `conversation.ThreadEventStore`, and `conversation/jsonlstore` are removed.
+- `conversation` is now the small core package for tree lineage, payload
+  events, turn fragments, internal items, projection, request defaults, and
+  provider continuation metadata.
+- `runtime.History` owns runtime conversation state, request defaults, thread
+  event encoding for conversation payloads, and provider request projection.
+- `thread.Store` owns create/resume/read/list/archive plus live append.
+- `agentcontext.Manager` owns provider polling, manager-owned key/fingerprint
+  diffs, render records, rollback, and the optional provider fingerprint fast
+  path.
+- `capability` and `capabilities/planner` implement the first stateful
+  capability slice with `capability.attached` and
+  `capability.state_event_dispatched`.
+
+The remaining completion work after this cleanup is:
+
+1. Durable-before-apply history commits: runtime history must append thread
+   events before mutating the in-memory tree.
+2. Context render events: context changes should be persisted as typed
+   `conversation.context_fragment` and
+   `conversation.context_fragment_removed` events, with render records kept as a
+   fast-path snapshot.
+3. Commit boundaries: normal final turns should batch context render events and
+   conversation payload events into one live-thread append when a thread-backed
+   history is available.
+4. Codex hints: thread-backed histories should use durable `ThreadID` as the
+   Codex session key; live runtime session id remains event-source metadata.
+5. Later hardening: strict event schema registry, provider metadata events,
+   buffered JSONL live writer, snapshot/index repair, and broader context
+   snapshot events.
 
 ## Executive Summary
 

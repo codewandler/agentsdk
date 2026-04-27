@@ -17,7 +17,11 @@ import (
 
 // EventContextRenderCommitted records the latest provider render fingerprints
 // so resumed runtimes can continue manager-owned context diffs.
-const EventContextRenderCommitted thread.EventKind = "harness.context_render_committed"
+const (
+	EventContextFragmentRecorded thread.EventKind = "conversation.context_fragment"
+	EventContextFragmentRemoved  thread.EventKind = "conversation.context_fragment_removed"
+	EventContextRenderCommitted  thread.EventKind = "harness.context_render_committed"
+)
 
 // ThreadRuntime binds a live thread to capabilities, context providers, and
 // replay state used by the high-level runtime engine helpers.
@@ -197,19 +201,30 @@ func (r *ThreadRuntime) ReplayContextRenders(events []thread.Event) error {
 	}
 	var latest contextRenderCommitted
 	var ok bool
+	records := map[agentcontext.ProviderKey]agentcontext.ProviderRenderRecord{}
 	for _, event := range events {
-		if event.Kind != EventContextRenderCommitted {
-			continue
+		switch event.Kind {
+		case EventContextFragmentRecorded:
+			if err := applyContextFragmentRecorded(records, event.Payload); err != nil {
+				return err
+			}
+		case EventContextFragmentRemoved:
+			if err := applyContextFragmentRemoved(records, event.Payload); err != nil {
+				return err
+			}
+		case EventContextRenderCommitted:
+			var payload contextRenderCommitted
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return err
+			}
+			latest = payload
+			ok = true
 		}
-		var payload contextRenderCommitted
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return err
-		}
-		latest = payload
-		ok = true
 	}
 	if ok {
 		r.contexts.SetRecords(latest.Records)
+	} else if len(records) > 0 {
+		r.contexts.SetRecords(records)
 	}
 	return nil
 }
@@ -247,11 +262,9 @@ func (r *ThreadRuntime) PrepareRequest(ctx context.Context, meta runner.RequestP
 		out.Items = append(append([]conversation.Item(nil), injection.Items...), req.Items...)
 	}
 	return runner.PreparedRequest{
-		Request: out,
+		Request:      out,
+		ThreadEvents: r.contextRenderEvents(render),
 		Commit: func(ctx context.Context) error {
-			if err := r.appendContextRenderCommitted(ctx, render); err != nil {
-				return err
-			}
 			return render.Commit()
 		},
 		Rollback: func(context.Context) {
@@ -285,6 +298,81 @@ type contextRenderCommitted struct {
 	Records map[agentcontext.ProviderKey]agentcontext.ProviderRenderRecord `json:"records"`
 }
 
+type contextFragmentRecorded struct {
+	ProviderKey string                   `json:"provider_key"`
+	FragmentKey string                   `json:"fragment_key"`
+	Role        unified.Role             `json:"role,omitempty"`
+	Authority   string                   `json:"authority,omitempty"`
+	StartMarker string                   `json:"start_marker,omitempty"`
+	EndMarker   string                   `json:"end_marker,omitempty"`
+	Content     string                   `json:"content"`
+	Fingerprint string                   `json:"fingerprint"`
+	CachePolicy agentcontext.CachePolicy `json:"cache_policy,omitempty"`
+}
+
+type contextFragmentRemovedRecorded struct {
+	ProviderKey         string `json:"provider_key"`
+	FragmentKey         string `json:"fragment_key"`
+	PreviousFingerprint string `json:"previous_fingerprint"`
+}
+
+func applyContextFragmentRecorded(records map[agentcontext.ProviderKey]agentcontext.ProviderRenderRecord, raw json.RawMessage) error {
+	var payload contextFragmentRecorded
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return err
+	}
+	providerKey := agentcontext.ProviderKey(payload.ProviderKey)
+	fragmentKey := agentcontext.FragmentKey(payload.FragmentKey)
+	record := records[providerKey]
+	record.ProviderKey = providerKey
+	if record.Fragments == nil {
+		record.Fragments = map[agentcontext.FragmentKey]agentcontext.RenderedFragmentRecord{}
+	}
+	fragment := agentcontext.ContextFragment{
+		Key:         fragmentKey,
+		Role:        payload.Role,
+		StartMarker: payload.StartMarker,
+		EndMarker:   payload.EndMarker,
+		Content:     payload.Content,
+		Fingerprint: payload.Fingerprint,
+		Authority:   agentcontext.FragmentAuthority(payload.Authority),
+		CachePolicy: payload.CachePolicy,
+	}
+	if fragment.Fingerprint == "" {
+		fragment.Fingerprint = agentcontext.FragmentFingerprint(fragment)
+	}
+	record.Fragments[fragmentKey] = agentcontext.RenderedFragmentRecord{
+		Key:         fragmentKey,
+		Fingerprint: fragment.Fingerprint,
+		Fragment:    fragment,
+	}
+	record.Fingerprint = agentcontext.ProviderFingerprint(record.ActiveFragments())
+	records[providerKey] = record
+	return nil
+}
+
+func applyContextFragmentRemoved(records map[agentcontext.ProviderKey]agentcontext.ProviderRenderRecord, raw json.RawMessage) error {
+	var payload contextFragmentRemovedRecorded
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return err
+	}
+	providerKey := agentcontext.ProviderKey(payload.ProviderKey)
+	fragmentKey := agentcontext.FragmentKey(payload.FragmentKey)
+	record := records[providerKey]
+	record.ProviderKey = providerKey
+	if record.Fragments == nil {
+		record.Fragments = map[agentcontext.FragmentKey]agentcontext.RenderedFragmentRecord{}
+	}
+	record.Fragments[fragmentKey] = agentcontext.RenderedFragmentRecord{
+		Key:         fragmentKey,
+		Fingerprint: payload.PreviousFingerprint,
+		Removed:     true,
+	}
+	record.Fingerprint = agentcontext.ProviderFingerprint(record.ActiveFragments())
+	records[providerKey] = record
+	return nil
+}
+
 func (r *ThreadRuntime) renderAndCommitContext(ctx context.Context, req agentcontext.BuildRequest) (agentcontext.BuildResult, error) {
 	if r == nil || r.contexts == nil || r.live == nil {
 		return agentcontext.BuildResult{}, fmt.Errorf("runtime: thread runtime is nil")
@@ -307,15 +395,70 @@ func (r *ThreadRuntime) appendContextRenderCommitted(ctx context.Context, render
 	if r == nil || r.live == nil || render == nil {
 		return nil
 	}
+	return r.live.Append(ctx, r.contextRenderEvents(render)...)
+}
+
+func (r *ThreadRuntime) contextRenderEvents(render *agentcontext.PreparedRender) []thread.Event {
+	if r == nil || render == nil {
+		return nil
+	}
+	result := render.Result
+	events := make([]thread.Event, 0, len(result.Added)+len(result.Updated)+len(result.Removed)+1)
+	for _, fragment := range append(append([]agentcontext.ContextFragment(nil), result.Added...), result.Updated...) {
+		payload, err := json.Marshal(contextFragmentRecorded{
+			ProviderKey: string(providerKeyForFragment(result, fragment.Key)),
+			FragmentKey: string(fragment.Key),
+			Role:        fragment.Role,
+			Authority:   string(fragment.Authority),
+			StartMarker: fragment.StartMarker,
+			EndMarker:   fragment.EndMarker,
+			Content:     fragment.Content,
+			Fingerprint: fragment.Fingerprint,
+			CachePolicy: fragment.CachePolicy,
+		})
+		if err != nil {
+			continue
+		}
+		events = append(events, thread.Event{
+			Kind:    EventContextFragmentRecorded,
+			Payload: payload,
+			Source:  r.source,
+		})
+	}
+	for _, removed := range result.Removed {
+		payload, err := json.Marshal(contextFragmentRemovedRecorded{
+			ProviderKey:         string(removed.ProviderKey),
+			FragmentKey:         string(removed.FragmentKey),
+			PreviousFingerprint: removed.PreviousFingerprint,
+		})
+		if err != nil {
+			continue
+		}
+		events = append(events, thread.Event{
+			Kind:    EventContextFragmentRemoved,
+			Payload: payload,
+			Source:  r.source,
+		})
+	}
 	payload, err := json.Marshal(contextRenderCommitted{Records: render.Records()})
 	if err != nil {
-		return err
+		return events
 	}
-	return r.live.Append(ctx, thread.Event{
+	events = append(events, thread.Event{
 		Kind:    EventContextRenderCommitted,
 		Payload: payload,
 		Source:  r.source,
 	})
+	return events
+}
+
+func providerKeyForFragment(result agentcontext.BuildResult, key agentcontext.FragmentKey) agentcontext.ProviderKey {
+	for _, provider := range result.Providers {
+		if _, ok := provider.Record.Fragments[key]; ok {
+			return provider.ProviderKey
+		}
+	}
+	return ""
 }
 
 func (c *TurnConfig) addThreadRuntime(runtime *ThreadRuntime) error {

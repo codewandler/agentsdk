@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/conversation"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -29,9 +30,10 @@ type RequestPrepareMeta struct {
 }
 
 type PreparedRequest struct {
-	Request  conversation.Request
-	Commit   func(context.Context) error
-	Rollback func(context.Context)
+	Request      conversation.Request
+	ThreadEvents []thread.Event
+	Commit       func(context.Context) error
+	Rollback     func(context.Context)
 }
 
 type RequestPreparer func(context.Context, RequestPrepareMeta, conversation.Request) (PreparedRequest, error)

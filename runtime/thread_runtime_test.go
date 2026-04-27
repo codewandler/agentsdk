@@ -66,6 +66,8 @@ func TestThreadRuntimeInjectsPlannerToolsContextAndResumes(t *testing.T) {
 	require.NoError(t, err)
 	requireEventCountRuntime(t, stored.Events, capability.EventAttached, 1)
 	requireEventCountRuntime(t, stored.Events, capability.EventStateEventDispatched, 2)
+	requireEventCountRuntime(t, stored.Events, EventContextFragmentRecorded, 2)
+	requireEventCountRuntime(t, stored.Events, EventContextRenderCommitted, 2)
 
 	resumedRuntime, _, err := ResumeThreadRuntime(ctx, store, thread.ResumeParams{
 		ID:     live.ID(),
@@ -318,6 +320,9 @@ func TestThreadRuntimeSendsTombstoneForRemovedFragmentWithNativeContinuation(t *
 	require.Len(t, client.requests, 2)
 	requireNoMessageContaining(t, client.requests[0], "Remove me")
 	requireMessageContaining(t, client.requests[1], "Context fragment removed: planner_1/planner/step/step_1")
+	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
+	require.NoError(t, err)
+	requireEventCountRuntime(t, stored.Events, EventContextFragmentRemoved, 1)
 }
 
 func TestThreadRuntimeReplaysCapabilitiesForSelectedBranch(t *testing.T) {

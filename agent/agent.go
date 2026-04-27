@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
+	"github.com/codewandler/agentsdk/capabilities/planner"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
@@ -45,6 +47,7 @@ type Spec struct {
 	Commands     []string
 	ResourceID   string
 	ResourceFrom string
+	Capabilities []capability.AttachSpec
 }
 
 // Instance is a running session-backed agent built from a Spec and runtime
@@ -91,6 +94,9 @@ type Instance struct {
 	specResourceFrom    string
 	skillRepo           *skill.Repository
 	materializedSystem  string
+	capabilitySpecs     []capability.AttachSpec
+	capabilityRegistry  capability.Registry
+	threadRuntime       *agentruntime.ThreadRuntime
 }
 
 func New(opts ...Option) (*Instance, error) {
@@ -205,6 +211,7 @@ func (a *Instance) Spec() Spec {
 		Commands:     append([]string(nil), a.specCommands...),
 		ResourceID:   a.specResourceID,
 		ResourceFrom: a.specResourceFrom,
+		Capabilities: append([]capability.AttachSpec(nil), a.capabilitySpecs...),
 	}
 }
 
@@ -277,12 +284,20 @@ func (a *Instance) Reset() {
 		return
 	}
 	a.tracker.Reset()
+	a.threadRuntime = nil
 	sessionID, err := newSessionID()
 	if err == nil {
 		a.sessionID = sessionID
 	}
 	if a.sessionStoreDir != "" {
 		if err := a.startPersistentSession(time.Now()); err == nil {
+			if runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...); err == nil {
+				a.runtime = runtimeAgent
+				return
+			}
+		}
+	} else if len(a.capabilitySpecs) > 0 {
+		if err := a.startEphemeralCapabilitySession(context.Background()); err == nil {
 			if runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...); err == nil {
 				a.runtime = runtimeAgent
 				return
@@ -548,6 +563,12 @@ func (a *Instance) runtimeOptions() []agentruntime.Option {
 	if a.history != nil {
 		opts = append(opts, agentruntime.WithHistory(a.history))
 	}
+	if a.threadRuntime != nil {
+		opts = append(opts, agentruntime.WithThreadRuntime(a.threadRuntime))
+	}
+	if len(a.capabilitySpecs) > 0 {
+		opts = append(opts, agentruntime.WithCapabilities(a.capabilitySpecs...))
+	}
 	return opts
 }
 
@@ -564,10 +585,6 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 		agentruntime.WithMaxSteps(a.maxSteps),
 		agentruntime.WithToolTimeout(a.toolTimeout),
 		agentruntime.WithProviderIdentity(a.providerIdentity),
-		agentruntime.WithContextProviders(
-			contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
-			contextproviders.Time(time.Minute),
-		),
 		agentruntime.WithToolContextFactory(func(ctx context.Context) tool.Ctx {
 			if a.toolCtxFactory != nil {
 				return a.toolCtxFactory(ctx)
@@ -578,6 +595,15 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 				agentruntime.WithToolActivation(a.toolset.Activation()),
 			)
 		}),
+	}
+	// When a ThreadRuntime is present, context providers are registered on
+	// its context manager directly (see initThreadRuntime). Passing them
+	// again via engine options would cause a duplicate-provider error.
+	if a.threadRuntime == nil {
+		opts = append(opts, agentruntime.WithContextProviders(
+			contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
+			contextproviders.Time(time.Minute),
+		))
 	}
 	if includeSessionID {
 		opts = append([]agentruntime.Option{agentruntime.WithHistoryOptions(agentruntime.WithHistorySessionID(a.sessionID))}, opts...)
@@ -602,7 +628,8 @@ func (a *Instance) resolveRouteIdentity() {
 }
 
 func (a *Instance) initSession(ctx context.Context) error {
-	if a.resumeSession == "" && a.sessionStoreDir == "" {
+	hasCapabilities := len(a.capabilitySpecs) > 0
+	if a.resumeSession == "" && a.sessionStoreDir == "" && !hasCapabilities {
 		return nil
 	}
 	if a.resumeSession != "" {
@@ -611,30 +638,71 @@ func (a *Instance) initSession(ctx context.Context) error {
 			dir = a.sessionStoreDir
 		}
 		store := threadjsonlstore.Open(dir)
-		live, err := store.Resume(ctx, thread.ResumeParams{
-			ID:     thread.ID(id),
-			Source: thread.EventSource{Type: "session", SessionID: id},
-		})
-		if err != nil {
-			return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+		source := thread.EventSource{Type: "session", SessionID: id}
+		if hasCapabilities {
+			registry, err := a.ensureCapabilityRegistry()
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			tr, stored, err := agentruntime.ResumeThreadRuntime(ctx, store, thread.ResumeParams{
+				ID:     thread.ID(id),
+				Source: source,
+			}, registry, agentruntime.WithThreadRuntimeSource(source))
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			if err := tr.ContextManager().Register(
+				contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
+				contextproviders.Time(time.Minute),
+			); err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			a.threadRuntime = tr
+			events, err := stored.EventsForBranch(tr.Live().BranchID())
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			_ = events // capability replay already handled by ResumeThreadRuntime
+			history, err := agentruntime.ResumeHistoryFromThread(ctx, store, tr.Live(), append(a.historyOptions(false), agentruntime.WithHistorySessionID(id))...)
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			a.history = history
+		} else {
+			live, err := store.Resume(ctx, thread.ResumeParams{
+				ID:     thread.ID(id),
+				Source: source,
+			})
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			history, err := agentruntime.ResumeHistoryFromThread(ctx, store, live, append(a.historyOptions(false), agentruntime.WithHistorySessionID(id))...)
+			if err != nil {
+				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
+			}
+			a.history = history
 		}
-		history, err := agentruntime.ResumeHistoryFromThread(ctx, store, live, append(a.historyOptions(false), agentruntime.WithHistorySessionID(id))...)
-		if err != nil {
-			return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
-		}
-		a.history = history
 		a.sessionID = id
 		a.sessionStoreDir = dir
 		a.sessionStorePath = filepath.Join(dir, id+".jsonl")
 		return nil
 	}
-	return a.startPersistentSession(time.Now())
+	if a.sessionStoreDir != "" {
+		return a.startPersistentSession(time.Now())
+	}
+	// Capabilities without a persistent session: create an in-memory thread
+	// so the ThreadRuntime has a live thread to append capability events to.
+	if hasCapabilities {
+		return a.startEphemeralCapabilitySession(ctx)
+	}
+	return nil
 }
 
 func (a *Instance) startPersistentSession(now time.Time) error {
 	if a.sessionStoreDir == "" {
 		a.history = nil
 		a.sessionStorePath = ""
+		a.threadRuntime = nil
 		return nil
 	}
 	if now.IsZero() {
@@ -649,13 +717,72 @@ func (a *Instance) startPersistentSession(now time.Time) error {
 	if err != nil {
 		return err
 	}
+	if len(a.capabilitySpecs) > 0 {
+		registry, err := a.ensureCapabilityRegistry()
+		if err != nil {
+			return err
+		}
+		if err := a.initThreadRuntime(live, registry); err != nil {
+			return err
+		}
+	}
 	a.history = agentruntime.NewHistory(append(a.historyOptions(true), agentruntime.WithHistoryLiveThread(live))...)
 	a.sessionStorePath = filepath.Join(a.sessionStoreDir, a.sessionID+".jsonl")
 	return nil
 }
 
+// startEphemeralCapabilitySession creates an in-memory thread and ThreadRuntime
+// for agents that use capabilities without a persistent session store.
+func (a *Instance) startEphemeralCapabilitySession(ctx context.Context) error {
+	store := thread.NewMemoryStore()
+	live, err := store.Create(ctx, thread.CreateParams{
+		ID:     thread.ID(a.sessionID),
+		Source: thread.EventSource{Type: "session", SessionID: a.sessionID},
+	})
+	if err != nil {
+		return err
+	}
+	registry, err := a.ensureCapabilityRegistry()
+	if err != nil {
+		return err
+	}
+	return a.initThreadRuntime(live, registry)
+}
+
 func (a *Instance) historyOptions(includeSessionID bool) []agentruntime.HistoryOption {
 	return agentruntime.HistoryOptions(a.baseRuntimeOptions(includeSessionID)...)
+}
+
+// ensureCapabilityRegistry returns the configured registry or creates a default
+// one that includes the built-in planner factory.
+func (a *Instance) ensureCapabilityRegistry() (capability.Registry, error) {
+	if a.capabilityRegistry != nil {
+		return a.capabilityRegistry, nil
+	}
+	return capability.NewRegistry(planner.Factory{})
+}
+
+// initThreadRuntime creates a ThreadRuntime backed by the given live thread and
+// store. It registers the agent's context providers on the thread runtime's
+// context manager.
+func (a *Instance) initThreadRuntime(live thread.Live, registry capability.Registry) error {
+	source := thread.EventSource{Type: "session", SessionID: a.sessionID}
+	tr, err := agentruntime.NewThreadRuntime(live, registry,
+		agentruntime.WithThreadRuntimeSource(source),
+	)
+	if err != nil {
+		return err
+	}
+	// Register the same context providers the engine would use so they are
+	// owned by the thread runtime's context manager (which survives replay).
+	if err := tr.ContextManager().Register(
+		contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
+		contextproviders.Time(time.Minute),
+	); err != nil {
+		return err
+	}
+	a.threadRuntime = tr
+	return nil
 }
 
 func (a *Instance) reasoningConfig() (unified.ReasoningConfig, bool) {

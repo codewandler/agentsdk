@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/thread"
@@ -184,7 +185,7 @@ func (h *History) AppendMessage(msg unified.Message) (conversation.NodeID, error
 }
 
 func (h *History) AppendContext(ctx context.Context, payload conversation.Payload) (conversation.NodeID, error) {
-	ids, err := h.appendPayloads(ctx, payload)
+	ids, err := h.appendPayloads(ctx, nil, payload)
 	if err != nil {
 		return "", err
 	}
@@ -267,9 +268,19 @@ func (h *History) buildRequest(req conversation.Request, identity conversation.P
 		out.ToolChoice = req.ToolChoice
 	}
 	if conversation.IsCodexResponsesIdentity(identity) {
-		conversation.AddCodexSessionHints(&out, identity, string(h.sessionID), h.tree, h.branch)
+		conversation.AddCodexSessionHints(&out, identity, h.codexSessionID(), h.tree, h.branch)
 	}
 	return out, nil
+}
+
+func (h *History) codexSessionID() string {
+	if h != nil && h.live != nil && h.live.ID() != "" {
+		return string(h.live.ID())
+	}
+	if h == nil {
+		return ""
+	}
+	return h.sessionID
 }
 
 func (h *History) projection() conversation.ProjectionPolicy {
@@ -280,6 +291,10 @@ func (h *History) projection() conversation.ProjectionPolicy {
 }
 
 func (h *History) CommitFragment(fragment *conversation.TurnFragment) ([]conversation.NodeID, error) {
+	return h.CommitFragmentWithThreadEvents(context.Background(), fragment)
+}
+
+func (h *History) CommitFragmentWithThreadEvents(ctx context.Context, fragment *conversation.TurnFragment, events ...thread.Event) ([]conversation.NodeID, error) {
 	if fragment == nil {
 		return nil, fmt.Errorf("runtime: turn fragment is nil")
 	}
@@ -287,27 +302,66 @@ func (h *History) CommitFragment(fragment *conversation.TurnFragment) ([]convers
 	if err != nil {
 		return nil, err
 	}
-	return h.appendPayloads(context.Background(), payloads...)
+	return h.appendPayloads(ctx, events, payloads...)
 }
 
-func (h *History) appendPayloads(ctx context.Context, payloads ...conversation.Payload) ([]conversation.NodeID, error) {
-	parent, _ := h.tree.Head(h.branch)
-	ids, err := h.tree.AppendMany(h.branch, payloads...)
-	if err != nil {
-		return nil, err
+func (h *History) AppendThreadEvents(ctx context.Context, events ...thread.Event) error {
+	if len(events) == 0 {
+		return nil
 	}
 	if h.live == nil {
+		return fmt.Errorf("runtime: thread events require live thread")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return h.live.Append(ctx, events...)
+}
+
+func (h *History) appendPayloads(ctx context.Context, prefixEvents []thread.Event, payloads ...conversation.Payload) ([]conversation.NodeID, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	parent, _ := h.tree.Head(h.branch)
+	nodes := make([]conversation.Node, 0, len(payloads))
+	ids := make([]conversation.NodeID, 0, len(payloads))
+	now := time.Now()
+	currentParent := parent
+	for _, payload := range payloads {
+		if payload == nil {
+			return nil, fmt.Errorf("runtime: payload is required")
+		}
+		id := conversation.NewNodeID()
+		if _, exists := h.tree.Node(id); exists {
+			return nil, fmt.Errorf("runtime: generated duplicate node %q", id)
+		}
+		node := conversation.Node{
+			ID:        id,
+			Parent:    currentParent,
+			Payload:   payload,
+			CreatedAt: now,
+		}
+		nodes = append(nodes, node)
+		ids = append(ids, id)
+		currentParent = id
+	}
+	if h.live == nil {
+		if len(prefixEvents) > 0 {
+			return nil, fmt.Errorf("runtime: thread events require live thread")
+		}
+		for _, node := range nodes {
+			if err := h.tree.InsertNode(h.branch, node); err != nil {
+				return nil, err
+			}
+		}
 		return ids, nil
 	}
-	events := make([]thread.Event, 0, len(ids))
-	for i, id := range ids {
-		node, ok := h.tree.Node(id)
-		if !ok {
-			return nil, fmt.Errorf("runtime: node %q not found after append", id)
-		}
+	events := make([]thread.Event, 0, len(prefixEvents)+len(nodes))
+	events = append(events, prefixEvents...)
+	for i, node := range nodes {
 		event, err := threadEventFromPayload(payloads[i], thread.Event{
 			BranchID:     thread.BranchID(h.branch),
-			NodeID:       thread.NodeID(id),
+			NodeID:       thread.NodeID(node.ID),
 			ParentNodeID: thread.NodeID(parent),
 			At:           node.CreatedAt,
 			Source:       thread.EventSource{Type: "conversation", SessionID: h.sessionID},
@@ -316,13 +370,15 @@ func (h *History) appendPayloads(ctx context.Context, payloads ...conversation.P
 			return nil, err
 		}
 		events = append(events, event)
-		parent = id
-	}
-	if ctx == nil {
-		ctx = context.Background()
+		parent = node.ID
 	}
 	if err := h.live.Append(ctx, events...); err != nil {
 		return nil, err
+	}
+	for _, node := range nodes {
+		if err := h.tree.InsertNode(h.branch, node); err != nil {
+			return nil, err
+		}
 	}
 	return ids, nil
 }

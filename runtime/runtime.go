@@ -54,6 +54,10 @@ func New(client unified.Client, opts ...Option) (*Engine, error) {
 	if engine.history == nil {
 		engine.history = NewHistory(engine.historyOptions...)
 	}
+	if engine.threadRuntime != nil && engine.threadRuntime.Live() != nil && engine.history.live == nil {
+		engine.history.live = engine.threadRuntime.Live()
+		engine.history.branch = conversation.BranchID(engine.threadRuntime.Live().BranchID())
+	}
 	return engine, nil
 }
 
