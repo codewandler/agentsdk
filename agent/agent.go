@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
@@ -600,10 +601,7 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 	// its context manager directly (see initThreadRuntime). Passing them
 	// again via engine options would cause a duplicate-provider error.
 	if a.threadRuntime == nil {
-		opts = append(opts, agentruntime.WithContextProviders(
-			contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
-			contextproviders.Time(time.Minute),
-		))
+		opts = append(opts, agentruntime.WithContextProviders(a.contextProviders()...))
 	}
 	if includeSessionID {
 		opts = append([]agentruntime.Option{agentruntime.WithHistoryOptions(agentruntime.WithHistorySessionID(a.sessionID))}, opts...)
@@ -651,10 +649,7 @@ func (a *Instance) initSession(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
 			}
-			if err := tr.ContextManager().Register(
-				contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
-				contextproviders.Time(time.Minute),
-			); err != nil {
+			if err := tr.ContextManager().Register(a.contextProviders()...); err != nil {
 				return fmt.Errorf("resume session %s: %w", a.resumeSession, err)
 			}
 			a.threadRuntime = tr
@@ -762,6 +757,29 @@ func (a *Instance) ensureCapabilityRegistry() (capability.Registry, error) {
 	return capability.NewRegistry(planner.Factory{})
 }
 
+// contextProviders returns the baseline context providers for this agent
+// instance. These are registered on the context manager (thread-backed or
+// standalone) so the model sees current environment, time, model identity,
+// active tools, and loaded skills as diffable context fragments.
+func (a *Instance) contextProviders() []agentcontext.Provider {
+	providers := []agentcontext.Provider{
+		contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
+		contextproviders.Time(time.Minute),
+	}
+	providers = append(providers, contextproviders.Model(contextproviders.ModelInfo{
+		Name:     a.resolvedModel,
+		Provider: a.resolvedProvider,
+		Effort:   string(a.inference.Effort),
+	}))
+	if a.toolset != nil {
+		providers = append(providers, contextproviders.Tools(a.toolset.ActiveTools()...))
+	}
+	if loaded := a.LoadedSkills(); len(loaded) > 0 {
+		providers = append(providers, contextproviders.Skills(loaded...))
+	}
+	return providers
+}
+
 // initThreadRuntime creates a ThreadRuntime backed by the given live thread and
 // store. It registers the agent's context providers on the thread runtime's
 // context manager.
@@ -773,12 +791,9 @@ func (a *Instance) initThreadRuntime(live thread.Live, registry capability.Regis
 	if err != nil {
 		return err
 	}
-	// Register the same context providers the engine would use so they are
-	// owned by the thread runtime's context manager (which survives replay).
-	if err := tr.ContextManager().Register(
-		contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
-		contextproviders.Time(time.Minute),
-	); err != nil {
+	// Register context providers on the thread runtime's context manager so
+	// they survive replay and are available for manager-owned diffs.
+	if err := tr.ContextManager().Register(a.contextProviders()...); err != nil {
 		return err
 	}
 	a.threadRuntime = tr
