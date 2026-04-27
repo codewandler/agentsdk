@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ type Session struct {
 	defaults       defaults
 	store          EventStore
 }
+
+var ErrNoEvents = errors.New("conversation: no events found")
 
 type defaults struct {
 	model           string
@@ -66,7 +69,7 @@ func Resume(ctx context.Context, store EventStore, conversationID ConversationID
 		return nil, err
 	}
 	if len(events) == 0 {
-		return nil, fmt.Errorf("conversation: no events found")
+		return nil, ErrNoEvents
 	}
 	s := &Session{
 		branch:   MainBranch,

@@ -80,6 +80,13 @@ func (e *Engine) Session() *conversation.Session {
 	return e.session
 }
 
+func (e *Engine) ThreadRuntime() *ThreadRuntime {
+	if e == nil {
+		return nil
+	}
+	return e.threadRuntime
+}
+
 func (e *Engine) ResetSession(opts ...conversation.Option) *conversation.Session {
 	if e == nil {
 		return nil
