@@ -92,6 +92,9 @@ manager for you.
 
 ```go
 import (
+    "time"
+
+    "github.com/codewandler/agentsdk/agentcontext/contextproviders"
     "github.com/codewandler/agentsdk/capabilities/planner"
     "github.com/codewandler/agentsdk/capability"
     "github.com/codewandler/agentsdk/runtime"
@@ -124,8 +127,10 @@ agent, stored, err := runtime.OpenThreadEngine(ctx,
         CapabilityName: planner.CapabilityName,
         InstanceID:     "planner_1",
     }),
-    // Add custom context providers here, for example env/time/git status.
-    // runtime.WithContextProviders(envProvider),
+    runtime.WithContextProviders(
+        contextproviders.Environment(contextproviders.WithWorkDir(".")),
+        contextproviders.Time(time.Minute),
+    ),
     runtime.WithCachePolicy(unified.CachePolicyOn),
     runtime.WithCacheKey("session-id"),
 )

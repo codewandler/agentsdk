@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
+	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
@@ -105,6 +107,10 @@ func ExampleOpenThreadEngine() {
 			CapabilityName: planner.CapabilityName,
 			InstanceID:     "planner_1",
 		}),
+		runtime.WithContextProviders(
+			contextproviders.Environment(contextproviders.WithWorkDir(".")),
+			contextproviders.Time(time.Minute),
+		),
 		runtime.WithCacheKey("example-session"),
 	)
 	if err != nil {
