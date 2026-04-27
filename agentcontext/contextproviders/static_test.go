@@ -73,15 +73,15 @@ func TestStaticProvidersUseStableFragmentKeys(t *testing.T) {
 func TestToolsProviderRendersSortedToolList(t *testing.T) {
 	provider := Tools(
 		namedTool{name: "zeta", description: "last"},
-		namedTool{name: "alpha", description: "first"},
+		namedTool{name: "alpha", description: "first", guidance: "Use exact inputs"},
 	)
 	providerContext, err := provider.GetContext(context.Background(), agentcontext.Request{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := providerContext.Fragments[0].Content
-	if !strings.Contains(content, "- alpha: first\n- zeta: last") {
-		t.Fatalf("tools content not sorted: %s", content)
+	if !strings.Contains(content, "- alpha: first\n  guidance:\n    Use exact inputs\n- zeta: last") {
+		t.Fatalf("tools content not sorted/guided: %s", content)
 	}
 }
 
@@ -187,6 +187,7 @@ func TestSkillInventoryProviderStableReferenceFragmentKey(t *testing.T) {
 type namedTool struct {
 	name        string
 	description string
+	guidance    string
 }
 
 func (t namedTool) Name() string        { return t.name }
@@ -197,4 +198,4 @@ func (t namedTool) Schema() *jsonschema.Schema {
 func (t namedTool) Execute(tool.Ctx, json.RawMessage) (tool.Result, error) {
 	return tool.Text("ok"), nil
 }
-func (t namedTool) Guidance() string { return "" }
+func (t namedTool) Guidance() string { return t.guidance }

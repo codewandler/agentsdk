@@ -121,6 +121,13 @@ func Tools(tools ...tool.Tool) agentcontext.Provider {
 		if desc := strings.TrimSpace(t.Description()); desc != "" {
 			line += ": " + desc
 		}
+		if guidance := strings.TrimSpace(t.Guidance()); guidance != "" {
+			line += "\n  guidance:\n"
+			for _, segment := range strings.Split(guidance, "\n") {
+				line += "    " + segment + "\n"
+			}
+			line = strings.TrimRight(line, "\n")
+		}
 		specs = append(specs, line)
 	}
 	sort.Strings(specs)

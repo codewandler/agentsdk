@@ -74,7 +74,7 @@ func Tools() []tool.Tool {
 
 func skillTool() tool.Tool {
 	return tool.New("skill",
-		"Activate skills and exact references under references/. Supports batched actions. Example: {\"actions\":[{\"action\":\"activate\",\"skill\":\"architecture\"}]}",
+		"Activate skills and exact references under references/. Supports batched actions. Activate a skill first, then activate exact relative reference paths like references/tradeoffs.md. Example: {\"actions\":[{\"action\":\"activate\",\"skill\":\"architecture\"}]} then {\"actions\":[{\"action\":\"activate\",\"skill\":\"architecture\",\"references\":[\"references/tradeoffs.md\"]}]}",
 		func(ctx tool.Ctx, p actionParams) (tool.Result, error) {
 			if len(p.Actions) == 0 {
 				return tool.Error("at least one action is required"), nil
