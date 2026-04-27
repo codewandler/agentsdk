@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/codewandler/agentsdk/capabilities/planner"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/conversation/jsonlstore"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/runtime"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/llmadapter/unified"
@@ -76,4 +79,40 @@ func ExampleSessionOptions() {
 
 	fmt.Println(session.SessionID())
 	// Output: example-session
+}
+
+func ExampleOpenThreadEngine() {
+	ctx := context.Background()
+	toolset := standard.DefaultToolset()
+	store := thread.NewMemoryStore()
+	registry, err := capability.NewRegistry(planner.Factory{})
+	if err != nil {
+		panic(err)
+	}
+
+	agent, stored, err := runtime.OpenThreadEngine(ctx,
+		store,
+		thread.CreateParams{
+			ID:       "example-thread",
+			Metadata: map[string]string{"title": "example"},
+			Source:   thread.EventSource{Type: "example", SessionID: "example-session"},
+		},
+		exampleClient{},
+		registry,
+		runtime.WithModel("default"),
+		runtime.WithTools(toolset.ActiveTools()),
+		runtime.WithCapabilities(capability.AttachSpec{
+			CapabilityName: planner.CapabilityName,
+			InstanceID:     "planner_1",
+		}),
+		runtime.WithCacheKey("example-session"),
+	)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := agent.RunTurn(ctx, "say ok"); err != nil {
+		panic(err)
+	}
+	fmt.Println(stored.ID)
+	// Output: example-thread
 }

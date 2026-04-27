@@ -82,32 +82,74 @@ if err != nil {
 _, err = agent.RunTurn(context.Background(), "inspect this repo")
 ```
 
-### Durable Sessions
+### Durable Thread Runtime
 
-Consumers own the session storage path policy. Use `conversation/jsonlstore` for append-only JSONL persistence and `runtime.SessionOptions` so persistent sessions receive the same defaults as the runtime agent.
+Use the thread runtime helpers for durable agents. A thread stores conversation
+events, capability attachment/state events, context render records, branch
+metadata, and lifecycle metadata in one append-only event log. Callers choose
+the storage location; the runtime wires the conversation session and context
+manager for you.
 
 ```go
 import (
-    "github.com/codewandler/agentsdk/conversation"
-    "github.com/codewandler/agentsdk/conversation/jsonlstore"
+    "github.com/codewandler/agentsdk/capabilities/planner"
+    "github.com/codewandler/agentsdk/capability"
     "github.com/codewandler/agentsdk/runtime"
+    "github.com/codewandler/agentsdk/thread"
+    threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
+    "github.com/codewandler/llmadapter/unified"
 )
 
-store := jsonlstore.Open("/path/to/sessions/20260425T120000Z-session-id.jsonl")
-session := conversation.New(append(
-    runtime.SessionOptions(
-        runtime.WithSessionOptions(conversation.WithSessionID("session-id")),
-        runtime.WithModel(model),
-        runtime.WithTools(toolset.ActiveTools()),
-        runtime.WithCachePolicy(unified.CachePolicyOn),
-        runtime.WithCacheKey("session-id"),
-    ),
-    conversation.WithStore(store),
-    conversation.WithConversationID("conv_session-id"),
-)...)
+store := threadjsonlstore.Open("/path/to/threads")
+registry, err := capability.NewRegistry(planner.Factory{})
+if err != nil {
+    return err
+}
+
+agent, stored, err := runtime.OpenThreadEngine(ctx,
+    store,
+    thread.CreateParams{
+        ID:     "thread_session-id",
+        Source: thread.EventSource{Type: "cli", SessionID: "session-id"},
+        Metadata: map[string]string{"title": "repo inspection"},
+    },
+    auto.Client,
+    registry,
+    runtime.WithProviderIdentity(identity),
+    runtime.WithModel(model),
+    runtime.WithSystem("You are a concise coding assistant."),
+    runtime.WithTools(toolset.ActiveTools()),
+    runtime.WithToolChoice(unified.ToolChoice{Mode: unified.ToolChoiceAuto}),
+    runtime.WithCapabilities(capability.AttachSpec{
+        CapabilityName: planner.CapabilityName,
+        InstanceID:     "planner_1",
+    }),
+    runtime.WithCachePolicy(unified.CachePolicyOn),
+    runtime.WithCacheKey("session-id"),
+)
+if err != nil {
+    return err
+}
+_ = stored.ID
+
+_, err = agent.RunTurn(ctx, "inspect this repo")
 ```
 
-Pass the session to the runtime with `runtime.WithSession(session)`. To resume, open the same store and call `conversation.Resume` with the same `runtime.SessionOptions(...)` defaults.
+Use `CreateThreadEngine` when creating a brand-new thread must fail if the ID
+already exists. Use `ResumeThreadEngine` when a missing thread should fail. Use
+`OpenThreadEngine` for the usual create-or-resume path.
+
+Thread-backed engines restore:
+
+- committed conversation messages and provider continuation metadata
+- attached capabilities and their event-sourced state, such as planner steps
+- active tools exported by attached capabilities
+- context render records used for full replay and native-continuation diffs
+
+Applications do not need to manually create `conversation.ThreadEventStore`.
+For explicit semantic compaction, call `agent.Compact(ctx, summary, nodeIDs...)`;
+the runtime appends the compaction event and refreshes persisted context render
+records.
 
 ## CLI Resource Bundles
 
