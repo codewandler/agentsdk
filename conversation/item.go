@@ -183,6 +183,7 @@ func NormalizeItems(items []Item) []Item {
 	expanded := ExpandItems(items)
 	messages := make([]Item, 0, len(expanded))
 	pendingToolCalls := map[string]unified.ToolCall{}
+	completedToolCalls := map[string]struct{}{}
 	for _, item := range expanded {
 		if item.Kind != ItemMessage && item.Kind != ItemAssistantTurn && item.Kind != ItemContextFragment && item.Kind != ItemCompaction {
 			continue
@@ -191,20 +192,31 @@ func NormalizeItems(items []Item) []Item {
 		msg.Content = sanitizeContentParts(msg.Content)
 		if msg.Role == unified.RoleAssistant {
 			msg.ToolCalls = sanitizeToolCalls(msg.ToolCalls)
+			filtered := msg.ToolCalls[:0]
 			for _, call := range msg.ToolCalls {
-				if call.ID != "" {
-					pendingToolCalls[call.ID] = call
+				if _, done := completedToolCalls[call.ID]; done {
+					continue
 				}
+				if _, pending := pendingToolCalls[call.ID]; pending {
+					continue
+				}
+				pendingToolCalls[call.ID] = call
+				filtered = append(filtered, call)
 			}
+			msg.ToolCalls = filtered
 		}
 		if msg.Role == unified.RoleTool {
-			msg.ToolResults = sanitizeToolResults(msg.ToolResults, pendingToolCalls)
+			msg.ToolResults = sanitizeToolResults(msg.ToolResults, pendingToolCalls, completedToolCalls)
 			for _, result := range msg.ToolResults {
 				delete(pendingToolCalls, result.ToolCallID)
+				completedToolCalls[result.ToolCallID] = struct{}{}
 			}
 			if len(msg.ToolResults) == 0 && len(msg.Content) == 0 {
 				continue
 			}
+		}
+		if len(msg.Content) == 0 && len(msg.ToolCalls) == 0 && len(msg.ToolResults) == 0 {
+			continue
 		}
 		item.Message = msg
 		messages = append(messages, item)
@@ -301,10 +313,13 @@ func sanitizeToolCalls(calls []unified.ToolCall) []unified.ToolCall {
 	return out
 }
 
-func sanitizeToolResults(results []unified.ToolResult, pending map[string]unified.ToolCall) []unified.ToolResult {
+func sanitizeToolResults(results []unified.ToolResult, pending map[string]unified.ToolCall, completed map[string]struct{}) []unified.ToolResult {
 	out := make([]unified.ToolResult, 0, len(results))
 	for _, result := range results {
 		if result.ToolCallID == "" {
+			continue
+		}
+		if _, ok := completed[result.ToolCallID]; ok {
 			continue
 		}
 		if _, ok := pending[result.ToolCallID]; !ok {
@@ -312,6 +327,7 @@ func sanitizeToolResults(results []unified.ToolResult, pending map[string]unifie
 		}
 		result.Content = sanitizeContentParts(result.Content)
 		out = append(out, result)
+		completed[result.ToolCallID] = struct{}{}
 	}
 	return out
 }

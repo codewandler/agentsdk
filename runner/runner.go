@@ -69,6 +69,7 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 
 	fragment := conversation.NewTurnFragment()
 	transcript := append([]unified.Message(nil), req.Messages...)
+	recoveryTranscriptDirty := false
 	currentProviderIdentity := options.ProviderIdentity
 
 	for step := 0; step < options.MaxSteps; step++ {
@@ -181,7 +182,11 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			emit(ToolResultEvent{CallID: toolResult.ToolCallID, Name: toolResult.Name, Output: output, IsError: toolResult.IsError})
 		}
 		transcript = append(transcript, unified.Message{Role: unified.RoleTool, ToolResults: results})
+		recoveryTranscriptDirty = true
 		if err := ctx.Err(); err != nil {
+			if recoveryErr := commitRecoveredTranscript(history, transcript); recoveryErr != nil {
+				err = errors.Join(err, recoveryErr)
+			}
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
@@ -189,9 +194,25 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 	}
 
 	err := ErrMaxStepsReached
+	if recoveryTranscriptDirty {
+		if recoveryErr := commitRecoveredTranscript(history, transcript); recoveryErr != nil {
+			err = errors.Join(err, recoveryErr)
+		}
+	}
 	fragment.Fail(err)
 	emit(ErrorEvent{Err: err})
 	return result, err
+}
+
+func commitRecoveredTranscript(history History, transcript []unified.Message) error {
+	if len(transcript) == 0 {
+		return nil
+	}
+	fragment := conversation.NewTurnFragment()
+	fragment.AddRequestMessages(transcript...)
+	fragment.Complete("")
+	_, err := history.CommitFragment(fragment)
+	return err
 }
 
 func providerMetadataEvents(route unified.RouteEvent, execution unified.ProviderExecutionEvent) []thread.Event {

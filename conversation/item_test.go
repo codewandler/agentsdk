@@ -75,6 +75,49 @@ func TestNormalizeItemsDropsOrphanToolResults(t *testing.T) {
 	}
 }
 
+func TestNormalizeItemsDropsDuplicateToolCallsAndResults(t *testing.T) {
+	items := []Item{
+		{
+			Kind: ItemAssistantTurn,
+			Message: unified.Message{
+				Role: unified.RoleAssistant,
+				ToolCalls: []unified.ToolCall{
+					{ID: "call_1", Name: "plan"},
+					{ID: "call_1", Name: "plan_duplicate"},
+				},
+			},
+		},
+		{
+			Kind: ItemMessage,
+			Message: unified.Message{
+				Role: unified.RoleTool,
+				ToolResults: []unified.ToolResult{
+					{ToolCallID: "call_1", Name: "plan", Content: []unified.ContentPart{unified.TextPart{Text: "ok"}}},
+					{ToolCallID: "call_1", Name: "plan", Content: []unified.ContentPart{unified.TextPart{Text: "duplicate"}}},
+				},
+			},
+		},
+	}
+
+	messages := MessagesFromItems(items)
+	if got, want := len(messages), 2; got != want {
+		t.Fatalf("messages = %d, want %d: %#v", got, want, messages)
+	}
+	if got, want := len(messages[0].ToolCalls), 1; got != want {
+		t.Fatalf("tool calls = %d, want %d", got, want)
+	}
+	if got, want := messages[0].ToolCalls[0].Name, "plan"; got != want {
+		t.Fatalf("tool call name = %q, want %q", got, want)
+	}
+	if got, want := len(messages[1].ToolResults), 1; got != want {
+		t.Fatalf("tool results = %d, want %d", got, want)
+	}
+	text, ok := messages[1].ToolResults[0].Content[0].(unified.TextPart)
+	if !ok || text.Text != "ok" {
+		t.Fatalf("tool result content = %#v", messages[1].ToolResults[0].Content)
+	}
+}
+
 func TestNormalizeItemsStripsUnsupportedMedia(t *testing.T) {
 	items := []Item{{
 		Kind: ItemMessage,

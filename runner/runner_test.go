@@ -196,14 +196,21 @@ func TestRunTurnToolTimeoutEmitsTimedOutResult(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
+	sess := newTestHistory("")
 
-	result, err := RunTurn(context.Background(), newTestHistory(""), client, conversation.NewRequest().User("use slow").Build(),
+	result, err := RunTurn(context.Background(), sess, client, conversation.NewRequest().User("use slow").Build(),
 		WithTools([]tool.Tool{slow}),
 		WithToolTimeout(time.Millisecond),
 		WithMaxSteps(1),
 	)
 	require.ErrorIs(t, err, ErrMaxStepsReached)
 	requireToolResult(t, result.Events, "[Timed out]", true)
+	messages, msgErr := sess.Messages()
+	require.NoError(t, msgErr)
+	require.Len(t, messages, 3)
+	require.Len(t, messages[1].ToolCalls, 1)
+	require.Len(t, messages[2].ToolResults, 1)
+	require.True(t, messages[2].ToolResults[0].IsError)
 }
 
 func TestRunTurnCancellationEmitsCanceledForRemainingToolCalls(t *testing.T) {
@@ -219,8 +226,9 @@ func TestRunTurnCancellationEmitsCanceledForRemainingToolCalls(t *testing.T) {
 		}
 		return toolResult(call, "should not run", false)
 	})
+	sess := newTestHistory("")
 
-	result, err := RunTurn(ctx, newTestHistory(""), client, conversation.NewRequest().User("use tools").Build(), WithToolExecutor(executor))
+	result, err := RunTurn(ctx, sess, client, conversation.NewRequest().User("use tools").Build(), WithToolExecutor(executor))
 	require.ErrorIs(t, err, context.Canceled)
 	var outputs []string
 	for _, event := range result.Events {
@@ -229,6 +237,11 @@ func TestRunTurnCancellationEmitsCanceledForRemainingToolCalls(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{"[Canceled]", "[Canceled]"}, outputs)
+	messages, msgErr := sess.Messages()
+	require.NoError(t, msgErr)
+	require.Len(t, messages, 3)
+	require.Len(t, messages[1].ToolCalls, 2)
+	require.Len(t, messages[2].ToolResults, 2)
 }
 
 func TestRunTurnPassesThroughWarningsAndRawEvents(t *testing.T) {
@@ -327,7 +340,6 @@ func (h *testHistory) BuildRequestForProvider(req conversation.Request, identity
 		ProviderIdentity:        identity,
 		Items:                   items,
 		PendingItems:            conversation.ItemsFromMessages(pending),
-		PendingMessages:         pending,
 		Extensions:              req.Extensions,
 		AllowNativeContinuation: true,
 	})

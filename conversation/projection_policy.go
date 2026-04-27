@@ -12,8 +12,6 @@ type ProjectionInput struct {
 	ProviderIdentity        ProviderIdentity
 	Items                   []Item
 	PendingItems            []Item
-	Messages                []unified.Message
-	PendingMessages         []unified.Message
 	Extensions              unified.Extensions
 	AllowNativeContinuation bool
 }
@@ -101,13 +99,7 @@ func estimateContentChars(part unified.ContentPart) int {
 func defaultProject(input ProjectionInput) (ProjectionResult, error) {
 	extensions := cloneExtensions(input.Extensions)
 	items := append([]Item(nil), input.Items...)
-	if len(items) == 0 && len(input.Messages) > 0 {
-		items = ItemsFromMessages(input.Messages)
-	}
 	pendingItems := append([]Item(nil), input.PendingItems...)
-	if len(pendingItems) == 0 && len(input.PendingMessages) > 0 {
-		pendingItems = ItemsFromMessages(input.PendingMessages)
-	}
 	pendingMessages := MessagesFromItems(pendingItems)
 	if input.AllowNativeContinuation && !extensions.Has(unified.ExtOpenAIPreviousResponseID) {
 		continuation, ok, err := ContinuationAtBranchHead(input.Tree, input.Branch, input.ProviderIdentity)

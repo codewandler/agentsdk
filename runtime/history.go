@@ -229,7 +229,6 @@ func (h *History) buildRequest(req conversation.Request, identity conversation.P
 		ProviderIdentity:        identity,
 		Items:                   items,
 		PendingItems:            pendingItems,
-		PendingMessages:         pendingMessages,
 		Extensions:              req.Extensions,
 		AllowNativeContinuation: useNativeContinuation,
 	})

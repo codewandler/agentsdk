@@ -56,18 +56,22 @@ The second cleanup pass has also landed:
   tools.
 - The default terminal `/context` command prints the last committed context
   render state for inspection.
+- Provider projection now uses normalized `conversation.Item` inputs only;
+  raw pending request messages are converted to items at the runtime boundary
+  rather than being accepted as a second projection path.
+- Tool call/result recovery now drops duplicate tool calls/results during
+  projection and persists a recovered, paired tool transcript when a turn aborts
+  after tool execution because of cancellation or max-step exhaustion.
 
 Remaining larger architecture work is intentionally outside this first
 implementation slice:
 
-1. Replace the remaining direct prompt projection paths with a full normalized
-   internal item projection layer everywhere it is still bypassed.
-2. Add synthetic aborted tool results and stricter tool call/result
-   normalization for cancellation, timeout, and malformed provider streams.
-3. Add compaction event projection beyond the current runtime helper.
-4. Add indexing/repair for JSONL thread metadata if/when listing/search needs
+1. Add stricter recovery events/diagnostics for malformed provider streams that
+   fail before a complete assistant tool-call message is available.
+2. Add compaction event projection beyond the current runtime helper.
+3. Add indexing/repair for JSONL thread metadata if/when listing/search needs
    outgrow replaying JSONL.
-5. Decide whether all durable non-capability event kinds need a shared typed
+4. Decide whether all durable non-capability event kinds need a shared typed
    registry, or whether schema validation should remain owned by the projections
    that consume those events.
 
