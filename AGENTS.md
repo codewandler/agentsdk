@@ -10,6 +10,45 @@ plugins, or skills, update `docs/RESOURCES.md` with the external standard or
 compatibility source being followed. Prefer established formats over new
 agentsdk-specific layouts.
 
+## Testing
+
+Run the full test suite before committing:
+
+```bash
+go test ./...
+```
+
+For focused work, run tests for the package you changed:
+
+```bash
+go test ./runtime/...
+go test ./conversation/...
+go test ./tool/...
+```
+
+See `.agents/reviews/` for detailed review notes and follow-up recommendations.
+
+## Examples
+
+The `examples/` directory contains runnable agent applications:
+
+- `examples/devops-cli/` — CLI agent with custom tool wiring.
+- `examples/research-desk/` — Multi-source research agent with resource bundles.
+- `examples/release-notes-agent/` — Planned: release notes generation agent.
+- `examples/repo-maintainer/` — Planned: repository maintenance agent.
+
+When adding or changing SDK APIs, check whether an existing example should be
+updated to reflect the change.
+
+## Branding: flai → agentsdk
+
+Several files still reference the predecessor project name "flai". Public
+constants (`tools/toolmgmt.KeyActivationState`, `skill.RegistryKey`) retain
+`flai.` prefixes for downstream compatibility.
+
+When writing new code, always use `agentsdk` naming. Do not introduce new
+`flai` references.
+
 ## Dependency update process
 
 When upgrading `llmadapter`, pass the released version through the dependency
@@ -32,3 +71,10 @@ checking installed-binary behavior.
 If `llmadapter resolve <model>` works but `miniagent -m <model>` fails, first
 verify that the installed `miniagent` binary was rebuilt after the dependency
 update. Otherwise the binary may still contain older routing behavior.
+
+## Cross-references
+
+- `README.md` — public API overview, runtime stack, CLI resource bundles.
+- `CHANGELOG.md` — release history and migration notes.
+- `docs/RESOURCES.md` — external format references and compatibility layouts.
+- `.agents/reviews/` — detailed architecture and implementation review notes.

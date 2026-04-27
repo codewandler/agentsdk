@@ -304,16 +304,6 @@ toolCtx := runtime.NewToolContext(ctx,
 
 `runtime.WithToolActivation` wires the state used by `tools_list`, `tools_activate`, and `tools_deactivate`.
 
-## Lower-Level Packages
-
-Use these directly when `runtime.Agent` is too high level:
-
-- `conversation`: branchable event-log sessions, request projection, JSONL storage, and provider continuations.
-- `runner`: model/tool loop over `llmadapter/unified.Client` with typed UI events.
-- `tool`: tool definitions, schemas, execution contracts, and unified conversion.
-- `usage`: token/cost records, runner usage event conversion, aggregation, and drift helpers.
-- `markdown`: markdown buffering, frontmatter, and instruction file loading.
-
 ## Web Tools
 
 The `tools/web` package provides:
@@ -334,9 +324,70 @@ Environment variables:
 - `WEBSEARCH_PROVIDER=tavily` — explicitly select Tavily.
 - `WEBSEARCH_PROVIDER=none` — disable web search while keeping `web_fetch` available.
 
+## Examples
+
+The `examples/` directory contains runnable agent applications:
+
+| Example | Description |
+|---------|-------------|
+| [`devops-cli`](examples/devops-cli/) | CLI agent with custom tool wiring |
+| [`research-desk`](examples/research-desk/) | Multi-source research agent with resource bundles |
+| [`release-notes-agent`](examples/release-notes-agent/) | Release notes generation agent |
+| [`repo-maintainer`](examples/repo-maintainer/) | Repository maintenance agent |
+
+## Package Index
+
+Use these directly when `runtime.Agent` is too high level:
+
+| Package | Purpose |
+|---------|---------|
+| `activation` | Reusable tool activation manager with glob-based activate/deactivate |
+| `agent` | Agent resource definitions, model policy, and evidence evaluation |
+| `agentcontext` | Context manager, context providers, render records, and fingerprinting |
+| `agentdir` | Agent directory loading, external resource resolution, and source discovery |
+| `app` | App manifest loading, plugin bundles, and skill wiring |
+| `capabilities/planner` | Built-in planner capability for structured task plans |
+| `capability` | Capability interface, registry, manager, and event-sourced state |
+| `command` | Slash command parsing, metadata, and tool conversion |
+| `conversation` | Branchable conversation tree, internal items, request projection, compaction, and provider continuations |
+| `internal/diff` | Internal unified diff helpers |
+| `internal/humanize` | Internal human-readable formatting |
+| `markdown` | Streaming markdown buffer, frontmatter parsing, and instruction file loading |
+| `plugin` | Plugin bundle definitions |
+| `resource` | Resource discovery and resource type definitions |
+| `runner` | Model/tool loop over `llmadapter/unified.Client` with typed UI events |
+| `runnertest` | Fake unified clients, recorded requests, and stream helpers for testing |
+| `runtime` | High-level agent runtime, thread engine, auto mux, and tool context |
+| `skill` | Skill metadata, directory loading, reference resolution, and search |
+| `terminal/cli` | Cobra-based CLI wiring for terminal agents |
+| `terminal/repl` | Interactive REPL loop |
+| `terminal/ui` | Terminal UI rendering and formatting |
+| `thread` | Thread event log, store interface, and memory store |
+| `thread/jsonlstore` | Append-only JSONL thread persistence |
+| `tool` | Tool definitions, schemas, execution contracts, and unified conversion |
+| `tools/filesystem` | File read, write, edit, glob, stat, delete, and directory tools |
+| `tools/git` | Git status and diff tools |
+| `tools/notify` | Desktop notification and TTS tools |
+| `tools/shell` | Bash command execution with streaming and timeout |
+| `tools/standard` | Default tool bundle assembly with activation manager |
+| `tools/todo` | Todo/task list tools |
+| `tools/toolmgmt` | Tool list, activate, and deactivate management tools |
+| `tools/turn` | Turn-done signaling tool |
+| `tools/web` | Web fetch and web search tools |
+| `tools/web/tavily` | Tavily-backed web search provider |
+| `usage` | Token/cost records, aggregation, drift helpers, and runner event conversion |
+| `websearch` | Web search provider interface |
+
+## Further Reading
+
+- [`AGENTS.md`](AGENTS.md) — developer and AI agent notes, testing guidance, dependency process.
+- [`CHANGELOG.md`](CHANGELOG.md) — release history and migration notes.
+- [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
+- [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
+
 ## Status
 
-Under development, extracted from flai as a portable foundation. The current shape is proven through `miniagent`, which uses `runtime`, `conversation`, `usage`, `tools/standard`, and `llmadapter` auto mux helpers.
+Under active development, extracted from flai as a portable foundation. The current shape is proven through `miniagent`, which uses `runtime`, `conversation`, `usage`, `tools/standard`, and `llmadapter` auto mux helpers.
 
 ## License
 

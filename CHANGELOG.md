@@ -10,13 +10,18 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-04-27
+
 ### Added
 
 - Added `agentcontext/contextproviders.Git` with configurable `off`, `minimal`, and `changed_files` modes plus file and byte caps.
+- Added `agentcontext/contextproviders.CmdContext` for short command-backed context fragments.
+- Added planner capability attachment to the default agent spec.
 
 ### Changed
 
 - Removed raw `ProjectionInput.Messages` and `ProjectionInput.PendingMessages`; provider projection now takes normalized conversation items only.
+- Expanded README and agent-facing project notes for the completed context/conversation architecture.
 
 ### Fixed
 
