@@ -93,21 +93,49 @@ func (e *Engine) ThreadRuntime() *ThreadRuntime {
 	return e.threadRuntime
 }
 
+// ContextState returns a human-readable summary of the last committed context
+// manager render state.
+func (e *Engine) ContextState() string {
+	if e == nil {
+		return "context: unavailable"
+	}
+	if e.threadRuntime != nil {
+		return e.threadRuntime.ContextState()
+	}
+	if e.threadContexts != nil {
+		return e.threadContexts.LastRenderState()
+	}
+	return "context: unavailable"
+}
+
 func (e *Engine) applyThreadContextOptions() error {
-	if e == nil || e.threadRuntime == nil {
+	if e == nil {
 		return nil
 	}
-	if e.threadContexts != nil && e.threadContexts != e.threadRuntime.ContextManager() {
-		return fmt.Errorf("runtime: thread context manager cannot replace an existing thread runtime context manager")
+	if e.threadRuntime != nil {
+		if e.threadContexts != nil && e.threadContexts != e.threadRuntime.ContextManager() {
+			return fmt.Errorf("runtime: thread context manager cannot replace an existing thread runtime context manager")
+		}
+		if len(e.contextProviders) == 0 {
+			return nil
+		}
+		manager := e.threadRuntime.ContextManager()
+		if manager == nil {
+			return fmt.Errorf("runtime: thread runtime has no context manager")
+		}
+		return manager.Register(e.contextProviders...)
 	}
-	if len(e.contextProviders) == 0 {
+	if e.threadContexts == nil && len(e.contextProviders) > 0 {
+		manager, err := agentcontext.NewManager()
+		if err != nil {
+			return err
+		}
+		e.threadContexts = manager
+	}
+	if e.threadContexts == nil || len(e.contextProviders) == 0 {
 		return nil
 	}
-	manager := e.threadRuntime.ContextManager()
-	if manager == nil {
-		return fmt.Errorf("runtime: thread runtime has no context manager")
-	}
-	return manager.Register(e.contextProviders...)
+	return e.threadContexts.Register(e.contextProviders...)
 }
 
 func (e *Engine) ResetSession(opts ...conversation.Option) *conversation.Session {
@@ -161,6 +189,8 @@ func (e *Engine) RunTurn(ctx context.Context, user string, opts ...TurnOption) (
 		if err := cfg.addThreadRuntime(e.threadRuntime); err != nil {
 			return runner.Result{}, err
 		}
+	} else if e.threadContexts != nil {
+		cfg.addContextManager(e.threadContexts)
 	}
 	return runner.RunTurn(ctx, e.session, e.client, cfg.Request, cfg.runnerOptions()...)
 }

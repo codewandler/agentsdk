@@ -647,6 +647,12 @@ func (a *App) builtins() []command.Command {
 			}
 			return command.Text("session: none"), nil
 		}),
+		command.New(command.Spec{Name: "context", Description: "Show last context render state"}, func(context.Context, command.Params) (command.Result, error) {
+			if inst, ok := a.DefaultAgent(); ok {
+				return command.Text(inst.ContextState()), nil
+			}
+			return command.Text("context: no default agent"), nil
+		}),
 	}
 }
 

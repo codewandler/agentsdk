@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/conversation/jsonlstore"
 	"github.com/codewandler/agentsdk/runner"
@@ -317,6 +318,13 @@ func (a *Instance) RunTurn(ctx context.Context, turnID int, task string) error {
 	return nil
 }
 
+func (a *Instance) ContextState() string {
+	if a == nil || a.runtime == nil {
+		return "context: unavailable"
+	}
+	return a.runtime.ContextState()
+}
+
 func (a *Instance) initRuntime() error {
 	if a.client == nil {
 		result, err := agentruntime.AutoMuxClient(a.inference.Model, a.autoMuxSourceAPI(), a.autoMux)
@@ -555,6 +563,10 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 		agentruntime.WithMaxSteps(a.maxSteps),
 		agentruntime.WithToolTimeout(a.toolTimeout),
 		agentruntime.WithProviderIdentity(a.providerIdentity),
+		agentruntime.WithContextProviders(
+			contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)),
+			contextproviders.Time(time.Minute),
+		),
 		agentruntime.WithToolContextFactory(func(ctx context.Context) tool.Ctx {
 			if a.toolCtxFactory != nil {
 				return a.toolCtxFactory(ctx)

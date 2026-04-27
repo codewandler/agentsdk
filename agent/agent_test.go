@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -33,7 +34,8 @@ func TestAgentRunTurnUsesCacheKeyAndRecordsRequest(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 	require.Equal(t, unified.CachePolicyOn, client.RequestAt(0).CachePolicy)
 	require.Equal(t, "test:"+a.SessionID(), client.RequestAt(0).CacheKey)
-	requireMessageText(t, client.RequestAt(0).Messages[0], "hello")
+	requireMessageText(t, client.RequestAt(0).Messages[len(client.RequestAt(0).Messages)-1], "hello")
+	requireRequestContainsText(t, client.RequestAt(0), "working_directory:")
 }
 
 func TestAgentMaterializesLoadedSkills(t *testing.T) {
@@ -84,10 +86,12 @@ func TestAgentPersistsAndResumesSession(t *testing.T) {
 	require.Equal(t, first.SessionID(), second.SessionID())
 	require.NoError(t, second.RunTurn(context.Background(), 1, "second task"))
 	require.Len(t, secondClient.Requests(), 1)
-	require.Len(t, secondClient.RequestAt(0).Messages, 3)
+	require.Len(t, secondClient.RequestAt(0).Messages, 5)
 	requireMessageText(t, secondClient.RequestAt(0).Messages[0], "first task")
 	requireMessageText(t, secondClient.RequestAt(0).Messages[1], "first response")
-	requireMessageText(t, secondClient.RequestAt(0).Messages[2], "second task")
+	requireRequestContainsText(t, secondClient.RequestAt(0), "working_directory:")
+	requireRequestContainsText(t, secondClient.RequestAt(0), "current_time:")
+	requireMessageText(t, secondClient.RequestAt(0).Messages[4], "second task")
 }
 
 func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
@@ -131,8 +135,10 @@ func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
 	second.providerIdentity = providerIdentity
 	require.NoError(t, second.RunTurn(context.Background(), 1, "second task"))
 	require.Len(t, secondClient.Requests(), 1)
-	require.Len(t, secondClient.RequestAt(0).Messages, 1)
-	requireMessageText(t, secondClient.RequestAt(0).Messages[0], "second task")
+	require.Len(t, secondClient.RequestAt(0).Messages, 3)
+	requireRequestContainsText(t, secondClient.RequestAt(0), "working_directory:")
+	requireRequestContainsText(t, secondClient.RequestAt(0), "current_time:")
+	requireMessageText(t, secondClient.RequestAt(0).Messages[2], "second task")
 	previousResponseID, ok, err := unified.GetExtension[string](secondClient.RequestAt(0).Extensions, unified.ExtOpenAIPreviousResponseID)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -209,4 +215,17 @@ func requireMessageText(t *testing.T, msg unified.Message, want string) {
 	text, ok := msg.Content[0].(unified.TextPart)
 	require.True(t, ok)
 	require.Equal(t, want, text.Text)
+}
+
+func requireRequestContainsText(t *testing.T, req unified.Request, want string) {
+	t.Helper()
+	for _, msg := range req.Messages {
+		for _, part := range msg.Content {
+			text, ok := part.(unified.TextPart)
+			if ok && strings.Contains(text.Text, want) {
+				return
+			}
+		}
+	}
+	t.Fatalf("request does not contain text %q in %#v", want, req.Messages)
 }

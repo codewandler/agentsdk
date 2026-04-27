@@ -467,7 +467,8 @@ func TestThreadRuntimeCompactsConversationAndCommitsContextRender(t *testing.T) 
 
 	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	require.NoError(t, err)
-	requireEventCountRuntime(t, stored.Events, conversation.EventConversationStored, 4)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationUserMessage, 3)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationCompaction, 1)
 	requireEventCountRuntime(t, stored.Events, EventContextRenderCommitted, 1)
 
 	resumedSession, err := conversation.Resume(ctx, threadEvents, "conversation_compaction")
@@ -511,7 +512,8 @@ func TestEngineCompactUsesThreadRuntimeWhenConfigured(t *testing.T) {
 
 	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	require.NoError(t, err)
-	requireEventCountRuntime(t, stored.Events, conversation.EventConversationStored, 2)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationUserMessage, 1)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationCompaction, 1)
 	requireEventCountRuntime(t, stored.Events, EventContextRenderCommitted, 1)
 }
 

@@ -104,6 +104,11 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, command.ResultHandled, result.Kind)
 	require.Len(t, client.Requests(), 1)
+
+	contextResult, err := app.Commands().Execute(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Contains(t, contextResult.Text, "provider: environment")
+	require.Contains(t, contextResult.Text, "provider: time")
 }
 
 func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
@@ -148,6 +153,18 @@ func TestAppHelpListsAgentsCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, result.Text, "/agents")
 	require.Contains(t, result.Text, "Show available agents")
+	require.Contains(t, result.Text, "/context")
+	require.Contains(t, result.Text, "Show last context render state")
+}
+
+func TestAppContextBuiltinHandlesNoDefaultAgent(t *testing.T) {
+	app, err := New(WithOutput(&bytes.Buffer{}))
+	require.NoError(t, err)
+
+	result, err := app.Commands().Execute(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Equal(t, command.ResultText, result.Kind)
+	require.Equal(t, "context: no default agent", result.Text)
 }
 
 func TestAppAgentsBuiltinListsRegisteredAgents(t *testing.T) {

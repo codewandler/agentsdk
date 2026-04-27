@@ -43,7 +43,8 @@ func TestCreateThreadEngineCreatesDurableEngine(t *testing.T) {
 	after, err := store.Read(ctx, thread.ReadParams{ID: "thread_engine_create"})
 	require.NoError(t, err)
 	requireEventCountRuntime(t, after.Events, thread.EventThreadCreated, 1)
-	requireEventCountRuntime(t, after.Events, conversation.EventConversationStored, 2)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationUserMessage, 1)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationAssistantMessage, 1)
 }
 
 func TestOpenThreadEngineCreatesMissingThreadAndResumesExistingThread(t *testing.T) {
@@ -80,7 +81,8 @@ func TestOpenThreadEngineCreatesMissingThreadAndResumesExistingThread(t *testing
 	after, err := store.Read(ctx, thread.ReadParams{ID: "thread_engine_open"})
 	require.NoError(t, err)
 	requireEventCountRuntime(t, after.Events, thread.EventThreadCreated, 1)
-	requireEventCountRuntime(t, after.Events, conversation.EventConversationStored, 2)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationUserMessage, 1)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationAssistantMessage, 1)
 }
 
 func TestOpenThreadEngineUsesContextProvidersAndRestoresRecords(t *testing.T) {
@@ -232,7 +234,8 @@ func TestResumeThreadEngineCreatesSessionWhenConversationMissing(t *testing.T) {
 
 	after, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	require.NoError(t, err)
-	requireEventCountRuntime(t, after.Events, conversation.EventConversationStored, 2)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationUserMessage, 1)
+	requireEventCountRuntime(t, after.Events, conversation.EventConversationAssistantMessage, 1)
 
 	resumed, _, err := ResumeThreadEngine(ctx, store, thread.ResumeParams{ID: live.ID()}, &fakeClient{}, registry, WithModel("model-a"))
 	require.NoError(t, err)

@@ -139,6 +139,15 @@ func (r *ThreadRuntime) ContextManager() *agentcontext.Manager {
 	return r.contexts
 }
 
+// ContextState returns a human-readable summary of the last committed context
+// render records.
+func (r *ThreadRuntime) ContextState() string {
+	if r == nil || r.contexts == nil {
+		return "context: unavailable"
+	}
+	return r.contexts.LastRenderState()
+}
+
 func (r *ThreadRuntime) AttachCapability(ctx context.Context, spec capability.AttachSpec) (capability.Capability, error) {
 	if r == nil || r.capabilities == nil {
 		return nil, fmt.Errorf("runtime: thread runtime is nil")
@@ -321,6 +330,46 @@ func (c *TurnConfig) addThreadRuntime(runtime *ThreadRuntime) error {
 	}
 	c.RequestPreparer = chainRequestPreparers(c.RequestPreparer, runtime.PrepareRequest)
 	return nil
+}
+
+func (c *TurnConfig) addContextManager(manager *agentcontext.Manager) {
+	c.RequestPreparer = chainRequestPreparers(c.RequestPreparer, standaloneContextPreparer(manager))
+}
+
+func standaloneContextPreparer(manager *agentcontext.Manager) runner.RequestPreparer {
+	return func(ctx context.Context, meta runner.RequestPrepareMeta, req conversation.Request) (runner.PreparedRequest, error) {
+		if manager == nil {
+			return runner.PreparedRequest{Request: req}, nil
+		}
+		reason := agentcontext.RenderTurn
+		if meta.Step > 1 {
+			reason = agentcontext.RenderToolFollowup
+		}
+		render, err := manager.Prepare(ctx, agentcontext.BuildRequest{
+			TurnID: fmt.Sprintf("step_%d", meta.Step),
+			Reason: reason,
+		})
+		if err != nil {
+			return runner.PreparedRequest{}, err
+		}
+		injection := contextInjectionForRender(render.Result, meta.NativeContinuation)
+		out := req
+		if len(injection.Instructions) > 0 {
+			out.Instructions = append(append([]unified.Instruction(nil), injection.Instructions...), req.Instructions...)
+		}
+		if len(injection.Items) > 0 {
+			out.Items = append(append([]conversation.Item(nil), injection.Items...), req.Items...)
+		}
+		return runner.PreparedRequest{
+			Request: out,
+			Commit: func(context.Context) error {
+				return render.Commit()
+			},
+			Rollback: func(context.Context) {
+				render.Rollback()
+			},
+		}, nil
+	}
 }
 
 func appendTools(base []tool.Tool, extra []tool.Tool) ([]tool.Tool, error) {
