@@ -10,6 +10,16 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+### Changed
+
+- Defaulted request-level cache policy to `On` while removing the public
+  cache-key and cache-TTL knobs from `agentsdk`; provider-specific cache
+  placement is now handled internally.
+- Changed context-provider rendering so the committed transcript carries the
+  append-only `<system-context>` diff blocks that are sent to upstream on user
+  turns and tool-result follow-ups.
+- Updated `github.com/codewandler/llmadapter` to `v1.0.0-rc.12`.
+
 ## [0.25.0] - 2026-04-27
 
 ### Added

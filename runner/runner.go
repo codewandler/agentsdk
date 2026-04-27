@@ -106,6 +106,7 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			}
 			stepReq = prepared.Request
 		}
+		transcript = append([]unified.Message(nil), stepReq.Messages...)
 		wireReq, err := history.BuildRequestForProvider(stepReq, currentProviderIdentity)
 		if err != nil {
 			rollbackPreparedRequest(ctx, prepared)

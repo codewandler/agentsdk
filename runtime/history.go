@@ -210,7 +210,6 @@ func (h *History) buildRequest(req conversation.Request, identity conversation.P
 	if err != nil {
 		return unified.Request{}, err
 	}
-	prefixItems := append([]conversation.Item(nil), req.PrefixItems...)
 	pendingMessages := append([]unified.Message(nil), req.Messages...)
 	pendingItems := append([]conversation.Item(nil), req.Items...)
 	pendingItems = append(pendingItems, conversation.ItemsFromMessages(pendingMessages)...)
@@ -218,7 +217,6 @@ func (h *History) buildRequest(req conversation.Request, identity conversation.P
 		Tree:                    h.tree,
 		Branch:                  h.branch,
 		ProviderIdentity:        identity,
-		PrefixItems:             prefixItems,
 		Items:                   items,
 		PendingItems:            pendingItems,
 		Extensions:              req.Extensions,

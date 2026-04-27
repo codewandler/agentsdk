@@ -61,7 +61,7 @@ func TestThreadRuntimeInjectsPlannerToolsContextAndResumes(t *testing.T) {
 	requireMessageContaining(t, client.requests[1], "title: Persist planner state")
 	sessionMessages, err := engine.History().Messages()
 	require.NoError(t, err)
-	requireNoStoredMessageContaining(t, sessionMessages, "Runtime plan")
+	requireMessageContaining(t, unified.Request{Messages: sessionMessages}, "Plan \"Runtime plan\" has 1 step(s).")
 
 	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	require.NoError(t, err)
@@ -90,8 +90,8 @@ func TestThreadRuntimeInjectsPlannerToolsContextAndResumes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resumedClient.requests, 1)
 	requireToolSpec(t, resumedClient.requests[0], "plan")
-	requireMessageContaining(t, resumedClient.requests[0], "Plan \"Runtime plan\" has 1 step(s).")
-	requireMessageContaining(t, resumedClient.requests[0], "title: Persist planner state")
+	requireNoMessageContaining(t, resumedClient.requests[0], "Runtime plan")
+	requireNoMessageContaining(t, resumedClient.requests[0], "Persist planner state")
 }
 
 func TestThreadRuntimeAutoAttachesConfiguredCapabilities(t *testing.T) {
@@ -329,7 +329,8 @@ func TestThreadRuntimeSendsTombstoneForRemovedFragmentWithNativeContinuation(t *
 	require.NoError(t, err)
 	require.Len(t, client.requests, 2)
 	requireNoMessageContaining(t, client.requests[0], "Remove me")
-	requireMessageContaining(t, client.requests[1], "Context fragment removed: planner_1/planner/step/step_1")
+	requireMessageContaining(t, client.requests[1], "planner_1/planner/step/step_1")
+	requireMessageContaining(t, client.requests[1], "removed")
 	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	require.NoError(t, err)
 	requireEventCountRuntime(t, stored.Events, EventContextFragmentRemoved, 1)
@@ -396,108 +397,64 @@ func TestThreadRuntimeRejectsCapabilityToolNameConflict(t *testing.T) {
 	require.ErrorContains(t, err, `duplicate tool "plan"`)
 }
 
-func TestThreadRuntimeRendersDeveloperAuthorityAsInstruction(t *testing.T) {
+func TestThreadRuntimePrependsContextDiffToUserAndToolResultMessages(t *testing.T) {
 	ctx := context.Background()
-	contexts, err := agentcontext.NewManager(runtimeContextProvider{
-		key: "policy",
-		fragments: []agentcontext.ContextFragment{{
-			Key:       "policy/rule",
-			Content:   "Always preserve durable state.",
-			Authority: agentcontext.AuthorityDeveloper,
-		}},
-	})
-	require.NoError(t, err)
-	store := thread.NewMemoryStore()
-	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_authority"})
-	require.NoError(t, err)
-	registry, err := capability.NewRegistry(planner.Factory{})
-	require.NoError(t, err)
-	threadRuntime, err := NewThreadRuntime(live, registry, WithContextManager(contexts))
-	require.NoError(t, err)
-	client := &fakeClient{}
-	engine, err := New(client, WithThreadRuntime(threadRuntime))
-	require.NoError(t, err)
-
-	_, err = engine.RunTurn(ctx, "hi")
-	require.NoError(t, err)
-	require.Len(t, client.requests, 1)
-	require.Len(t, client.requests[0].Instructions, 1)
-	require.Equal(t, unified.InstructionDeveloper, client.requests[0].Instructions[0].Kind)
-	requireInstructionContaining(t, client.requests[0], "Always preserve durable state.")
-	requireNoMessageContaining(t, client.requests[0], "Always preserve durable state.")
-}
-
-func TestThreadRuntimeLeavesContextFragmentsToRequestLevelCacheControl(t *testing.T) {
-	ctx := context.Background()
-	contexts, err := agentcontext.NewManager(runtimeContextProvider{
+	contexts, err := agentcontext.NewManager(&stepwiseRuntimeContextProvider{
 		key: "dynamic",
-		fragments: []agentcontext.ContextFragment{{
-			Key:       "dynamic/current",
-			Content:   "Current volatile state.",
-			Authority: agentcontext.AuthorityUser,
-			CachePolicy: agentcontext.CachePolicy{
-				Scope: agentcontext.CacheTurn,
-			},
-		}},
-	})
-	require.NoError(t, err)
-	store := thread.NewMemoryStore()
-	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_cache_control"})
-	require.NoError(t, err)
-	registry, err := capability.NewRegistry()
-	require.NoError(t, err)
-	threadRuntime, err := NewThreadRuntime(live, registry, WithContextManager(contexts))
-	require.NoError(t, err)
-	client := &fakeClient{}
-	engine, err := New(client, WithThreadRuntime(threadRuntime))
-	require.NoError(t, err)
-
-	_, err = engine.RunTurn(ctx, "hi")
-	require.NoError(t, err)
-	require.Len(t, client.requests, 1)
-	requireMessageContaining(t, client.requests[0], "Current volatile state.")
-	require.Equal(t, unified.CachePolicyOn, client.requests[0].CachePolicy)
-	for _, message := range client.requests[0].Messages {
-		for _, part := range message.Content {
-			text, ok := part.(unified.TextPart)
-			if ok && strings.Contains(text.Text, "Current volatile state.") {
-				require.Nil(t, text.CacheControl)
-				return
-			}
-		}
-	}
-	t.Fatal("missing context text part")
-}
-
-func TestThreadRuntimeDoesNotCacheControlContextFragmentsWithoutPolicy(t *testing.T) {
-	ctx := context.Background()
-	contexts, err := agentcontext.NewManager(runtimeContextProvider{
-		key: "planner",
-		fragments: []agentcontext.ContextFragment{
-			{Key: "planner/meta", Content: "Plan has 4 steps.", Authority: agentcontext.AuthorityUser},
-			{Key: "planner/step/1", Content: "step 1", Authority: agentcontext.AuthorityUser},
-			{Key: "planner/step/2", Content: "step 2", Authority: agentcontext.AuthorityUser},
-			{Key: "planner/step/3", Content: "step 3", Authority: agentcontext.AuthorityUser},
-			{Key: "planner/step/4", Content: "step 4", Authority: agentcontext.AuthorityUser},
+		turns: [][]agentcontext.ContextFragment{
+			{{
+				Key:       "dynamic/current",
+				Content:   "alpha context",
+				Authority: agentcontext.AuthorityUser,
+			}},
+			{{
+				Key:       "dynamic/current",
+				Content:   "beta context",
+				Authority: agentcontext.AuthorityUser,
+			}},
 		},
 	})
 	require.NoError(t, err)
 	store := thread.NewMemoryStore()
-	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_no_cache_control_default"})
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_context_diff"})
 	require.NoError(t, err)
 	registry, err := capability.NewRegistry()
 	require.NoError(t, err)
 	threadRuntime, err := NewThreadRuntime(live, registry, WithContextManager(contexts))
 	require.NoError(t, err)
-	client := &fakeClient{}
-	engine, err := New(client, WithThreadRuntime(threadRuntime))
+	client := &fakeClient{events: [][]unified.Event{
+		{
+			unified.ToolCallDoneEvent{Index: 0, ID: "call_echo", Name: "echo", Args: json.RawMessage(`{"text":"ok"}`)},
+			unified.CompletedEvent{FinishReason: unified.FinishReasonToolCall},
+		},
+		{
+			unified.TextDeltaEvent{Text: "done"},
+			unified.CompletedEvent{FinishReason: unified.FinishReasonStop},
+		},
+	}}
+	echo := tool.New("echo", "echo text", func(_ tool.Ctx, p struct {
+		Text string `json:"text"`
+	}) (tool.Result, error) {
+		return tool.Text(p.Text), nil
+	})
+	engine, err := New(client,
+		WithThreadRuntime(threadRuntime),
+		WithTools([]tool.Tool{echo}),
+		WithMaxSteps(2),
+	)
 	require.NoError(t, err)
 
 	_, err = engine.RunTurn(ctx, "hi")
 	require.NoError(t, err)
-	require.Len(t, client.requests, 1)
-	requireMessageContaining(t, client.requests[0], "Plan has 4 steps.")
-	require.Zero(t, messageCacheControlCount(client.requests[0]))
+	require.Len(t, client.requests, 2)
+	requireMessageContentPrefix(t, client.requests[0].Messages[0], "alpha context", "hi")
+	requireMessageContentPrefix(t, client.requests[1].Messages[len(client.requests[1].Messages)-1], "beta context", "")
+
+	messages, err := engine.History().Messages()
+	require.NoError(t, err)
+	require.Len(t, messages, 5)
+	requireMessageContentPrefix(t, messages[0], "alpha context", "hi")
+	requireMessageContentPrefix(t, messages[3], "beta context", "")
 }
 
 func TestThreadRuntimeCompactsConversationAndCommitsContextRender(t *testing.T) {
@@ -617,6 +574,14 @@ func requireInstructionContaining(t *testing.T, req unified.Request, want string
 			}
 		}
 	}
+	for _, message := range req.Messages {
+		for _, part := range message.Content {
+			text, ok := part.(unified.TextPart)
+			if ok && strings.Contains(text.Text, want) {
+				return
+			}
+		}
+	}
 	t.Fatalf("missing instruction containing %q in %#v", want, req.Instructions)
 }
 
@@ -704,12 +669,38 @@ func (p *recordingContextProvider) GetContext(_ context.Context, req agentcontex
 	return agentcontext.ProviderContext{Fragments: append([]agentcontext.ContextFragment(nil), p.fragments...)}, nil
 }
 
+type stepwiseRuntimeContextProvider struct {
+	key       agentcontext.ProviderKey
+	turns     [][]agentcontext.ContextFragment
+	requests  []agentcontext.Request
+	callCount int
+}
+
+func (p *stepwiseRuntimeContextProvider) Key() agentcontext.ProviderKey { return p.key }
+
+func (p *stepwiseRuntimeContextProvider) GetContext(_ context.Context, req agentcontext.Request) (agentcontext.ProviderContext, error) {
+	p.requests = append(p.requests, req)
+	index := p.callCount
+	if index >= len(p.turns) {
+		index = len(p.turns) - 1
+	}
+	p.callCount++
+	return agentcontext.ProviderContext{Fragments: append([]agentcontext.ContextFragment(nil), p.turns[index]...)}, nil
+}
+
 func requireTextMessage(t *testing.T, msg unified.Message, want string) {
 	t.Helper()
-	require.Len(t, msg.Content, 1)
+	require.NotEmpty(t, msg.Content)
 	text, ok := msg.Content[0].(unified.TextPart)
 	require.True(t, ok)
-	require.Equal(t, want, text.Text)
+	if len(msg.Content) == 1 {
+		require.Equal(t, want, text.Text)
+		return
+	}
+	require.Contains(t, text.Text, "<system-context>")
+	second, ok := msg.Content[1].(unified.TextPart)
+	require.True(t, ok)
+	require.Equal(t, want, second.Text)
 }
 
 func requireMessageContaining(t *testing.T, req unified.Request, want string) {
@@ -737,17 +728,19 @@ func requireNoMessageContaining(t *testing.T, req unified.Request, want string) 
 	}
 }
 
-func messageCacheControlCount(req unified.Request) int {
-	count := 0
-	for _, message := range req.Messages {
-		for _, part := range message.Content {
-			text, ok := part.(unified.TextPart)
-			if ok && text.CacheControl != nil {
-				count++
-			}
-		}
+func requireMessageContentPrefix(t *testing.T, msg unified.Message, wantDiff string, wantUser string) {
+	t.Helper()
+	require.NotEmpty(t, msg.Content)
+	first, ok := msg.Content[0].(unified.TextPart)
+	require.True(t, ok)
+	require.Contains(t, first.Text, "<system-context>")
+	require.Contains(t, first.Text, wantDiff)
+	if wantUser != "" {
+		require.Len(t, msg.Content, 2)
+		second, ok := msg.Content[1].(unified.TextPart)
+		require.True(t, ok)
+		require.Contains(t, second.Text, wantUser)
 	}
-	return count
 }
 
 func requireNoStoredMessageContaining(t *testing.T, messages []unified.Message, want string) {

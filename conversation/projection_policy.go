@@ -10,7 +10,6 @@ type ProjectionInput struct {
 	Tree                    *Tree
 	Branch                  BranchID
 	ProviderIdentity        ProviderIdentity
-	PrefixItems             []Item
 	Items                   []Item
 	PendingItems            []Item
 	Extensions              unified.Extensions
@@ -99,7 +98,6 @@ func estimateContentChars(part unified.ContentPart) int {
 
 func defaultProject(input ProjectionInput) (ProjectionResult, error) {
 	extensions := cloneExtensions(input.Extensions)
-	prefixItems := append([]Item(nil), input.PrefixItems...)
 	items := append([]Item(nil), input.Items...)
 	pendingItems := append([]Item(nil), input.PendingItems...)
 	pendingMessages := MessagesFromItems(pendingItems)
@@ -115,13 +113,10 @@ func defaultProject(input ProjectionInput) (ProjectionResult, error) {
 					return ProjectionResult{}, err
 				}
 			}
-			messages := MessagesFromItems(prefixItems)
-			messages = append(messages, pendingMessages...)
-			return ProjectionResult{Messages: messages, Extensions: extensions}, nil
+			return ProjectionResult{Messages: pendingMessages, Extensions: extensions}, nil
 		}
 	}
-	messages := MessagesFromItems(prefixItems)
-	messages = append(messages, MessagesFromItems(items)...)
+	messages := MessagesFromItems(items)
 	messages = append(messages, pendingMessages...)
 	return ProjectionResult{Messages: messages, Extensions: extensions}, nil
 }

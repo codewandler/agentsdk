@@ -3,7 +3,9 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/codewandler/agentsdk/agentcontext"
@@ -254,17 +256,7 @@ func (r *ThreadRuntime) PrepareRequest(ctx context.Context, meta runner.RequestP
 	if err != nil {
 		return runner.PreparedRequest{}, err
 	}
-	injection := contextInjectionForRender(render.Result, meta.NativeContinuation)
-	out := req
-	if len(injection.Instructions) > 0 {
-		out.Instructions = append(append([]unified.Instruction(nil), injection.Instructions...), req.Instructions...)
-	}
-	if len(injection.PrefixItems) > 0 {
-		out.PrefixItems = append(append([]conversation.Item(nil), injection.PrefixItems...), req.PrefixItems...)
-	}
-	if len(injection.Items) > 0 {
-		out.Items = append(append([]conversation.Item(nil), injection.Items...), req.Items...)
-	}
+	out := injectSystemContextDiff(req, render.Result)
 	return runner.PreparedRequest{
 		Request:      out,
 		ThreadEvents: r.contextRenderEvents(render),
@@ -539,17 +531,7 @@ func standaloneContextPreparer(manager *agentcontext.Manager) runner.RequestPrep
 		if err != nil {
 			return runner.PreparedRequest{}, err
 		}
-		injection := contextInjectionForRender(render.Result, meta.NativeContinuation)
-		out := req
-		if len(injection.Instructions) > 0 {
-			out.Instructions = append(append([]unified.Instruction(nil), injection.Instructions...), req.Instructions...)
-		}
-		if len(injection.PrefixItems) > 0 {
-			out.PrefixItems = append(append([]conversation.Item(nil), injection.PrefixItems...), req.PrefixItems...)
-		}
-		if len(injection.Items) > 0 {
-			out.Items = append(append([]conversation.Item(nil), injection.Items...), req.Items...)
-		}
+		out := injectSystemContextDiff(req, render.Result)
 		return runner.PreparedRequest{
 			Request: out,
 			Commit: func(context.Context) error {
@@ -664,85 +646,6 @@ func chainRequestPreparers(first runner.RequestPreparer, second runner.RequestPr
 	}
 }
 
-type contextInjection struct {
-	Instructions []unified.Instruction
-	PrefixItems  []conversation.Item
-	Items        []conversation.Item
-}
-
-func contextInjectionForRender(result agentcontext.BuildResult, nativeContinuation bool) contextInjection {
-	if nativeContinuation {
-		injection := contextInjection{}
-		injection.Items = append(injection.Items, contextRemovalItems(result.Removed)...)
-		return injection.appendFragments(append(append([]agentcontext.ContextFragment(nil), result.Added...), result.Updated...))
-	}
-	return contextInjection{}.appendFragments(result.Active)
-}
-
-func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragment) contextInjection {
-	for _, fragment := range fragments {
-		content := renderContextFragment(fragment)
-		if content == "" {
-			continue
-		}
-		part := unified.TextPart{Text: content}
-		if fragment.Authority == agentcontext.AuthorityDeveloper || fragment.Role == unified.RoleSystem {
-			kind := unified.InstructionDeveloper
-			if fragment.Role == unified.RoleSystem {
-				kind = unified.InstructionSystem
-			}
-			i.Instructions = append(i.Instructions, unified.Instruction{
-				Kind:    kind,
-				Name:    "context",
-				Content: []unified.ContentPart{part},
-				Meta: map[string]any{
-					"context_fragment": string(fragment.Key),
-					"authority":        string(fragment.Authority),
-				},
-			})
-			continue
-		}
-		role := fragment.Role
-		if role == "" || role == unified.RoleTool {
-			role = unified.RoleUser
-		}
-		i.PrefixItems = append(i.PrefixItems, conversation.Item{
-			Kind: conversation.ItemContextFragment,
-			Message: unified.Message{
-				Role:    role,
-				Name:    "context",
-				Content: []unified.ContentPart{part},
-				Meta: map[string]any{
-					"context_fragment": string(fragment.Key),
-					"authority":        string(fragment.Authority),
-				},
-			},
-		})
-	}
-	return i
-}
-
-func contextRemovalItems(removed []agentcontext.FragmentRemoved) []conversation.Item {
-	items := make([]conversation.Item, 0, len(removed))
-	for _, fragment := range removed {
-		items = append(items, conversation.Item{
-			Kind: conversation.ItemContextFragment,
-			Message: unified.Message{
-				Role: unified.RoleUser,
-				Name: "context",
-				Content: []unified.ContentPart{unified.TextPart{
-					Text: fmt.Sprintf("Context fragment removed: %s", fragment.FragmentKey),
-				}},
-				Meta: map[string]any{
-					"context_fragment": string(fragment.FragmentKey),
-					"context_removed":  true,
-				},
-			},
-		})
-	}
-	return items
-}
-
 func renderContextFragment(fragment agentcontext.ContextFragment) string {
 	content := strings.TrimSpace(fragment.Content)
 	if content == "" {
@@ -760,4 +663,126 @@ func renderContextFragment(fragment agentcontext.ContextFragment) string {
 		return content + "\n" + end
 	}
 	return content
+}
+
+func renderContextDiff(result agentcontext.BuildResult) (string, bool) {
+	var b strings.Builder
+	var hasDiff bool
+	for _, provider := range result.Providers {
+		if len(provider.Diff.Added) == 0 && len(provider.Diff.Updated) == 0 && len(provider.Diff.Removed) == 0 {
+			continue
+		}
+		hasDiff = true
+		if b.Len() == 0 {
+			b.WriteString("<system-context>\n")
+		}
+		writeXMLStart(&b, "provider", map[string]string{
+			"key": string(provider.ProviderKey),
+		}, 1)
+		for _, fragment := range provider.Diff.Added {
+			writeContextFragmentDiff(&b, "added", fragment, 2)
+		}
+		for _, fragment := range provider.Diff.Updated {
+			writeContextFragmentDiff(&b, "updated", fragment, 2)
+		}
+		for _, removed := range provider.Diff.Removed {
+			writeContextFragmentRemoval(&b, removed, 2)
+		}
+		writeXMLEnd(&b, "provider", 1)
+	}
+	if !hasDiff {
+		return "", false
+	}
+	b.WriteString("</system-context>")
+	return b.String(), true
+}
+
+func writeContextFragmentDiff(b *strings.Builder, tag string, fragment agentcontext.ContextFragment, indent int) {
+	attrs := map[string]string{
+		"fragment":  string(fragment.Key),
+		"role":      string(fragment.Role),
+		"authority": string(fragment.Authority),
+	}
+	writeXMLStart(b, tag, attrs, indent)
+	writeXMLText(b, renderContextFragment(fragment), indent+1)
+	writeXMLEnd(b, tag, indent)
+}
+
+func writeContextFragmentRemoval(b *strings.Builder, removed agentcontext.FragmentRemoved, indent int) {
+	writeXMLStart(b, "removed", map[string]string{
+		"fragment":    string(removed.FragmentKey),
+		"fingerprint": removed.PreviousFingerprint,
+	}, indent)
+	writeXMLEnd(b, "removed", indent)
+}
+
+func writeXMLStart(b *strings.Builder, tag string, attrs map[string]string, indent int) {
+	b.WriteString(strings.Repeat("  ", indent))
+	b.WriteByte('<')
+	b.WriteString(tag)
+	keys := make([]string, 0, len(attrs))
+	for key, value := range attrs {
+		if value == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		b.WriteByte(' ')
+		b.WriteString(key)
+		b.WriteString("=\"")
+		var escaped strings.Builder
+		_ = xml.EscapeText(&escaped, []byte(attrs[key]))
+		b.WriteString(escaped.String())
+		b.WriteByte('"')
+	}
+	b.WriteString(">\n")
+}
+
+func writeXMLEnd(b *strings.Builder, tag string, indent int) {
+	b.WriteString(strings.Repeat("  ", indent))
+	b.WriteString("</")
+	b.WriteString(tag)
+	b.WriteString(">\n")
+}
+
+func writeXMLText(b *strings.Builder, text string, indent int) {
+	if text == "" {
+		return
+	}
+	b.WriteString(strings.Repeat("  ", indent))
+	b.WriteString(escapeXMLText(text))
+	b.WriteByte('\n')
+}
+
+func escapeXMLText(text string) string {
+	text = strings.ReplaceAll(text, "&", "&amp;")
+	text = strings.ReplaceAll(text, "<", "&lt;")
+	text = strings.ReplaceAll(text, ">", "&gt;")
+	return text
+}
+
+func injectSystemContextDiff(req conversation.Request, result agentcontext.BuildResult) conversation.Request {
+	diff, ok := renderContextDiff(result)
+	if !ok || len(req.Messages) == 0 {
+		return req
+	}
+	out := req
+	out.Messages = append([]unified.Message(nil), req.Messages...)
+	last := len(out.Messages) - 1
+	msg := out.Messages[last]
+	if msg.Role == unified.RoleTool {
+		out.Messages = append(out.Messages, unified.Message{
+			Role: unified.RoleUser,
+			Name: "context",
+			Content: []unified.ContentPart{
+				unified.TextPart{Text: diff},
+			},
+		})
+		return out
+	}
+	msg.Content = append([]unified.ContentPart{unified.TextPart{Text: diff}}, msg.Content...)
+	out.Messages[last] = msg
+	return out
 }

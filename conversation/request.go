@@ -16,7 +16,6 @@ type Request struct {
 	Instructions    []unified.Instruction
 	Tools           []unified.Tool
 	ToolChoice      *unified.ToolChoice
-	PrefixItems     []Item
 	Messages        []unified.Message
 	Items           []Item
 	Stream          bool
@@ -78,14 +77,6 @@ func (b *Builder) Tools(tools []unified.Tool) *Builder {
 }
 func (b *Builder) ToolChoice(choice unified.ToolChoice) *Builder {
 	b.req.ToolChoice = &choice
-	return b
-}
-func (b *Builder) PrefixItem(item Item) *Builder {
-	b.req.PrefixItems = append(b.req.PrefixItems, item)
-	return b
-}
-func (b *Builder) PrefixItems(items ...Item) *Builder {
-	b.req.PrefixItems = append(b.req.PrefixItems, items...)
 	return b
 }
 func (b *Builder) Message(msg unified.Message) *Builder {
