@@ -6,6 +6,9 @@ Create a lightweight architecture design for:
 
 {{.Query}}
 
+Read the existing codebase first to understand current patterns, boundaries, and
+conventions. Use `grep`, `dir_tree`, and `file_read` to explore.
+
 Include:
 
 - problem statement and constraints

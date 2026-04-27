@@ -9,6 +9,33 @@ Run it from the agentsdk repository root:
 go run ./cmd/agentsdk run examples/engineer
 ```
 
+## Tools
+
+The agent has access to filesystem, shell, git, and web tools:
+
+| Tool | Purpose |
+|------|---------|
+| `bash` | Run shell commands |
+| `file_read` | Read files with line numbers |
+| `file_write` | Create or overwrite files |
+| `file_edit` | Precise edits — replace, insert, remove, patch |
+| `file_stat` | File metadata (size, permissions, modification time) |
+| `file_delete` | Delete files |
+| `grep` | Regex search across files |
+| `glob` | Find files by pattern |
+| `dir_tree` | Recursive directory tree |
+| `dir_list` | Directory listing with metadata |
+| `git_status` | Working tree status |
+| `git_diff` | Diff of staged or unstaged changes |
+| `web_fetch` | Fetch a URL and extract content |
+| `web_search` | Search the web (requires Tavily API key) |
+
+## Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| `planner` | Structured task plans for multi-step work |
+
 ## Commands
 
 | Command   | Description                                                  |
@@ -41,6 +68,10 @@ go run ./cmd/agentsdk run examples/engineer
 
 ```text
 What are the trade-offs between an event-driven and a request-driven architecture for our notification system?
+```
+
+```text
+Look up the latest Go 1.24 changes to the net/http package and summarize what affects our HTTP client code.
 ```
 
 If you have an installed `agentsdk` binary:

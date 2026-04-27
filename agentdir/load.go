@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/capability"
 	cmdmarkdown "github.com/codewandler/agentsdk/command/markdown"
 	md "github.com/codewandler/agentsdk/markdown"
 	"github.com/codewandler/agentsdk/resource"
@@ -18,18 +19,19 @@ import (
 )
 
 type AgentFrontmatter struct {
-	Name         string     `yaml:"name"`
-	Description  string     `yaml:"description"`
-	Model        string     `yaml:"model"`
-	MaxTokens    int        `yaml:"max-tokens"`
-	MaxSteps     int        `yaml:"max-steps"`
-	Temperature  float64    `yaml:"temperature"`
-	Thinking     string     `yaml:"thinking"`
-	Effort       string     `yaml:"effort"`
-	Tools        stringList `yaml:"tools"`
-	Skills       stringList `yaml:"skills"`
-	Commands     stringList `yaml:"commands"`
-	SkillSources stringList `yaml:"skill-sources"`
+	Name         string           `yaml:"name"`
+	Description  string           `yaml:"description"`
+	Model        string           `yaml:"model"`
+	MaxTokens    int              `yaml:"max-tokens"`
+	MaxSteps     int              `yaml:"max-steps"`
+	Temperature  float64          `yaml:"temperature"`
+	Thinking     string           `yaml:"thinking"`
+	Effort       string           `yaml:"effort"`
+	Tools        stringList       `yaml:"tools"`
+	Skills       stringList       `yaml:"skills"`
+	Commands     stringList       `yaml:"commands"`
+	SkillSources stringList       `yaml:"skill-sources"`
+	Capabilities capabilityList   `yaml:"capabilities"`
 }
 
 type stringList []string
@@ -64,6 +66,97 @@ func cleanStringList(values []string) []string {
 		}
 	}
 	return out
+}
+
+// capabilityList supports both short and long forms in YAML frontmatter:
+//
+//	capabilities: [planner]                          # short: name only
+//	capabilities:
+//	  - planner                                      # short: name only
+//	  - name: planner                                # long: explicit fields
+//	    instance-id: my-planner
+type capabilityList []capability.AttachSpec
+
+func (l *capabilityList) UnmarshalYAML(unmarshal func(any) error) error {
+	// Try structured list first.
+	var structured []capabilityEntry
+	if err := unmarshal(&structured); err == nil {
+		specs := make([]capability.AttachSpec, 0, len(structured))
+		for _, entry := range structured {
+			spec := entry.toAttachSpec()
+			if spec.CapabilityName != "" {
+				specs = append(specs, spec)
+			}
+		}
+		*l = specs
+		return nil
+	}
+	// Fall back to plain string list.
+	var names []string
+	if err := unmarshal(&names); err == nil {
+		specs := make([]capability.AttachSpec, 0, len(names))
+		for _, name := range names {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				specs = append(specs, capability.AttachSpec{
+					CapabilityName: name,
+					InstanceID:     "default",
+				})
+			}
+		}
+		*l = specs
+		return nil
+	}
+	// Single string.
+	var single string
+	if err := unmarshal(&single); err != nil {
+		return err
+	}
+	var specs []capability.AttachSpec
+	for _, part := range strings.Split(single, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			specs = append(specs, capability.AttachSpec{
+				CapabilityName: part,
+				InstanceID:     "default",
+			})
+		}
+	}
+	*l = specs
+	return nil
+}
+
+type capabilityEntry struct {
+	Name       string `yaml:"name"`
+	InstanceID string `yaml:"instance-id"`
+}
+
+func (e *capabilityEntry) UnmarshalYAML(unmarshal func(any) error) error {
+	// Try structured map first.
+	type plain capabilityEntry
+	var p plain
+	if err := unmarshal(&p); err == nil {
+		*e = capabilityEntry(p)
+		return nil
+	}
+	// Fall back to bare string.
+	var name string
+	if err := unmarshal(&name); err != nil {
+		return err
+	}
+	e.Name = strings.TrimSpace(name)
+	return nil
+}
+
+func (e capabilityEntry) toAttachSpec() capability.AttachSpec {
+	instanceID := strings.TrimSpace(e.InstanceID)
+	if instanceID == "" {
+		instanceID = "default"
+	}
+	return capability.AttachSpec{
+		CapabilityName: strings.TrimSpace(e.Name),
+		InstanceID:     instanceID,
+	}
 }
 
 // LoadDir loads resources from an OS directory.
@@ -202,14 +295,15 @@ func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, 
 		inference.Effort = unified.ReasoningEffort(fm.Effort)
 	}
 	return agent.Spec{
-		Name:        fm.Name,
-		Description: fm.Description,
-		System:      body,
-		Inference:   inference,
-		MaxSteps:    fm.MaxSteps,
-		Tools:       append([]string(nil), []string(fm.Tools)...),
-		Skills:      append([]string(nil), []string(fm.Skills)...),
-		Commands:    append([]string(nil), []string(fm.Commands)...),
+		Name:         fm.Name,
+		Description:  fm.Description,
+		System:       body,
+		Inference:    inference,
+		MaxSteps:     fm.MaxSteps,
+		Tools:        append([]string(nil), []string(fm.Tools)...),
+		Skills:       append([]string(nil), []string(fm.Skills)...),
+		Commands:     append([]string(nil), []string(fm.Commands)...),
+		Capabilities: append([]capability.AttachSpec(nil), []capability.AttachSpec(fm.Capabilities)...),
 	}, fm, nil
 }
 

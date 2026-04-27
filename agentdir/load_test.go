@@ -8,6 +8,8 @@ import (
 	"testing/fstest"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/capabilities/planner"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/stretchr/testify/require"
 )
@@ -381,6 +383,61 @@ func TestResolutionHelpers(t *testing.T) {
 	err = resolved.UpdateAgentSpec("missing", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "available agents")
+}
+
+func TestParseAgentSpecCapabilitiesShortForm(t *testing.T) {
+	spec, err := ParseAgentSpec("test.md", []byte(`---
+name: test
+capabilities: [planner]
+---
+Test agent.`))
+	require.NoError(t, err)
+	require.Len(t, spec.Capabilities, 1)
+	require.Equal(t, planner.CapabilityName, spec.Capabilities[0].CapabilityName)
+	require.Equal(t, "default", spec.Capabilities[0].InstanceID)
+}
+
+func TestParseAgentSpecCapabilitiesLongForm(t *testing.T) {
+	spec, err := ParseAgentSpec("test.md", []byte(`---
+name: test
+capabilities:
+  - name: planner
+    instance-id: my-planner
+---
+Test agent.`))
+	require.NoError(t, err)
+	require.Len(t, spec.Capabilities, 1)
+	require.Equal(t, planner.CapabilityName, spec.Capabilities[0].CapabilityName)
+	require.Equal(t, "my-planner", spec.Capabilities[0].InstanceID)
+}
+
+func TestParseAgentSpecCapabilitiesMixedForm(t *testing.T) {
+	spec, err := ParseAgentSpec("test.md", []byte(`---
+name: test
+capabilities:
+  - planner
+  - name: custom
+    instance-id: custom-1
+---
+Test agent.`))
+	require.NoError(t, err)
+	require.Len(t, spec.Capabilities, 2)
+	require.Equal(t, capability.AttachSpec{CapabilityName: "planner", InstanceID: "default"}, spec.Capabilities[0])
+	require.Equal(t, capability.AttachSpec{CapabilityName: "custom", InstanceID: "custom-1"}, spec.Capabilities[1])
+}
+
+func TestParseAgentSpecCapabilitiesCommaString(t *testing.T) {
+	spec, err := ParseAgentSpec("test.md", []byte("---\nname: test\ncapabilities: planner, custom\n---\nTest."))
+	require.NoError(t, err)
+	require.Len(t, spec.Capabilities, 2)
+	require.Equal(t, "planner", spec.Capabilities[0].CapabilityName)
+	require.Equal(t, "custom", spec.Capabilities[1].CapabilityName)
+}
+
+func TestParseAgentSpecNoCapabilities(t *testing.T) {
+	spec, err := ParseAgentSpec("test.md", []byte("---\nname: test\n---\nTest."))
+	require.NoError(t, err)
+	require.Empty(t, spec.Capabilities)
 }
 
 func writeFile(t *testing.T, path string, content string) {

@@ -6,6 +6,9 @@ Review the following code changes:
 
 {{.Query}}
 
+Start by reading the actual code with `git_diff`, `file_read`, or `grep` as
+needed. Do not review from memory alone.
+
 Provide:
 
 - a one-sentence summary of what the change does
