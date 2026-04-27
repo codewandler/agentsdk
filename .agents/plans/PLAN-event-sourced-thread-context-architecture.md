@@ -67,15 +67,18 @@ The second cleanup pass has also landed:
   compaction is branch-local, pending context fragments remain outside the
   compacted window, and native continuation is not reused after compaction
   becomes the branch head.
+- Thread-backed provider stream failures now append `provider.stream_failed`
+  diagnostics with step/model/provider identity, recoverability, error text,
+  last stream event, text/reasoning byte counts, and partial tool-call facts.
+  These diagnostics are durable thread events only; they are not projected into
+  model-visible conversation messages.
 
 Remaining larger architecture work is intentionally outside this first
 implementation slice:
 
-1. Add stricter recovery events/diagnostics for malformed provider streams that
-   fail before a complete assistant tool-call message is available.
-2. Add indexing/repair for JSONL thread metadata if/when listing/search needs
+1. Add indexing/repair for JSONL thread metadata if/when listing/search needs
    outgrow replaying JSONL.
-3. Decide whether all durable non-capability event kinds need a shared typed
+2. Decide whether all durable non-capability event kinds need a shared typed
    registry, or whether schema validation should remain owned by the projections
    that consume those events.
 

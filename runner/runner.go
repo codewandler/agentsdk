@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/codewandler/agentsdk/conversation"
@@ -18,6 +19,7 @@ var ErrMaxStepsReached = errors.New("runner: max steps reached")
 const (
 	EventProviderRouteSelected             thread.EventKind = "provider.route_selected"
 	EventProviderExecutionMetadataRecorded thread.EventKind = "provider.execution_metadata_recorded"
+	EventProviderStreamFailed              thread.EventKind = "provider.stream_failed"
 )
 
 type Result struct {
@@ -112,13 +114,24 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			return result, err
 		}
 
+		streamFacts := &providerStreamFacts{}
 		assistant, finishReason, usage, toolCalls, messageID, providerIdentity, routeEvent, executionEvent, err := consumeEvents(ctx, events, emit, eventContext{
 			step:             result.Steps,
 			model:            wireReq.Model,
 			providerIdentity: currentProviderIdentity,
-		})
+		}, streamFacts)
 		if err != nil {
 			rollbackPreparedRequest(ctx, prepared)
+			if diagnosticErr := appendProviderStreamFailed(ctx, history, providerStreamFailedPayload{
+				Step:             result.Steps,
+				Model:            wireReq.Model,
+				ProviderIdentity: streamFacts.providerIdentity(currentProviderIdentity),
+				Error:            err.Error(),
+				Recoverable:      streamFacts.Recoverable,
+				Facts:            streamFacts.snapshot(),
+			}); diagnosticErr != nil {
+				err = errors.Join(err, diagnosticErr)
+			}
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
@@ -230,6 +243,84 @@ func providerMetadataEvents(route unified.RouteEvent, execution unified.Provider
 	return events
 }
 
+type providerStreamFailedPayload struct {
+	Step             int                           `json:"step"`
+	Model            string                        `json:"model,omitempty"`
+	ProviderIdentity conversation.ProviderIdentity `json:"provider_identity,omitempty"`
+	Error            string                        `json:"error"`
+	Recoverable      bool                          `json:"recoverable,omitempty"`
+	Facts            providerStreamFactsSnapshot   `json:"facts,omitempty"`
+}
+
+type providerStreamFactsSnapshot struct {
+	LastEvent      string                   `json:"last_event,omitempty"`
+	SawCompleted   bool                     `json:"saw_completed,omitempty"`
+	TextBytes      int                      `json:"text_bytes,omitempty"`
+	ReasoningBytes int                      `json:"reasoning_bytes,omitempty"`
+	ToolCalls      []providerStreamToolCall `json:"tool_calls,omitempty"`
+}
+
+type providerStreamToolCall struct {
+	Index     int    `json:"index"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	ArgsBytes int    `json:"args_bytes,omitempty"`
+}
+
+type providerStreamFacts struct {
+	LastEvent      string
+	SawCompleted   bool
+	TextBytes      int
+	ReasoningBytes int
+	Recoverable    bool
+	Route          unified.RouteEvent
+	Execution      unified.ProviderExecutionEvent
+	toolCalls      map[int]providerStreamToolCall
+}
+
+func (f *providerStreamFacts) snapshot() providerStreamFactsSnapshot {
+	if f == nil {
+		return providerStreamFactsSnapshot{}
+	}
+	calls := make([]providerStreamToolCall, 0, len(f.toolCalls))
+	for _, call := range f.toolCalls {
+		calls = append(calls, call)
+	}
+	sort.SliceStable(calls, func(i, j int) bool {
+		return calls[i].Index < calls[j].Index
+	})
+	return providerStreamFactsSnapshot{
+		LastEvent:      f.LastEvent,
+		SawCompleted:   f.SawCompleted,
+		TextBytes:      f.TextBytes,
+		ReasoningBytes: f.ReasoningBytes,
+		ToolCalls:      calls,
+	}
+}
+
+func (f *providerStreamFacts) providerIdentity(fallback conversation.ProviderIdentity) conversation.ProviderIdentity {
+	if f != nil && !isZeroRouteEvent(f.Route) {
+		return providerIdentityFromRouteEvent(f.Route)
+	}
+	return fallback
+}
+
+func appendProviderStreamFailed(ctx context.Context, history History, payload providerStreamFailedPayload) error {
+	threadHistory, ok := history.(threadEventHistory)
+	if !ok || !threadHistory.ThreadEventsEnabled() {
+		return nil
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return threadHistory.AppendThreadEvents(ctx, thread.Event{
+		Kind:    EventProviderStreamFailed,
+		Payload: raw,
+		Source:  thread.EventSource{Type: "provider", ID: payload.ProviderIdentity.ProviderName},
+	})
+}
+
 func isZeroRouteEvent(event unified.RouteEvent) bool {
 	return event.SourceAPI == "" &&
 		event.TargetAPI == "" &&
@@ -320,7 +411,7 @@ type eventContext struct {
 	providerIdentity conversation.ProviderIdentity
 }
 
-func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(Event), meta eventContext) (unified.Message, unified.FinishReason, unified.Usage, []unified.ToolCall, string, conversation.ProviderIdentity, unified.RouteEvent, unified.ProviderExecutionEvent, error) {
+func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(Event), meta eventContext, facts *providerStreamFacts) (unified.Message, unified.FinishReason, unified.Usage, []unified.ToolCall, string, conversation.ProviderIdentity, unified.RouteEvent, unified.ProviderExecutionEvent, error) {
 	var text strings.Builder
 	var reasoning strings.Builder
 	var reasoningSignature strings.Builder
@@ -341,38 +432,53 @@ func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(E
 		case event, ok := <-events:
 			if !ok {
 				if !sawCompleted {
+					recordStreamEvent(facts, "stream_closed")
 					return unified.Message{}, "", unified.Usage{}, nil, "", providerIdentity, routeEvent, executionEvent, fmt.Errorf("runner: stream ended without completed event")
 				}
 				return assistantMessage(messageID, text.String(), reasoning.String(), reasoningSignature.String(), toolCalls), finishReason, usage, toolCalls, messageID, providerIdentity, routeEvent, executionEvent, nil
 			}
 			switch ev := event.(type) {
 			case unified.MessageStartEvent:
+				recordStreamEvent(facts, "message_start")
 				if ev.ID != "" {
 					messageID = ev.ID
 				}
 			case unified.TextDeltaEvent:
+				recordStreamEvent(facts, "text_delta")
+				if facts != nil {
+					facts.TextBytes += len(ev.Text)
+				}
 				text.WriteString(ev.Text)
 				emit(TextDeltaEvent{Step: meta.step, Text: ev.Text})
 			case unified.ReasoningDeltaEvent:
+				recordStreamEvent(facts, "reasoning_delta")
+				if facts != nil {
+					facts.ReasoningBytes += len(ev.Text)
+				}
 				reasoning.WriteString(ev.Text)
 				reasoningSignature.WriteString(ev.Signature)
 				emit(ReasoningDeltaEvent{Step: meta.step, Text: ev.Text})
 			case unified.ToolCallStartEvent:
+				recordStreamEvent(facts, "tool_call_start")
 				call := unified.ToolCall{ID: ev.ID, Name: ev.Name, Index: ev.Index}
+				recordStreamToolCall(facts, call, 0)
 				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
 				builder.id = firstNonEmpty(ev.ID, builder.id)
 				builder.name = firstNonEmpty(ev.Name, builder.name)
 				toolCalls = append(toolCalls, call)
 				emit(ToolCallEvent{Step: meta.step, Call: call})
 			case unified.ToolCallArgsDeltaEvent:
+				recordStreamEvent(facts, "tool_call_args_delta")
 				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
 				builder.id = firstNonEmpty(ev.ID, builder.id)
 				builder.args.WriteString(ev.Delta)
+				recordStreamToolCall(facts, unified.ToolCall{ID: builder.id, Name: builder.name, Index: ev.Index}, len(builder.args.Bytes()))
 				if ev.ID != "" || ev.Delta != "" {
 					updateToolCallArgs(&toolCalls, ev.Index, ev.ID, builder.name, builder.args.Bytes())
 				}
 				emit(ToolCallArgsDeltaEvent{Step: meta.step, Index: ev.Index, ID: ev.ID, Name: builder.name, Delta: ev.Delta})
 			case unified.ToolCallDoneEvent:
+				recordStreamEvent(facts, "tool_call_done")
 				builder := ensureToolCallBuilder(toolBuilders, ev.Index)
 				builder.id = firstNonEmpty(ev.ID, builder.id)
 				builder.name = firstNonEmpty(ev.Name, builder.name)
@@ -384,36 +490,79 @@ func consumeEvents(ctx context.Context, events <-chan unified.Event, emit func(E
 				call.ID = firstNonEmpty(call.ID, builder.id)
 				call.Name = firstNonEmpty(call.Name, builder.name)
 				call.Arguments = append(json.RawMessage(nil), args...)
+				recordStreamToolCall(facts, call, len(call.Arguments))
 				upsertToolCall(&toolCalls, call)
 				emit(ToolCallEvent{Step: meta.step, Call: call})
 			case unified.UsageEvent:
+				recordStreamEvent(facts, "usage")
 				usage = mergeUsage(usage, ev.Usage())
 				emit(UsageEvent{Step: meta.step, Model: meta.model, ProviderIdentity: providerIdentity, Usage: ev.Usage()})
 			case unified.CompletedEvent:
+				recordStreamEvent(facts, "completed")
+				if facts != nil {
+					facts.SawCompleted = true
+				}
 				sawCompleted = true
 				finishReason = ev.FinishReason
 				if ev.MessageID != "" {
 					messageID = ev.MessageID
 				}
 			case unified.ErrorEvent:
+				recordStreamEvent(facts, "error")
+				if facts != nil {
+					facts.Recoverable = ev.Recoverable
+				}
 				if ev.Err != nil {
 					return unified.Message{}, "", unified.Usage{}, nil, "", providerIdentity, routeEvent, executionEvent, ev.Err
 				}
 				return unified.Message{}, "", unified.Usage{}, nil, "", providerIdentity, routeEvent, executionEvent, fmt.Errorf("runner: provider stream error")
 			case unified.WarningEvent:
+				recordStreamEvent(facts, "warning")
 				emit(WarningEvent{Step: meta.step, Warning: ev})
 			case unified.RawEvent:
+				recordStreamEvent(facts, "raw")
 				emit(RawEvent{Step: meta.step, Raw: ev})
 			case unified.RouteEvent:
+				recordStreamEvent(facts, "route")
 				routeEvent = ev
+				if facts != nil {
+					facts.Route = ev
+				}
 				providerIdentity = providerIdentityFromRouteEvent(ev)
 				emit(RouteEvent{Step: meta.step, Route: ev, ProviderIdentity: providerIdentity})
 			case unified.ProviderExecutionEvent:
+				recordStreamEvent(facts, "provider_execution")
 				executionEvent = ev
+				if facts != nil {
+					facts.Execution = ev
+				}
 				emit(ProviderExecutionEvent{Step: meta.step, Execution: ev})
 			}
 		}
 	}
+}
+
+func recordStreamEvent(facts *providerStreamFacts, name string) {
+	if facts != nil {
+		facts.LastEvent = name
+	}
+}
+
+func recordStreamToolCall(facts *providerStreamFacts, call unified.ToolCall, argsBytes int) {
+	if facts == nil {
+		return
+	}
+	if facts.toolCalls == nil {
+		facts.toolCalls = map[int]providerStreamToolCall{}
+	}
+	record := facts.toolCalls[call.Index]
+	record.Index = call.Index
+	record.ID = firstNonEmpty(call.ID, record.ID)
+	record.Name = firstNonEmpty(call.Name, record.Name)
+	if argsBytes > record.ArgsBytes {
+		record.ArgsBytes = argsBytes
+	}
+	facts.toolCalls[call.Index] = record
 }
 
 func providerIdentityFromRouteEvent(ev unified.RouteEvent) conversation.ProviderIdentity {

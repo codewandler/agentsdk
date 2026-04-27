@@ -2,12 +2,14 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runnertest"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
@@ -269,6 +271,35 @@ func TestRunTurnProviderErrorDoesNotCommit(t *testing.T) {
 	require.Empty(t, messages)
 }
 
+func TestRunTurnProviderErrorRecordsThreadDiagnostic(t *testing.T) {
+	ctx := context.Background()
+	client := runnertest.NewClient([]unified.Event{
+		unified.ToolCallStartEvent{Index: 0, ID: "call_1", Name: "partial"},
+		unified.ToolCallArgsDeltaEvent{Index: 0, Delta: `{"a"`},
+		unified.ErrorEvent{Err: errors.New("boom"), Recoverable: true},
+	})
+	sess, store := newTestThreadHistory(t, ctx)
+
+	_, err := RunTurn(ctx, sess, client, conversation.NewRequest().User("hi").Build(),
+		WithProviderIdentity(conversation.ProviderIdentity{ProviderName: "test", APIKind: "responses"}),
+	)
+	require.ErrorContains(t, err, "boom")
+	messages, msgErr := sess.Messages()
+	require.NoError(t, msgErr)
+	require.Empty(t, messages)
+
+	payload := requireProviderStreamFailedPayload(t, ctx, store, sess.live.ID())
+	require.Equal(t, 1, payload.Step)
+	require.Equal(t, "test", payload.ProviderIdentity.ProviderName)
+	require.Equal(t, "boom", payload.Error)
+	require.True(t, payload.Recoverable)
+	require.Equal(t, "error", payload.Facts.LastEvent)
+	require.Len(t, payload.Facts.ToolCalls, 1)
+	require.Equal(t, "call_1", payload.Facts.ToolCalls[0].ID)
+	require.Equal(t, "partial", payload.Facts.ToolCalls[0].Name)
+	require.Equal(t, len(`{"a"`), payload.Facts.ToolCalls[0].ArgsBytes)
+}
+
 func TestRunTurnIncompleteStreamDoesNotCommit(t *testing.T) {
 	client := runnertest.NewClient(runnertest.IncompleteTextStream("partial"))
 	sess := newTestHistory("")
@@ -277,6 +308,26 @@ func TestRunTurnIncompleteStreamDoesNotCommit(t *testing.T) {
 	messages, msgErr := sess.Messages()
 	require.NoError(t, msgErr)
 	require.Empty(t, messages)
+}
+
+func TestRunTurnIncompleteStreamRecordsThreadDiagnostic(t *testing.T) {
+	ctx := context.Background()
+	client := runnertest.NewClient(runnertest.IncompleteTextStream("partial"))
+	sess, store := newTestThreadHistory(t, ctx)
+
+	_, err := RunTurn(ctx, sess, client, conversation.NewRequest().Model("gpt-test").User("hi").Build())
+	require.ErrorContains(t, err, "without completed")
+	messages, msgErr := sess.Messages()
+	require.NoError(t, msgErr)
+	require.Empty(t, messages)
+
+	payload := requireProviderStreamFailedPayload(t, ctx, store, sess.live.ID())
+	require.Equal(t, 1, payload.Step)
+	require.Equal(t, "gpt-test", payload.Model)
+	require.Equal(t, "runner: stream ended without completed event", payload.Error)
+	require.Equal(t, "stream_closed", payload.Facts.LastEvent)
+	require.Equal(t, len("partial"), payload.Facts.TextBytes)
+	require.False(t, payload.Facts.SawCompleted)
 }
 
 func requireToolResult(t *testing.T, events []Event, output string, isError bool) {
@@ -307,6 +358,51 @@ type testHistory struct {
 	sessionID string
 	branch    conversation.BranchID
 	tree      *conversation.Tree
+}
+
+type testThreadHistory struct {
+	*testHistory
+	live thread.Live
+}
+
+func newTestThreadHistory(t *testing.T, ctx context.Context) (*testThreadHistory, *thread.MemoryStore) {
+	t.Helper()
+	store := thread.NewMemoryStore()
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_runner_diagnostics"})
+	require.NoError(t, err)
+	return &testThreadHistory{testHistory: newTestHistory("session_runner_diagnostics"), live: live}, store
+}
+
+func (h *testThreadHistory) ThreadEventsEnabled() bool { return h.live != nil }
+
+func (h *testThreadHistory) AppendThreadEvents(ctx context.Context, events ...thread.Event) error {
+	return h.live.Append(ctx, events...)
+}
+
+func (h *testThreadHistory) CommitFragmentWithThreadEvents(ctx context.Context, fragment *conversation.TurnFragment, events ...thread.Event) ([]conversation.NodeID, error) {
+	if len(events) > 0 {
+		if err := h.live.Append(ctx, events...); err != nil {
+			return nil, err
+		}
+	}
+	return h.CommitFragment(fragment)
+}
+
+func requireProviderStreamFailedPayload(t *testing.T, ctx context.Context, store *thread.MemoryStore, id thread.ID) providerStreamFailedPayload {
+	t.Helper()
+	stored, err := store.Read(ctx, thread.ReadParams{ID: id})
+	require.NoError(t, err)
+	var payloads []providerStreamFailedPayload
+	for _, event := range stored.Events {
+		if event.Kind != EventProviderStreamFailed {
+			continue
+		}
+		var payload providerStreamFailedPayload
+		require.NoError(t, json.Unmarshal(event.Payload, &payload))
+		payloads = append(payloads, payload)
+	}
+	require.Len(t, payloads, 1)
+	return payloads[0]
 }
 
 func newTestHistory(sessionID string) *testHistory {
