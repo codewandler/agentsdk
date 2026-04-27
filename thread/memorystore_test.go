@@ -120,3 +120,51 @@ func TestMemoryStoreArchiveListResumeAndDiscard(t *testing.T) {
 		t.Fatal("expected discarded thread to be removed")
 	}
 }
+
+func TestStoredEventsForBranchUsesForkWindows(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	mainLive, err := store.Create(ctx, CreateParams{ID: "thread_branch"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mainLive.Append(ctx, Event{Kind: "capability.attached"}); err != nil {
+		t.Fatal(err)
+	}
+	altLive, err := store.Fork(ctx, ForkParams{ID: mainLive.ID(), FromBranchID: MainBranch, ToBranchID: "alt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mainLive.Append(ctx, Event{Kind: "capability.state_event_dispatched", Payload: json.RawMessage(`{"branch":"main-after-fork"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := altLive.Append(ctx, Event{Kind: "capability.state_event_dispatched", Payload: json.RawMessage(`{"branch":"alt"}`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := store.Read(ctx, ReadParams{ID: mainLive.ID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	altEvents, err := stored.EventsForBranch("alt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(altEvents), 4; got != want {
+		t.Fatalf("alt events = %d, want %d", got, want)
+	}
+	for _, event := range altEvents {
+		if string(event.Payload) == `{"branch":"main-after-fork"}` {
+			t.Fatalf("alt replay included main event after fork: %#v", altEvents)
+		}
+	}
+	mainEvents, err := stored.EventsForBranch(MainBranch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range mainEvents {
+		if string(event.Payload) == `{"branch":"alt"}` {
+			t.Fatalf("main replay included alt event: %#v", mainEvents)
+		}
+	}
+}

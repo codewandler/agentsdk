@@ -22,7 +22,19 @@ type Options struct {
 
 type Option func(*Options)
 
-type RequestPreparer func(context.Context, int, conversation.Request) (conversation.Request, error)
+type RequestPrepareMeta struct {
+	Step               int
+	ProviderIdentity   conversation.ProviderIdentity
+	NativeContinuation bool
+}
+
+type PreparedRequest struct {
+	Request  conversation.Request
+	Commit   func(context.Context) error
+	Rollback func(context.Context)
+}
+
+type RequestPreparer func(context.Context, RequestPrepareMeta, conversation.Request) (PreparedRequest, error)
 
 type ToolExecutor interface {
 	ExecuteTool(ctx context.Context, call unified.ToolCall) unified.ToolResult

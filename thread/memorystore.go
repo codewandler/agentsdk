@@ -17,6 +17,7 @@ type MemoryStore struct {
 type memoryThread struct {
 	id        ID
 	branchID  BranchID
+	branches  map[BranchID]Branch
 	metadata  map[string]string
 	archived  bool
 	createdAt time.Time
@@ -57,6 +58,7 @@ func (s *MemoryStore) Create(ctx context.Context, params CreateParams) (Live, er
 	stored := &memoryThread{
 		id:        id,
 		branchID:  branchID,
+		branches:  map[BranchID]Branch{branchID: {ID: branchID, CreatedAt: now}},
 		metadata:  cloneMetadata(params.Metadata),
 		createdAt: now,
 		updatedAt: now,
@@ -97,7 +99,53 @@ func (s *MemoryStore) Resume(ctx context.Context, params ResumeParams) (Live, er
 	if branchID == "" {
 		branchID = stored.branchID
 	}
+	if _, ok := stored.branches[branchID]; !ok {
+		return nil, fmt.Errorf("thread: branch %q not found", branchID)
+	}
 	return &memoryLive{store: s, threadID: stored.id, branchID: branchID, source: params.Source}, nil
+}
+
+func (s *MemoryStore) Fork(ctx context.Context, params ForkParams) (Live, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, ok := s.threads[params.ID]
+	if !ok {
+		return nil, fmt.Errorf("thread: thread %q not found", params.ID)
+	}
+	from := params.FromBranchID
+	if from == "" {
+		from = stored.branchID
+	}
+	if from == "" {
+		from = MainBranch
+	}
+	if _, ok := stored.branches[from]; !ok {
+		return nil, fmt.Errorf("thread: branch %q not found", from)
+	}
+	to := params.ToBranchID
+	if to == "" {
+		to = NewBranchID()
+	}
+	if _, ok := stored.branches[to]; ok {
+		return nil, fmt.Errorf("thread: branch %q already exists", to)
+	}
+	now := time.Now()
+	forkSeq := stored.nextSeq - 1
+	stored.branches[to] = Branch{ID: to, Parent: from, ForkSeq: forkSeq, CreatedAt: now}
+	payload, err := json.Marshal(struct {
+		FromBranchID BranchID `json:"from_branch_id"`
+		ToBranchID   BranchID `json:"to_branch_id"`
+		ForkSeq      int64    `json:"fork_seq"`
+	}{FromBranchID: from, ToBranchID: to, ForkSeq: forkSeq})
+	if err != nil {
+		return nil, err
+	}
+	source := params.Source
+	stored.appendLocked(to, Event{Kind: EventBranchCreated, Payload: payload, Source: source, At: now})
+	return &memoryLive{store: s, threadID: stored.id, branchID: to, source: source}, nil
 }
 
 func (s *MemoryStore) Read(ctx context.Context, params ReadParams) (Stored, error) {
@@ -162,6 +210,7 @@ func (t *memoryThread) snapshot() Stored {
 	return Stored{
 		ID:        t.id,
 		BranchID:  t.branchID,
+		Branches:  cloneBranches(t.branches),
 		Metadata:  cloneMetadata(t.metadata),
 		Archived:  t.archived,
 		CreatedAt: t.createdAt,

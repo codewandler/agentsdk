@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/thread"
@@ -12,6 +13,7 @@ import (
 )
 
 type Manager struct {
+	mu           sync.RWMutex
 	registry     Registry
 	runtime      Runtime
 	capabilities map[string]Capability
@@ -26,6 +28,8 @@ func NewManager(registry Registry, runtime Runtime) *Manager {
 }
 
 func (m *Manager) Attach(ctx context.Context, spec AttachSpec) (Capability, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.registry == nil {
 		return nil, fmt.Errorf("capability: registry is required")
 	}
@@ -56,6 +60,8 @@ func (m *Manager) Attach(ctx context.Context, spec AttachSpec) (Capability, erro
 }
 
 func (m *Manager) Replay(ctx context.Context, events []thread.Event) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.registry == nil {
 		return fmt.Errorf("capability: registry is required")
 	}
@@ -70,8 +76,8 @@ func (m *Manager) Replay(ctx context.Context, events []thread.Event) error {
 				return err
 			}
 			spec := AttachSpec{
-				ThreadID:       event.ThreadID,
-				BranchID:       event.BranchID,
+				ThreadID:       m.runtime.ThreadID(),
+				BranchID:       m.runtime.BranchID(),
 				CapabilityName: payload.CapabilityName,
 				InstanceID:     payload.InstanceID,
 				Config:         payload.Config,
@@ -112,6 +118,8 @@ func (m *Manager) Replay(ctx context.Context, events []thread.Event) error {
 }
 
 func (m *Manager) Capability(instanceID string) (Capability, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	instance, ok := m.capabilities[instanceID]
 	return instance, ok
 }
@@ -140,6 +148,12 @@ func (m *Manager) normalizeSpec(spec AttachSpec) AttachSpec {
 }
 
 func (m *Manager) sortedCapabilities() []Capability {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.sortedCapabilitiesLocked()
+}
+
+func (m *Manager) sortedCapabilitiesLocked() []Capability {
 	keys := make([]string, 0, len(m.capabilities))
 	for key := range m.capabilities {
 		keys = append(keys, key)

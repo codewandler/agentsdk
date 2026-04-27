@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/codewandler/agentsdk/conversation"
@@ -15,10 +16,18 @@ import (
 type fakeClient struct {
 	requests []unified.Request
 	events   [][]unified.Event
+	errors   []error
 }
 
 func (c *fakeClient) Request(_ context.Context, req unified.Request) (<-chan unified.Event, error) {
 	c.requests = append(c.requests, req)
+	if len(c.errors) > 0 {
+		err := c.errors[0]
+		c.errors = c.errors[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
 	events := []unified.Event{unified.CompletedEvent{FinishReason: unified.FinishReasonStop}}
 	if len(c.events) > 0 {
 		events = c.events[0]
@@ -31,6 +40,8 @@ func (c *fakeClient) Request(_ context.Context, req unified.Request) (<-chan uni
 	close(out)
 	return out, nil
 }
+
+var errFakeRequest = errors.New("fake request failed")
 
 func TestRunTurnAppliesDefaultsAndCommits(t *testing.T) {
 	client := &fakeClient{events: [][]unified.Event{{

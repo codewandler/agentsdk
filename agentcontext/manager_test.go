@@ -124,6 +124,45 @@ func TestManagerUsesFingerprintFastPath(t *testing.T) {
 	}
 }
 
+func TestManagerPrepareCommitAndRollback(t *testing.T) {
+	provider := &staticProvider{
+		key:       "env",
+		fragments: []ContextFragment{{Key: "env/cwd", Content: "/repo"}},
+	}
+	manager, err := NewManager(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prepared, err := manager.Prepare(context.Background(), BuildRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prepared.Result.Added) != 1 {
+		t.Fatalf("prepared added = %d, want 1", len(prepared.Result.Added))
+	}
+	prepared.Rollback()
+
+	again, err := manager.Prepare(context.Background(), BuildRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again.Result.Added) != 1 {
+		t.Fatalf("again added = %d, want 1 after rollback", len(again.Result.Added))
+	}
+	if err := again.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	noChange, err := manager.Prepare(context.Background(), BuildRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(noChange.Result.Added) != 0 || len(noChange.Result.Updated) != 0 || len(noChange.Result.Removed) != 0 {
+		t.Fatalf("noChange diff = added %d updated %d removed %d, want no-op", len(noChange.Result.Added), len(noChange.Result.Updated), len(noChange.Result.Removed))
+	}
+}
+
 type staticProvider struct {
 	key         ProviderKey
 	fragments   []ContextFragment

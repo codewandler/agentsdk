@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 )
 
 type Manager struct {
+	mu        sync.Mutex
 	providers []Provider
 	records   map[ProviderKey]ProviderRenderRecord
+	version   int64
 }
 
 func NewManager(providers ...Provider) (*Manager, error) {
@@ -22,6 +25,12 @@ func NewManager(providers ...Provider) (*Manager, error) {
 }
 
 func (m *Manager) Register(providers ...Provider) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.registerLocked(providers...)
+}
+
+func (m *Manager) registerLocked(providers ...Provider) error {
 	if m.records == nil {
 		m.records = make(map[ProviderKey]ProviderRenderRecord)
 	}
@@ -50,6 +59,8 @@ func (m *Manager) Register(providers ...Provider) error {
 }
 
 func (m *Manager) Records() map[ProviderKey]ProviderRenderRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	out := make(map[ProviderKey]ProviderRenderRecord, len(m.records))
 	for key, record := range m.records {
 		out[key] = cloneRecord(record)
@@ -83,13 +94,45 @@ type BuildResult struct {
 }
 
 func (m *Manager) Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
+	render, err := m.Prepare(ctx, req)
+	if err != nil {
+		return BuildResult{}, err
+	}
+	if err := render.Commit(); err != nil {
+		return BuildResult{}, err
+	}
+	return render.Result, nil
+}
+
+type PreparedRender struct {
+	manager *Manager
+	version int64
+	records map[ProviderKey]ProviderRenderRecord
+	Result  BuildResult
+	done    bool
+}
+
+func (m *Manager) Prepare(ctx context.Context, req BuildRequest) (*PreparedRender, error) {
+	m.mu.Lock()
 	if m.records == nil {
 		m.records = make(map[ProviderKey]ProviderRenderRecord)
 	}
+	providers := append([]Provider(nil), m.providers...)
+	previousRecords := make(map[ProviderKey]ProviderRenderRecord, len(m.records))
+	for key, record := range m.records {
+		previousRecords[key] = cloneRecord(record)
+	}
+	version := m.version
+	m.mu.Unlock()
+
 	result := BuildResult{}
-	for _, provider := range m.providers {
+	nextRecords := make(map[ProviderKey]ProviderRenderRecord, len(previousRecords))
+	for key, record := range previousRecords {
+		nextRecords[key] = cloneRecord(record)
+	}
+	for _, provider := range providers {
 		providerKey := provider.Key()
-		previous, hasPrevious := m.records[providerKey]
+		previous, hasPrevious := previousRecords[providerKey]
 		contextReq := Request{
 			ThreadID:     req.ThreadID,
 			BranchID:     req.BranchID,
@@ -100,14 +143,13 @@ func (m *Manager) Build(ctx context.Context, req BuildRequest) (BuildResult, err
 			Reason:       req.Reason,
 		}
 		if hasPrevious {
-			clone := cloneRecord(previous)
-			contextReq.Previous = &clone
+			contextReq.Previous = &previous
 		}
 
 		if fast, ok := provider.(FingerprintingProvider); ok && hasPrevious {
 			fingerprint, valid, err := fast.StateFingerprint(ctx, contextReq)
 			if err != nil {
-				return BuildResult{}, err
+				return nil, err
 			}
 			if valid && fingerprint != "" && fingerprint == previous.Fingerprint {
 				record := cloneRecord(previous)
@@ -123,13 +165,13 @@ func (m *Manager) Build(ctx context.Context, req BuildRequest) (BuildResult, err
 
 		providerContext, err := provider.GetContext(ctx, contextReq)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		record, diff, err := buildProviderRecord(providerKey, previous, providerContext)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
-		m.records[providerKey] = cloneRecord(record)
+		nextRecords[providerKey] = cloneRecord(record)
 
 		result.Providers = append(result.Providers, ProviderBuildResult{
 			ProviderKey: providerKey,
@@ -141,7 +183,35 @@ func (m *Manager) Build(ctx context.Context, req BuildRequest) (BuildResult, err
 		result.Removed = append(result.Removed, diff.Removed...)
 		result.Active = append(result.Active, record.ActiveFragments()...)
 	}
-	return result, nil
+	return &PreparedRender{manager: m, version: version, records: nextRecords, Result: result}, nil
+}
+
+func (r *PreparedRender) Commit() error {
+	if r == nil || r.manager == nil {
+		return fmt.Errorf("agentcontext: prepared render is nil")
+	}
+	r.manager.mu.Lock()
+	defer r.manager.mu.Unlock()
+	if r.done {
+		return fmt.Errorf("agentcontext: prepared render already closed")
+	}
+	if r.manager.version != r.version {
+		return fmt.Errorf("agentcontext: render records changed before commit")
+	}
+	r.manager.records = make(map[ProviderKey]ProviderRenderRecord, len(r.records))
+	for key, record := range r.records {
+		r.manager.records[key] = cloneRecord(record)
+	}
+	r.manager.version++
+	r.done = true
+	return nil
+}
+
+func (r *PreparedRender) Rollback() {
+	if r == nil {
+		return
+	}
+	r.done = true
 }
 
 func buildProviderRecord(providerKey ProviderKey, previous ProviderRenderRecord, providerContext ProviderContext) (ProviderRenderRecord, RenderDiff, error) {

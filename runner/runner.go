@@ -55,17 +55,29 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 		result.Steps++
 		stepReq := req
 		stepReq.Messages = append([]unified.Message(nil), transcript...)
+		var prepared PreparedRequest
 		if options.RequestPreparer != nil {
-			prepared, err := options.RequestPreparer(ctx, result.Steps, stepReq)
+			nativeContinuation, err := nativeContinuationAvailable(session, currentProviderIdentity)
 			if err != nil {
 				fragment.Fail(err)
 				emit(ErrorEvent{Err: err})
 				return result, err
 			}
-			stepReq = prepared
+			prepared, err = options.RequestPreparer(ctx, RequestPrepareMeta{
+				Step:               result.Steps,
+				ProviderIdentity:   currentProviderIdentity,
+				NativeContinuation: nativeContinuation,
+			}, stepReq)
+			if err != nil {
+				fragment.Fail(err)
+				emit(ErrorEvent{Err: err})
+				return result, err
+			}
+			stepReq = prepared.Request
 		}
 		wireReq, err := session.BuildRequestForProvider(stepReq, currentProviderIdentity)
 		if err != nil {
+			rollbackPreparedRequest(ctx, prepared)
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
@@ -73,6 +85,7 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 		emit(StepStartEvent{Step: result.Steps, MaxSteps: options.MaxSteps, Model: wireReq.Model})
 		events, err := client.Request(ctx, wireReq)
 		if err != nil {
+			rollbackPreparedRequest(ctx, prepared)
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
@@ -84,6 +97,12 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 			providerIdentity: currentProviderIdentity,
 		})
 		if err != nil {
+			rollbackPreparedRequest(ctx, prepared)
+			fragment.Fail(err)
+			emit(ErrorEvent{Err: err})
+			return result, err
+		}
+		if err := commitPreparedRequest(ctx, prepared); err != nil {
 			fragment.Fail(err)
 			emit(ErrorEvent{Err: err})
 			return result, err
@@ -149,6 +168,30 @@ func RunTurn(ctx context.Context, session *conversation.Session, client unified.
 	fragment.Fail(err)
 	emit(ErrorEvent{Err: err})
 	return result, err
+}
+
+func nativeContinuationAvailable(session *conversation.Session, identity conversation.ProviderIdentity) (bool, error) {
+	if session == nil {
+		return false, nil
+	}
+	continuation, ok, err := conversation.ContinuationAtBranchHead(session.Tree(), session.Branch(), identity)
+	if err != nil {
+		return false, err
+	}
+	return ok && continuation.SupportsPublicPreviousResponseID(), nil
+}
+
+func commitPreparedRequest(ctx context.Context, prepared PreparedRequest) error {
+	if prepared.Commit == nil {
+		return nil
+	}
+	return prepared.Commit(ctx)
+}
+
+func rollbackPreparedRequest(ctx context.Context, prepared PreparedRequest) {
+	if prepared.Rollback != nil {
+		prepared.Rollback(ctx)
+	}
 }
 
 type eventContext struct {

@@ -89,7 +89,11 @@ func ResumeThreadRuntime(ctx context.Context, store thread.Store, params thread.
 	if err != nil {
 		return nil, thread.Stored{}, err
 	}
-	if err := runtime.Replay(ctx, stored.Events); err != nil {
+	events, err := stored.EventsForBranch(live.BranchID())
+	if err != nil {
+		return nil, thread.Stored{}, err
+	}
+	if err := runtime.Replay(ctx, events); err != nil {
 		return nil, thread.Stored{}, err
 	}
 	return runtime, stored, nil
@@ -137,30 +141,40 @@ func (r *ThreadRuntime) Tools() []tool.Tool {
 	return r.capabilities.Tools()
 }
 
-func (r *ThreadRuntime) PrepareRequest(ctx context.Context, step int, req conversation.Request) (conversation.Request, error) {
+func (r *ThreadRuntime) PrepareRequest(ctx context.Context, meta runner.RequestPrepareMeta, req conversation.Request) (runner.PreparedRequest, error) {
 	if r == nil || r.contexts == nil || r.live == nil {
-		return req, nil
+		return runner.PreparedRequest{Request: req}, nil
 	}
 	reason := agentcontext.RenderTurn
-	if step > 1 {
+	if meta.Step > 1 {
 		reason = agentcontext.RenderToolFollowup
 	}
-	build, err := r.contexts.Build(ctx, agentcontext.BuildRequest{
+	render, err := r.contexts.Prepare(ctx, agentcontext.BuildRequest{
 		ThreadID: string(r.live.ID()),
 		BranchID: string(r.live.BranchID()),
-		TurnID:   fmt.Sprintf("step_%d", step),
+		TurnID:   fmt.Sprintf("step_%d", meta.Step),
 		Reason:   reason,
 	})
 	if err != nil {
-		return conversation.Request{}, err
+		return runner.PreparedRequest{}, err
 	}
-	messages := contextMessages(build.Active)
-	if len(messages) == 0 {
-		return req, nil
-	}
+	injection := contextInjectionForRender(render.Result, meta.NativeContinuation)
 	out := req
-	out.Messages = append(append([]unified.Message(nil), messages...), req.Messages...)
-	return out, nil
+	if len(injection.Instructions) > 0 {
+		out.Instructions = append(append([]unified.Instruction(nil), injection.Instructions...), req.Instructions...)
+	}
+	if len(injection.Messages) > 0 {
+		out.Messages = append(append([]unified.Message(nil), injection.Messages...), req.Messages...)
+	}
+	return runner.PreparedRequest{
+		Request: out,
+		Commit: func(context.Context) error {
+			return render.Commit()
+		},
+		Rollback: func(context.Context) {
+			render.Rollback()
+		},
+	}, nil
 }
 
 func (c *TurnConfig) addThreadRuntime(runtime *ThreadRuntime) error {
@@ -238,33 +252,111 @@ func chainRequestPreparers(first runner.RequestPreparer, second runner.RequestPr
 	if second == nil {
 		return first
 	}
-	return func(ctx context.Context, step int, req conversation.Request) (conversation.Request, error) {
-		prepared, err := first(ctx, step, req)
+	return func(ctx context.Context, meta runner.RequestPrepareMeta, req conversation.Request) (runner.PreparedRequest, error) {
+		prepared, err := first(ctx, meta, req)
 		if err != nil {
-			return conversation.Request{}, err
+			return runner.PreparedRequest{}, err
 		}
-		return second(ctx, step, prepared)
+		next, err := second(ctx, meta, prepared.Request)
+		if err != nil {
+			if prepared.Rollback != nil {
+				prepared.Rollback(ctx)
+			}
+			return runner.PreparedRequest{}, err
+		}
+		return runner.PreparedRequest{
+			Request: next.Request,
+			Commit: func(ctx context.Context) error {
+				if prepared.Commit != nil {
+					if err := prepared.Commit(ctx); err != nil {
+						if next.Rollback != nil {
+							next.Rollback(ctx)
+						}
+						return err
+					}
+				}
+				if next.Commit != nil {
+					return next.Commit(ctx)
+				}
+				return nil
+			},
+			Rollback: func(ctx context.Context) {
+				if next.Rollback != nil {
+					next.Rollback(ctx)
+				}
+				if prepared.Rollback != nil {
+					prepared.Rollback(ctx)
+				}
+			},
+		}, nil
 	}
 }
 
-func contextMessages(fragments []agentcontext.ContextFragment) []unified.Message {
-	messages := make([]unified.Message, 0, len(fragments))
+type contextInjection struct {
+	Instructions []unified.Instruction
+	Messages     []unified.Message
+}
+
+func contextInjectionForRender(result agentcontext.BuildResult, nativeContinuation bool) contextInjection {
+	if nativeContinuation {
+		return contextInjection{
+			Messages: contextRemovalMessages(result.Removed),
+		}.appendFragments(append(append([]agentcontext.ContextFragment(nil), result.Added...), result.Updated...))
+	}
+	return contextInjection{}.appendFragments(result.Active)
+}
+
+func (i contextInjection) appendFragments(fragments []agentcontext.ContextFragment) contextInjection {
 	for _, fragment := range fragments {
 		content := renderContextFragment(fragment)
 		if content == "" {
 			continue
 		}
+		if fragment.Authority == agentcontext.AuthorityDeveloper || fragment.Role == unified.RoleSystem {
+			kind := unified.InstructionDeveloper
+			if fragment.Role == unified.RoleSystem {
+				kind = unified.InstructionSystem
+			}
+			i.Instructions = append(i.Instructions, unified.Instruction{
+				Kind:    kind,
+				Name:    "context",
+				Content: []unified.ContentPart{unified.TextPart{Text: content}},
+				Meta: map[string]any{
+					"context_fragment": string(fragment.Key),
+					"authority":        string(fragment.Authority),
+				},
+			})
+			continue
+		}
 		role := fragment.Role
-		if role == "" {
+		if role == "" || role == unified.RoleTool {
 			role = unified.RoleUser
 		}
-		messages = append(messages, unified.Message{
+		i.Messages = append(i.Messages, unified.Message{
 			Role:    role,
 			Name:    "context",
 			Content: []unified.ContentPart{unified.TextPart{Text: content}},
 			Meta: map[string]any{
 				"context_fragment": string(fragment.Key),
 				"authority":        string(fragment.Authority),
+			},
+		})
+	}
+	return i
+}
+
+func contextRemovalMessages(removed []agentcontext.FragmentRemoved) []unified.Message {
+	messages := make([]unified.Message, 0, len(removed))
+	for _, fragment := range removed {
+		messages = append(messages, unified.Message{
+			Role: unified.RoleUser,
+			Name: "context",
+			Content: []unified.ContentPart{unified.TextPart{
+				Text: fmt.Sprintf("Context fragment removed: %s", fragment.FragmentKey),
+			}},
+			Meta: map[string]any{
+				"context_fragment": string(fragment.FragmentKey),
+				"context_removed":  true,
 			},
 		})
 	}
