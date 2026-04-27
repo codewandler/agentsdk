@@ -91,7 +91,7 @@ func TestPlannerDoesNotMutateWhenAppendFails(t *testing.T) {
 func TestPlannerReplayReconstructsState(t *testing.T) {
 	stateEvents := []capability.StateEvent{
 		mustStateEvent(t, EventPlanCreated, PlanCreated{PlanID: "plan_1", Title: "Replay"}),
-		mustStateEvent(t, EventStepAdded, StepAdded{Step: Step{ID: "step_1", Order: 1, Title: "First", Status: StepPending}}),
+		mustStateEvent(t, EventStepAdded, StepAdded{Step: Step{ID: "step_1", Title: "First", Status: StepPending}}),
 		mustStateEvent(t, EventStepStatusChanged, StepStatusChanged{StepID: "step_1", Status: StepCompleted}),
 	}
 	replayed := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, nil)
@@ -145,6 +145,159 @@ func TestPlannerToolReturnsModelFacingResultOnly(t *testing.T) {
 	}
 	if strings.Contains(result.String(), "capability.state_event_dispatched") || strings.Contains(result.String(), "event_name") {
 		t.Fatalf("tool result leaked persistence details: %s", result.String())
+	}
+}
+
+func TestPlannerAddStepWithDependsOn(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_b", Title: "B", DependsOn: []string{"step_a"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := p.State(context.Background())
+	if got := stepOrder(plan, "step_a"); got != 0 {
+		t.Fatalf("step_a order = %d, want 0", got)
+	}
+	if got := stepOrder(plan, "step_b"); got != 1 {
+		t.Fatalf("step_b order = %d, want 1", got)
+	}
+}
+
+func TestPlannerDependsOnRejectsCycles(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_b", Title: "B"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionSetStepDependsOn, StepID: "step_a", DependsOn: []string{"step_b"}},
+		{Action: ActionSetStepDependsOn, StepID: "step_b", DependsOn: []string{"step_a"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("expected cycle error, got: %v", err)
+	}
+}
+
+func TestPlannerParentRejectsSelf(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A", ParentID: "step_a"}},
+	}); err == nil || !strings.Contains(err.Error(), "own parent") {
+		t.Fatalf("expected self-parent error, got: %v", err)
+	}
+}
+
+func TestPlannerRemoveStepRejectsIfChildrenExist(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_parent", Title: "Parent"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_child", Title: "Child", ParentID: "step_parent"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionRemoveStep, StepID: "step_parent"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "sub-tasks") {
+		t.Fatalf("expected sub-tasks error, got: %v", err)
+	}
+}
+
+func TestPlannerRemoveStepCleansUpDependsOn(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_b", Title: "B", DependsOn: []string{"step_a"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionRemoveStep, StepID: "step_a"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := p.State(context.Background())
+	b, ok := findStep(plan, "step_b")
+	if !ok {
+		t.Fatal("step_b missing")
+	}
+	if len(plan.Steps[b].DependsOn) != 0 {
+		t.Fatalf("step_b depends_on = %v, want empty", plan.Steps[b].DependsOn)
+	}
+}
+
+func TestPlannerSetStepDependsOnTopoSorts(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_c", Title: "C"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_b", Title: "B"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionSetStepDependsOn, StepID: "step_b", DependsOn: []string{"step_a"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := p.State(context.Background())
+	ids := make([]string, len(plan.Steps))
+	for i, s := range plan.Steps {
+		ids[i] = s.ID
+	}
+	if ids[0] != "step_a" || ids[1] != "step_b" {
+		t.Fatalf("unexpected order: %v", ids)
+	}
+}
+
+func TestPlannerSetStepParent(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_parent", Title: "Parent"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_child", Title: "Child"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionSetStepParent, StepID: "step_child", ParentID: "step_parent"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := p.State(context.Background())
+	idx, ok := findStep(plan, "step_child")
+	if !ok {
+		t.Fatal("step_child missing")
+	}
+	if plan.Steps[idx].ParentID != "step_parent" {
+		t.Fatalf("parent = %q, want step_parent", plan.Steps[idx].ParentID)
+	}
+}
+
+func TestPlannerReplayDependsOnChanged(t *testing.T) {
+	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
+	if _, err := p.ApplyActions(context.Background(), []Action{
+		{Action: ActionCreatePlan, Plan: &PlanPatch{ID: "plan_1"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_a", Title: "A"}},
+		{Action: ActionAddStep, Step: &StepPatch{ID: "step_b", Title: "B"}},
+		{Action: ActionSetStepDependsOn, StepID: "step_b", DependsOn: []string{"step_a"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := p.State(context.Background())
+	idx, _ := findStep(plan, "step_b")
+	if plan.Steps[idx].DependsOn[0] != "step_a" {
+		t.Fatalf("unexpected depends_on: %v", plan.Steps[idx].DependsOn)
 	}
 }
 
@@ -212,4 +365,13 @@ func (c fakeToolCtx) Extra() map[string]any { return nil }
 
 func agentcontextRequest() agentcontext.Request {
 	return agentcontext.Request{}
+}
+
+func stepOrder(plan Plan, id string) int {
+	for i, s := range plan.Steps {
+		if s.ID == id {
+			return i
+		}
+	}
+	return -1
 }

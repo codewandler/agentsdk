@@ -18,7 +18,8 @@ func (Factory) StateEventDefinitions() []capability.StateEventDefinition {
 		capability.DefineStateEvent[StepRemoved](CapabilityName, EventStepRemoved),
 		capability.DefineStateEvent[StepTitleChanged](CapabilityName, EventStepTitleChanged),
 		capability.DefineStateEvent[StepStatusChanged](CapabilityName, EventStepStatusChanged),
-		capability.DefineStateEvent[StepReordered](CapabilityName, EventStepReordered),
+		capability.DefineStateEvent[StepDependsOnChanged](CapabilityName, EventStepDependsOnChanged),
+		capability.DefineStateEvent[StepParentChanged](CapabilityName, EventStepParentChanged),
 		capability.DefineStateEvent[CurrentStepChanged](CapabilityName, EventCurrentStepChanged),
 	}
 }

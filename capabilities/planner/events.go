@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	EventPlanCreated        = "plan_created"
-	EventStepAdded          = "step_added"
-	EventStepRemoved        = "step_removed"
-	EventStepTitleChanged   = "step_title_changed"
-	EventStepStatusChanged  = "step_status_changed"
-	EventStepReordered      = "step_reordered"
-	EventCurrentStepChanged = "current_step_changed"
+	EventPlanCreated          = "plan_created"
+	EventStepAdded            = "step_added"
+	EventStepRemoved          = "step_removed"
+	EventStepTitleChanged     = "step_title_changed"
+	EventStepStatusChanged    = "step_status_changed"
+	EventStepDependsOnChanged = "step_depends_on_changed"
+	EventStepParentChanged    = "step_parent_changed"
+	EventCurrentStepChanged   = "current_step_changed"
 )
 
 type PlanCreated struct {
@@ -40,9 +41,14 @@ type StepStatusChanged struct {
 	Status StepStatus `json:"status"`
 }
 
-type StepReordered struct {
-	StepID string `json:"step_id"`
-	Order  int    `json:"order"`
+type StepDependsOnChanged struct {
+	StepID    string   `json:"step_id"`
+	DependsOn []string `json:"depends_on"`
+}
+
+type StepParentChanged struct {
+	StepID   string `json:"step_id"`
+	ParentID string `json:"parent_id"`
 }
 
 type CurrentStepChanged struct {

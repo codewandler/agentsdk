@@ -11,13 +11,14 @@ import (
 )
 
 const (
-	ActionCreatePlan     = "create_plan"
-	ActionAddStep        = "add_step"
-	ActionRemoveStep     = "remove_step"
-	ActionSetStepTitle   = "set_step_title"
-	ActionSetStepStatus  = "set_step_status"
-	ActionReorderStep    = "reorder_step"
-	ActionSetCurrentStep = "set_current_step"
+	ActionCreatePlan       = "create_plan"
+	ActionAddStep          = "add_step"
+	ActionRemoveStep       = "remove_step"
+	ActionSetStepTitle     = "set_step_title"
+	ActionSetStepStatus    = "set_step_status"
+	ActionSetStepDependsOn = "set_step_depends_on"
+	ActionSetStepParent    = "set_step_parent"
+	ActionSetCurrentStep   = "set_current_step"
 )
 
 type PlanPatch struct {
@@ -26,20 +27,22 @@ type PlanPatch struct {
 }
 
 type StepPatch struct {
-	ID     string     `json:"id,omitempty"`
-	Order  *int       `json:"order,omitempty"`
-	Title  string     `json:"title,omitempty"`
-	Status StepStatus `json:"status,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	Title     string     `json:"title,omitempty"`
+	Status    StepStatus `json:"status,omitempty"`
+	DependsOn []string   `json:"depends_on,omitempty"`
+	ParentID  string     `json:"parent_id,omitempty"`
 }
 
 type Action struct {
-	Action string     `json:"action" jsonschema:"required,enum=create_plan,enum=add_step,enum=remove_step,enum=set_step_title,enum=set_step_status,enum=reorder_step,enum=set_current_step"`
-	Plan   *PlanPatch `json:"plan,omitempty"`
-	Step   *StepPatch `json:"step,omitempty"`
-	StepID string     `json:"step_id,omitempty"`
-	Status StepStatus `json:"status,omitempty" jsonschema:"enum=pending,enum=in_progress,enum=completed"`
-	Title  string     `json:"title,omitempty"`
-	Order  *int       `json:"order,omitempty"`
+	Action    string     `json:"action" jsonschema:"required,enum=create_plan,enum=add_step,enum=remove_step,enum=set_step_title,enum=set_step_status,enum=set_step_depends_on,enum=set_step_parent,enum=set_current_step"`
+	Plan      *PlanPatch `json:"plan,omitempty"`
+	Step      *StepPatch `json:"step,omitempty"`
+	StepID    string     `json:"step_id,omitempty"`
+	Status    StepStatus `json:"status,omitempty" jsonschema:"enum=pending,enum=in_progress,enum=completed"`
+	Title     string     `json:"title,omitempty"`
+	DependsOn []string   `json:"depends_on,omitempty"`
+	ParentID  string     `json:"parent_id,omitempty"`
 }
 
 type ApplyActionsResult struct {
@@ -124,9 +127,11 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 			return nil, fmt.Errorf("planner: add_step requires step")
 		}
 		step := Step{
-			ID:     action.Step.ID,
-			Title:  action.Step.Title,
-			Status: action.Step.Status,
+			ID:        action.Step.ID,
+			Title:     action.Step.Title,
+			Status:    action.Step.Status,
+			DependsOn: append([]string(nil), action.Step.DependsOn...),
+			ParentID:  action.Step.ParentID,
 		}
 		if step.ID == "" {
 			generated, err := newStepID()
@@ -138,11 +143,6 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 		if step.Title == "" {
 			return nil, fmt.Errorf("planner: step title is required")
 		}
-		if action.Step.Order != nil {
-			step.Order = *action.Step.Order
-		} else {
-			step.Order = nextOrder(*plan)
-		}
 		if step.Status == "" {
 			step.Status = StepPending
 		}
@@ -151,6 +151,26 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 		}
 		if _, ok := findStep(*plan, step.ID); ok {
 			return nil, fmt.Errorf("planner: step %q already exists", step.ID)
+		}
+		if step.ParentID == step.ID {
+			return nil, fmt.Errorf("planner: step cannot be its own parent")
+		}
+		if step.ParentID != "" {
+			if _, ok := findStep(*plan, step.ParentID); !ok {
+				return nil, fmt.Errorf("planner: parent step %q not found", step.ParentID)
+			}
+		}
+		for _, dep := range step.DependsOn {
+			if dep == step.ID {
+				return nil, fmt.Errorf("planner: step cannot depend on itself")
+			}
+			if _, ok := findStep(*plan, dep); !ok {
+				return nil, fmt.Errorf("planner: dependency step %q not found", dep)
+			}
+		}
+		_, err := topoSortSteps(append(cloneSteps(plan.Steps), step))
+		if err != nil {
+			return nil, err
 		}
 		event, err := stateEvent(EventStepAdded, StepAdded{Step: step})
 		if err != nil {
@@ -164,6 +184,11 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 		stepID := requireStepID(action)
 		if _, ok := findStep(*plan, stepID); !ok {
 			return nil, fmt.Errorf("planner: step %q not found", stepID)
+		}
+		for _, s := range plan.Steps {
+			if s.ParentID == stepID {
+				return nil, fmt.Errorf("planner: step %q has sub-tasks", stepID)
+			}
 		}
 		event, err := stateEvent(EventStepRemoved, StepRemoved{StepID: stepID})
 		if err != nil {
@@ -202,7 +227,7 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 			return nil, err
 		}
 		return []capability.StateEvent{event}, nil
-	case ActionReorderStep:
+	case ActionSetStepDependsOn:
 		if err := requireCreated(*created); err != nil {
 			return nil, err
 		}
@@ -210,10 +235,50 @@ func buildActionEvent(plan *Plan, created *bool, action Action) ([]capability.St
 		if _, ok := findStep(*plan, stepID); !ok {
 			return nil, fmt.Errorf("planner: step %q not found", stepID)
 		}
-		if action.Order == nil {
-			return nil, fmt.Errorf("planner: order is required")
+		for _, dep := range action.DependsOn {
+			if dep == stepID {
+				return nil, fmt.Errorf("planner: step cannot depend on itself")
+			}
+			if _, ok := findStep(*plan, dep); !ok {
+				return nil, fmt.Errorf("planner: dependency step %q not found", dep)
+			}
 		}
-		event, err := stateEvent(EventStepReordered, StepReordered{StepID: stepID, Order: *action.Order})
+		idx, _ := findStep(*plan, stepID)
+		temp := cloneSteps(plan.Steps)
+		temp[idx].DependsOn = append([]string(nil), action.DependsOn...)
+		_, err := topoSortSteps(temp)
+		if err != nil {
+			return nil, err
+		}
+		event, err := stateEvent(EventStepDependsOnChanged, StepDependsOnChanged{StepID: stepID, DependsOn: append([]string(nil), action.DependsOn...)})
+		if err != nil {
+			return nil, err
+		}
+		return []capability.StateEvent{event}, nil
+	case ActionSetStepParent:
+		if err := requireCreated(*created); err != nil {
+			return nil, err
+		}
+		stepID := requireStepID(action)
+		if _, ok := findStep(*plan, stepID); !ok {
+			return nil, fmt.Errorf("planner: step %q not found", stepID)
+		}
+		if action.ParentID == stepID {
+			return nil, fmt.Errorf("planner: step cannot be its own parent")
+		}
+		if action.ParentID != "" {
+			if _, ok := findStep(*plan, action.ParentID); !ok {
+				return nil, fmt.Errorf("planner: parent step %q not found", action.ParentID)
+			}
+		}
+		idx, _ := findStep(*plan, stepID)
+		temp := cloneSteps(plan.Steps)
+		temp[idx].ParentID = action.ParentID
+		_, err := topoSortSteps(temp)
+		if err != nil {
+			return nil, err
+		}
+		event, err := stateEvent(EventStepParentChanged, StepParentChanged{StepID: stepID, ParentID: action.ParentID})
 		if err != nil {
 			return nil, err
 		}
@@ -248,16 +313,6 @@ func requireStepID(action Action) string {
 	return ""
 }
 
-func nextOrder(plan Plan) int {
-	maxOrder := 0
-	for _, step := range plan.Steps {
-		if step.Order > maxOrder {
-			maxOrder = step.Order
-		}
-	}
-	return maxOrder + 1
-}
-
 func summarizeActions(actions []Action) string {
 	if len(actions) == 1 {
 		return "Applied 1 planner action."
@@ -267,4 +322,12 @@ func summarizeActions(actions []Action) string {
 
 func marshalResult(result ApplyActionsResult) ([]byte, error) {
 	return json.Marshal(result)
+}
+
+func cloneSteps(steps []Step) []Step {
+	cloned := append([]Step(nil), steps...)
+	for i := range cloned {
+		cloned[i].DependsOn = append([]string(nil), cloned[i].DependsOn...)
+	}
+	return cloned
 }

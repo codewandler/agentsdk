@@ -54,7 +54,11 @@ func applyEventTo(plan *Plan, created *bool, event capability.StateEvent) error 
 			return fmt.Errorf("planner: step %q already exists", payload.Step.ID)
 		}
 		plan.Steps = append(plan.Steps, payload.Step)
-		normalizeSteps(plan)
+		sorted, err := topoSortSteps(plan.Steps)
+		if err != nil {
+			return err
+		}
+		plan.Steps = sorted
 	case EventStepRemoved:
 		if err := requireCreated(*created); err != nil {
 			return err
@@ -71,6 +75,10 @@ func applyEventTo(plan *Plan, created *bool, event capability.StateEvent) error 
 		if plan.CurrentStepID == payload.StepID {
 			plan.CurrentStepID = ""
 		}
+		for i := range plan.Steps {
+			plan.Steps[i].DependsOn = filterString(plan.Steps[i].DependsOn, payload.StepID)
+		}
+		plan.Steps, _ = topoSortSteps(plan.Steps)
 	case EventStepTitleChanged:
 		if err := requireCreated(*created); err != nil {
 			return err
@@ -100,11 +108,11 @@ func applyEventTo(plan *Plan, created *bool, event capability.StateEvent) error 
 			return fmt.Errorf("planner: step %q not found", payload.StepID)
 		}
 		plan.Steps[index].Status = payload.Status
-	case EventStepReordered:
+	case EventStepDependsOnChanged:
 		if err := requireCreated(*created); err != nil {
 			return err
 		}
-		payload, err := decodeStateEvent[StepReordered](event)
+		payload, err := decodeStateEvent[StepDependsOnChanged](event)
 		if err != nil {
 			return err
 		}
@@ -112,8 +120,30 @@ func applyEventTo(plan *Plan, created *bool, event capability.StateEvent) error 
 		if !ok {
 			return fmt.Errorf("planner: step %q not found", payload.StepID)
 		}
-		plan.Steps[index].Order = payload.Order
-		normalizeSteps(plan)
+		plan.Steps[index].DependsOn = append([]string(nil), payload.DependsOn...)
+		sorted, err := topoSortSteps(plan.Steps)
+		if err != nil {
+			return err
+		}
+		plan.Steps = sorted
+	case EventStepParentChanged:
+		if err := requireCreated(*created); err != nil {
+			return err
+		}
+		payload, err := decodeStateEvent[StepParentChanged](event)
+		if err != nil {
+			return err
+		}
+		index, ok := findStep(*plan, payload.StepID)
+		if !ok {
+			return fmt.Errorf("planner: step %q not found", payload.StepID)
+		}
+		plan.Steps[index].ParentID = payload.ParentID
+		sorted, err := topoSortSteps(plan.Steps)
+		if err != nil {
+			return err
+		}
+		plan.Steps = sorted
 	case EventCurrentStepChanged:
 		if err := requireCreated(*created); err != nil {
 			return err
@@ -141,4 +171,14 @@ func findStep(plan Plan, id string) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func filterString(ss []string, exclude string) []string {
+	out := make([]string, 0, len(ss))
+	for _, s := range ss {
+		if s != exclude {
+			out = append(out, s)
+		}
+	}
+	return out
 }

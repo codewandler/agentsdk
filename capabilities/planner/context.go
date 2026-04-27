@@ -68,9 +68,14 @@ func renderMeta(plan Plan) string {
 func renderStep(step Step) string {
 	parts := []string{
 		fmt.Sprintf("id: %s", step.ID),
-		fmt.Sprintf("order: %d", step.Order),
 		fmt.Sprintf("status: %s", step.Status),
 		fmt.Sprintf("title: %s", step.Title),
+	}
+	if step.ParentID != "" {
+		parts = append(parts, fmt.Sprintf("parent: %s", step.ParentID))
+	}
+	if len(step.DependsOn) > 0 {
+		parts = append(parts, fmt.Sprintf("depends_on: %s", strings.Join(step.DependsOn, ", ")))
 	}
 	return strings.Join(parts, "\n")
 }
