@@ -238,8 +238,47 @@ func (r *ThreadRuntime) PrepareRequest(ctx context.Context, meta runner.RequestP
 	}, nil
 }
 
+func (r *ThreadRuntime) Compact(ctx context.Context, session *conversation.Session, summary string, replaces ...conversation.NodeID) (conversation.NodeID, error) {
+	if r == nil || r.live == nil || r.contexts == nil {
+		return "", fmt.Errorf("runtime: thread runtime is nil")
+	}
+	if session == nil {
+		return "", fmt.Errorf("runtime: conversation session is required")
+	}
+	id, err := session.CompactContext(ctx, summary, replaces...)
+	if err != nil {
+		return "", err
+	}
+	_, err = r.renderAndCommitContext(ctx, agentcontext.BuildRequest{
+		ThreadID:   string(r.live.ID()),
+		BranchID:   string(r.live.BranchID()),
+		TurnID:     string(id),
+		Preference: agentcontext.PreferFull,
+		Reason:     agentcontext.RenderCompaction,
+	})
+	return id, err
+}
+
 type contextRenderCommitted struct {
 	Records map[agentcontext.ProviderKey]agentcontext.ProviderRenderRecord `json:"records"`
+}
+
+func (r *ThreadRuntime) renderAndCommitContext(ctx context.Context, req agentcontext.BuildRequest) (agentcontext.BuildResult, error) {
+	if r == nil || r.contexts == nil || r.live == nil {
+		return agentcontext.BuildResult{}, fmt.Errorf("runtime: thread runtime is nil")
+	}
+	render, err := r.contexts.Prepare(ctx, req)
+	if err != nil {
+		return agentcontext.BuildResult{}, err
+	}
+	if err := r.appendContextRenderCommitted(ctx, render); err != nil {
+		render.Rollback()
+		return agentcontext.BuildResult{}, err
+	}
+	if err := render.Commit(); err != nil {
+		return agentcontext.BuildResult{}, err
+	}
+	return render.Result, nil
 }
 
 func (r *ThreadRuntime) appendContextRenderCommitted(ctx context.Context, render *agentcontext.PreparedRender) error {

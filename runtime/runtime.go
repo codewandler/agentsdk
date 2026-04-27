@@ -90,6 +90,19 @@ func (e *Engine) ResetSession(opts ...conversation.Option) *conversation.Session
 	return e.session
 }
 
+func (e *Engine) Compact(ctx context.Context, summary string, replaces ...conversation.NodeID) (conversation.NodeID, error) {
+	if e == nil {
+		return "", fmt.Errorf("runtime: engine is nil")
+	}
+	if e.session == nil {
+		return "", fmt.Errorf("runtime: session is required")
+	}
+	if e.threadRuntime != nil {
+		return e.threadRuntime.Compact(ctx, e.session, summary, replaces...)
+	}
+	return e.session.CompactContext(ctx, summary, replaces...)
+}
+
 func (e *Engine) RunTurn(ctx context.Context, user string, opts ...TurnOption) (runner.Result, error) {
 	if e == nil {
 		return runner.Result{}, fmt.Errorf("runtime: engine is nil")

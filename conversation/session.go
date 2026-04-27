@@ -264,7 +264,11 @@ func (s *Session) Fork(to BranchID) error {
 }
 
 func (s *Session) Append(payload Payload) (NodeID, error) {
-	ids, err := s.appendPayloads(payload)
+	return s.AppendContext(context.Background(), payload)
+}
+
+func (s *Session) AppendContext(ctx context.Context, payload Payload) (NodeID, error) {
+	ids, err := s.appendPayloads(ctx, payload)
 	if err != nil {
 		return "", err
 	}
@@ -283,6 +287,10 @@ func (s *Session) AddUser(text string) (NodeID, error) {
 }
 
 func (s *Session) Compact(summary string, replaces ...NodeID) (NodeID, error) {
+	return s.CompactContext(context.Background(), summary, replaces...)
+}
+
+func (s *Session) CompactContext(ctx context.Context, summary string, replaces ...NodeID) (NodeID, error) {
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
 		return "", fmt.Errorf("conversation: compaction summary is required")
@@ -295,7 +303,7 @@ func (s *Session) Compact(summary string, replaces ...NodeID) (NodeID, error) {
 			return "", fmt.Errorf("conversation: compaction replacement node %q not found", id)
 		}
 	}
-	return s.Append(CompactionEvent{
+	return s.AppendContext(ctx, CompactionEvent{
 		Summary:  summary,
 		Replaces: append([]NodeID(nil), replaces...),
 	})
@@ -388,10 +396,10 @@ func (s *Session) CommitFragment(fragment *TurnFragment) ([]NodeID, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.appendPayloads(payloads...)
+	return s.appendPayloads(context.Background(), payloads...)
 }
 
-func (s *Session) appendPayloads(payloads ...Payload) ([]NodeID, error) {
+func (s *Session) appendPayloads(ctx context.Context, payloads ...Payload) ([]NodeID, error) {
 	parent, _ := s.tree.Head(s.branch)
 	ids, err := s.tree.AppendMany(s.branch, payloads...)
 	if err != nil {
@@ -418,7 +426,10 @@ func (s *Session) appendPayloads(payloads ...Payload) ([]NodeID, error) {
 		})
 		parent = id
 	}
-	if err := s.store.AppendEvents(context.Background(), events...); err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := s.store.AppendEvents(ctx, events...); err != nil {
 		return nil, err
 	}
 	return ids, nil

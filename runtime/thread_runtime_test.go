@@ -412,6 +412,109 @@ func TestThreadRuntimeRendersDeveloperAuthorityAsInstruction(t *testing.T) {
 	requireNoMessageContaining(t, client.requests[0], "Always preserve durable state.")
 }
 
+func TestThreadRuntimeCompactsConversationAndCommitsContextRender(t *testing.T) {
+	ctx := context.Background()
+	store := thread.NewMemoryStore()
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_compaction"})
+	require.NoError(t, err)
+	recorder := &recordingContextProvider{
+		key: "policy",
+		fragments: []agentcontext.ContextFragment{{
+			Key:       "policy/rule",
+			Content:   "Keep current plan state available.",
+			Authority: agentcontext.AuthorityDeveloper,
+		}},
+	}
+	contexts, err := agentcontext.NewManager(recorder)
+	require.NoError(t, err)
+	registry, err := capability.NewRegistry()
+	require.NoError(t, err)
+	threadRuntime, err := NewThreadRuntime(live, registry, WithContextManager(contexts))
+	require.NoError(t, err)
+	threadEvents := conversation.NewThreadEventStore(store, live)
+	session := conversation.New(
+		conversation.WithConversationID("conversation_compaction"),
+		conversation.WithSessionID("session_compaction"),
+		conversation.WithStore(threadEvents),
+	)
+	oldOne, err := session.AddUser("old one")
+	require.NoError(t, err)
+	oldTwo, err := session.AddUser("old two")
+	require.NoError(t, err)
+	keep, err := session.AddUser("keep")
+	require.NoError(t, err)
+
+	compaction, err := threadRuntime.Compact(ctx, session, "summary of old messages", oldOne, oldTwo)
+	require.NoError(t, err)
+	require.NotEmpty(t, compaction)
+	require.Len(t, recorder.requests, 1)
+	require.Equal(t, agentcontext.RenderCompaction, recorder.requests[0].Reason)
+	require.Equal(t, agentcontext.PreferFull, recorder.requests[0].Preference)
+	require.Equal(t, string(live.ID()), recorder.requests[0].ThreadID)
+	require.Equal(t, string(live.BranchID()), recorder.requests[0].BranchID)
+
+	messages, err := session.Messages()
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	requireTextMessage(t, messages[0], "keep")
+	requireTextMessage(t, messages[1], "summary of old messages")
+	_, ok := session.Tree().Node(oldOne)
+	require.True(t, ok)
+	_, ok = session.Tree().Node(oldTwo)
+	require.True(t, ok)
+	_, ok = session.Tree().Node(keep)
+	require.True(t, ok)
+
+	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
+	require.NoError(t, err)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationStored, 4)
+	requireEventCountRuntime(t, stored.Events, EventContextRenderCommitted, 1)
+
+	resumedSession, err := conversation.Resume(ctx, threadEvents, "conversation_compaction")
+	require.NoError(t, err)
+	resumedMessages, err := resumedSession.Messages()
+	require.NoError(t, err)
+	require.Len(t, resumedMessages, 2)
+	requireTextMessage(t, resumedMessages[0], "keep")
+	requireTextMessage(t, resumedMessages[1], "summary of old messages")
+
+	resumedProvider := &recordingContextProvider{key: "policy"}
+	resumedContexts, err := agentcontext.NewManager(resumedProvider)
+	require.NoError(t, err)
+	resumedRuntime, _, err := ResumeThreadRuntime(ctx, store, thread.ResumeParams{ID: live.ID()}, registry, WithContextManager(resumedContexts))
+	require.NoError(t, err)
+	records := resumedRuntime.ContextManager().Records()
+	require.Contains(t, records, agentcontext.ProviderKey("policy"))
+	require.NotEmpty(t, records["policy"].Fragments)
+}
+
+func TestEngineCompactUsesThreadRuntimeWhenConfigured(t *testing.T) {
+	ctx := context.Background()
+	store := thread.NewMemoryStore()
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_engine_compaction"})
+	require.NoError(t, err)
+	registry, err := capability.NewRegistry()
+	require.NoError(t, err)
+	threadRuntime, err := NewThreadRuntime(live, registry)
+	require.NoError(t, err)
+	session := conversation.New(
+		conversation.WithConversationID("conversation_engine_compaction"),
+		conversation.WithStore(conversation.NewThreadEventStore(store, live)),
+	)
+	old, err := session.AddUser("old")
+	require.NoError(t, err)
+	engine, err := New(&fakeClient{}, WithSession(session), WithThreadRuntime(threadRuntime))
+	require.NoError(t, err)
+
+	_, err = engine.Compact(ctx, "summary", old)
+	require.NoError(t, err)
+
+	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
+	require.NoError(t, err)
+	requireEventCountRuntime(t, stored.Events, conversation.EventConversationStored, 2)
+	requireEventCountRuntime(t, stored.Events, EventContextRenderCommitted, 1)
+}
+
 func requireToolSpec(t *testing.T, req unified.Request, name string) {
 	t.Helper()
 	for _, spec := range req.Tools {
@@ -504,6 +607,27 @@ func (p runtimeContextProvider) Key() agentcontext.ProviderKey { return p.key }
 
 func (p runtimeContextProvider) GetContext(context.Context, agentcontext.Request) (agentcontext.ProviderContext, error) {
 	return agentcontext.ProviderContext{Fragments: append([]agentcontext.ContextFragment(nil), p.fragments...)}, nil
+}
+
+type recordingContextProvider struct {
+	key       agentcontext.ProviderKey
+	fragments []agentcontext.ContextFragment
+	requests  []agentcontext.Request
+}
+
+func (p *recordingContextProvider) Key() agentcontext.ProviderKey { return p.key }
+
+func (p *recordingContextProvider) GetContext(_ context.Context, req agentcontext.Request) (agentcontext.ProviderContext, error) {
+	p.requests = append(p.requests, req)
+	return agentcontext.ProviderContext{Fragments: append([]agentcontext.ContextFragment(nil), p.fragments...)}, nil
+}
+
+func requireTextMessage(t *testing.T, msg unified.Message, want string) {
+	t.Helper()
+	require.Len(t, msg.Content, 1)
+	text, ok := msg.Content[0].(unified.TextPart)
+	require.True(t, ok)
+	require.Equal(t, want, text.Text)
 }
 
 func requireMessageContaining(t *testing.T, req unified.Request, want string) {
