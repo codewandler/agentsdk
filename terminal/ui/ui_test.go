@@ -203,19 +203,58 @@ func TestStepDisplay(t *testing.T) {
 		assert.Equal(t, "\x1b[0mParagraph one.\n\n\x1b[0m* a\n* b", buf.String())
 	})
 
-	t.Run("fenced code is withheld until closed", func(t *testing.T) {
+	t.Run("fenced code streams complete lines before close", func(t *testing.T) {
 		var buf strings.Builder
-		sd := NewStepDisplayWithRenderer(&buf, plain)
+		sd := NewStepDisplay(&buf)
 
 		sd.WriteText("Before\n\n```go\nfmt.Println(1)\n")
 		out := buf.String()
 		assert.Contains(t, out, "Before")
-		assert.NotContains(t, out, "fmt.Println(1)")
+		assert.Contains(t, out, "fmt")
+		assert.Contains(t, out, "Println")
+		assert.NotContains(t, out, "```")
 
-		sd.WriteText("```\n")
+		sd.WriteText("```\nAfter")
 		sd.End()
 		out = buf.String()
-		assert.Contains(t, out, "fmt.Println(1)")
+		assert.Contains(t, out, "After")
+		assert.NotContains(t, out, "```")
+	})
+
+	t.Run("fenced code waits for complete line", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplay(&buf)
+
+		sd.WriteText("```go\nfmt.")
+		assert.Empty(t, buf.String())
+
+		sd.WriteText("Println(1)\n")
+		out := buf.String()
+		assert.Contains(t, out, "fmt")
+		assert.Contains(t, out, "Println")
+		assert.NotContains(t, out, "```")
+	})
+
+	t.Run("fenced code flushes partial line at end", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplay(&buf)
+
+		sd.WriteText("```go\nfmt.Print")
+		sd.End()
+
+		out := buf.String()
+		assert.Contains(t, out, "fmt")
+		assert.Contains(t, out, "Print")
+		assert.NotContains(t, out, "```")
+	})
+
+	t.Run("line-start inline code does not wait for newline once it is not a fence", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplay(&buf)
+
+		sd.WriteText("`not a fence")
+
+		assert.Contains(t, buf.String(), "`not a fence")
 	})
 
 	t.Run("tool call flushes pending markdown", func(t *testing.T) {
@@ -231,5 +270,101 @@ func TestStepDisplay(t *testing.T) {
 		assert.Contains(t, out, "bash")
 		assert.Contains(t, out, `"command"`)
 		assert.Contains(t, out, `"ls -la"`)
+	})
+}
+
+func TestMarkdownRenderer(t *testing.T) {
+	t.Run("standard markdown is formatted", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("# Heading\n\n- item with **bold** and `code`\n")
+
+		assert.Contains(t, out, "Heading")
+		assert.Contains(t, out, "- item with ")
+		assert.Contains(t, out, "bold")
+		assert.Contains(t, out, "code")
+		assert.NotContains(t, out, "# Heading")
+		assert.NotContains(t, out, "**bold**")
+		assert.NotContains(t, out, "`code`")
+		assert.Contains(t, out, "\x1b[")
+	})
+
+	t.Run("fenced code is highlighted without markdown layout rewriting", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("```go\nfmt.Println(\"hi\")\n```\n")
+
+		assert.Contains(t, out, "fmt")
+		assert.Contains(t, out, "Println")
+		assert.NotContains(t, out, "```")
+		assert.Contains(t, out, "\x1b[")
+	})
+
+	t.Run("tables are formatted", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("| Name | Count |\n| --- | ---: |\n| Alpha | 2 |\n| Beta | 100 |\n")
+		plainOut := ansiOnlyLineRE.ReplaceAllString(out, "")
+
+		assert.Contains(t, plainOut, "| Name  | Count |")
+		assert.Contains(t, plainOut, "| Alpha |     2 |")
+		assert.Contains(t, plainOut, "| Beta  |   100 |")
+		assert.NotContains(t, plainOut, "---:")
+		assert.Contains(t, out, "\x1b[")
+	})
+
+	t.Run("gfm task lists and strikethrough are formatted", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("- [x] done\n- [ ] todo\n\n~~removed~~ and https://example.com\n")
+		plainOut := ansiOnlyLineRE.ReplaceAllString(out, "")
+
+		assert.Contains(t, plainOut, "- [x] done")
+		assert.Contains(t, plainOut, "- [ ] todo")
+		assert.Contains(t, plainOut, "removed")
+		assert.Contains(t, plainOut, "https://example.com")
+		assert.NotContains(t, plainOut, "~~removed~~")
+		assert.Contains(t, out, "\x1b[9m")
+	})
+
+	t.Run("fenced code keeps following markdown separated", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("```go\nfmt.Println(\"hi\")\n```\nAfter\n")
+
+		assert.Contains(t, out, "fmt")
+		assert.Contains(t, out, "\nAfter")
+	})
+
+	t.Run("fenced code preserves intentional blank content lines", func(t *testing.T) {
+		var buf strings.Builder
+		render := NewMarkdownRendererForWriter(&buf)
+
+		out := render("```text\n\nvalue\n\n```\n")
+		plainOut := ansiOnlyLineRE.ReplaceAllString(out, "")
+
+		assert.True(t, strings.HasPrefix(plainOut, "\n"), out)
+		assert.Contains(t, plainOut, "\nvalue\n")
+	})
+
+	t.Run("streamed fenced code highlights before close", func(t *testing.T) {
+		var buf strings.Builder
+		sd := NewStepDisplay(&buf)
+
+		sd.WriteText("```go\nfmt.Println(\"hi\")\n")
+		assert.Contains(t, buf.String(), "fmt")
+
+		sd.WriteText("```\n")
+		sd.End()
+
+		out := buf.String()
+		assert.Contains(t, out, "fmt")
+		assert.NotContains(t, out, "```")
+		assert.Contains(t, out, "\x1b[")
 	})
 }

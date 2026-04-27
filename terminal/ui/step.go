@@ -20,12 +20,22 @@ const (
 
 // StepDisplay manages streamed output for one model/tool step.
 type StepDisplay struct {
-	w           io.Writer
-	state       State
-	buffer      *md.Buffer
-	render      Renderer
-	rendered    bool
-	atLineStart bool
+	w              io.Writer
+	state          State
+	buffer         *md.Buffer
+	render         Renderer
+	codeRenderer   nativeMarkdownRenderer
+	rendered       bool
+	atLineStart    bool
+	fenceCandidate string
+	code           *streamingCodeBlock
+}
+
+type streamingCodeBlock struct {
+	marker   byte
+	length   int
+	language string
+	pending  string
 }
 
 func NewStepDisplay(w io.Writer) *StepDisplay {
@@ -36,7 +46,7 @@ func NewStepDisplayWithRenderer(w io.Writer, renderer Renderer) *StepDisplay {
 	if renderer == nil {
 		renderer = func(s string) string { return s }
 	}
-	d := &StepDisplay{w: w, render: renderer, atLineStart: true}
+	d := &StepDisplay{w: w, render: renderer, codeRenderer: newNativeMarkdownRenderer(), atLineStart: true}
 	d.buffer = md.NewBuffer(func(blocks []md.Block) {
 		for _, block := range blocks {
 			d.writeRenderedMarkdown(block.Markdown)
@@ -68,7 +78,7 @@ func (d *StepDisplay) PrintToolCall(name string, args map[string]any) {
 	case StateReasoning:
 		fmt.Fprintf(d.w, "%s\n", Reset)
 	case StateText:
-		_ = d.buffer.Flush()
+		d.flushText()
 		fmt.Fprint(d.w, "\n")
 	}
 	d.state = StateIdle
@@ -87,7 +97,7 @@ func (d *StepDisplay) End() {
 	case StateReasoning:
 		fmt.Fprintf(d.w, "%s\n", Reset)
 	case StateText:
-		_ = d.buffer.Flush()
+		d.flushText()
 		fmt.Fprint(d.w, "\n")
 		d.rendered = false
 	}
@@ -109,6 +119,14 @@ func (d *StepDisplay) writeRenderedMarkdown(markdown string) {
 
 func (d *StepDisplay) writeTextChunk(chunk string) {
 	for chunk != "" {
+		if d.code != nil {
+			chunk = d.writeCodeChunk(chunk)
+			continue
+		}
+		if d.fenceCandidate != "" || (d.atLineStart && maybeFenceOpeningPrefix(chunk)) {
+			chunk = d.writeFenceCandidate(chunk)
+			continue
+		}
 		if d.buffer.Pending() != "" || (d.atLineStart && shouldBufferMarkdownLineStart(chunk)) {
 			_, _ = d.buffer.WriteString(chunk)
 			if d.buffer.Pending() == "" {
@@ -125,6 +143,147 @@ func (d *StepDisplay) writeTextChunk(chunk string) {
 		d.atLineStart = strings.HasSuffix(part, "\n")
 		chunk = chunk[n:]
 	}
+}
+
+func (d *StepDisplay) writeFenceCandidate(chunk string) string {
+	d.fenceCandidate += chunk
+	if !couldBeFenceOpening(d.fenceCandidate) {
+		fmt.Fprint(d.w, d.fenceCandidate)
+		d.rendered = true
+		d.atLineStart = strings.HasSuffix(d.fenceCandidate, "\n")
+		d.fenceCandidate = ""
+		return ""
+	}
+	idx := strings.IndexByte(d.fenceCandidate, '\n')
+	if idx < 0 {
+		return ""
+	}
+	line := d.fenceCandidate[:idx+1]
+	rest := d.fenceCandidate[idx+1:]
+	d.fenceCandidate = ""
+
+	open, ok := parseOpeningFence(line)
+	if !ok {
+		fmt.Fprint(d.w, line)
+		d.atLineStart = true
+		return rest
+	}
+
+	_ = d.buffer.Flush()
+	d.code = &streamingCodeBlock{
+		marker:   open.marker,
+		length:   open.length,
+		language: open.language,
+	}
+	d.atLineStart = true
+	return rest
+}
+
+func (d *StepDisplay) writeCodeChunk(chunk string) string {
+	d.code.pending += chunk
+	for {
+		idx := strings.IndexByte(d.code.pending, '\n')
+		if idx < 0 {
+			return ""
+		}
+		line := d.code.pending[:idx+1]
+		d.code.pending = d.code.pending[idx+1:]
+		if isClosingFence(line, d.code.marker, d.code.length) {
+			rest := d.code.pending
+			d.code = nil
+			d.atLineStart = true
+			return rest
+		}
+		d.writeStreamedCode(line)
+	}
+}
+
+func (d *StepDisplay) writeStreamedCode(code string) {
+	rendered := d.codeRenderer.highlightCodePreserve(code, d.code.language)
+	if rendered == "" {
+		return
+	}
+	fmt.Fprint(d.w, rendered)
+	d.rendered = true
+	d.atLineStart = strings.HasSuffix(code, "\n")
+}
+
+func (d *StepDisplay) flushText() {
+	d.flushFenceCandidate()
+	if d.code != nil {
+		d.flushCode()
+	}
+	_ = d.buffer.Flush()
+}
+
+func (d *StepDisplay) flushFenceCandidate() {
+	if d.fenceCandidate == "" {
+		return
+	}
+	if open, ok := parseOpeningFence(d.fenceCandidate); ok {
+		d.code = &streamingCodeBlock{
+			marker:   open.marker,
+			length:   open.length,
+			language: open.language,
+		}
+		d.fenceCandidate = ""
+		return
+	}
+	fmt.Fprint(d.w, d.fenceCandidate)
+	d.rendered = true
+	d.atLineStart = strings.HasSuffix(d.fenceCandidate, "\n")
+	d.fenceCandidate = ""
+}
+
+func (d *StepDisplay) flushCode() {
+	if d.code.pending != "" && !isClosingFence(d.code.pending, d.code.marker, d.code.length) {
+		d.writeStreamedCode(d.code.pending)
+	}
+	d.code = nil
+	d.atLineStart = true
+}
+
+func maybeFenceOpeningPrefix(s string) bool {
+	if s == "" {
+		return false
+	}
+	segment := s
+	if idx := strings.IndexByte(segment, '\n'); idx >= 0 {
+		segment = segment[:idx]
+	}
+	trimmed := strings.TrimLeft(segment, " ")
+	indent := len(segment) - len(trimmed)
+	if indent > 3 {
+		return false
+	}
+	if trimmed == "" {
+		return !strings.Contains(s, "\n")
+	}
+	return trimmed[0] == '`' || trimmed[0] == '~'
+}
+
+func couldBeFenceOpening(s string) bool {
+	segment := s
+	if idx := strings.IndexByte(segment, '\n'); idx >= 0 {
+		segment = segment[:idx]
+	}
+	trimmed := strings.TrimLeft(segment, " ")
+	indent := len(segment) - len(trimmed)
+	if indent > 3 {
+		return false
+	}
+	if trimmed == "" {
+		return true
+	}
+	marker := trimmed[0]
+	if marker != '`' && marker != '~' {
+		return false
+	}
+	run := countLeadingByte(trimmed, marker)
+	if run >= 3 {
+		return true
+	}
+	return run == len(trimmed)
 }
 
 func shouldBufferMarkdownLineStart(s string) bool {
