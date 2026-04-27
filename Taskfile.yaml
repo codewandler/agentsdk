@@ -1,0 +1,7 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install the agentsdk binary into GOPATH/bin
+    cmds:
+      - go install ./cmd/agentsdk
