@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	mdterminal "github.com/codewandler/markdown/terminal"
+	"github.com/codewandler/markdown"
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
@@ -140,7 +140,7 @@ func toolSchemaCmd() *cobra.Command {
 				if err := enc.Encode(shaped); err != nil {
 					return fmt.Errorf("tool %q: yaml marshal: %w", name, err)
 				}
-				yamlBytes := []byte(strings.TrimRight(yamlBuf.String(), "\n"))
+				yamlBytes := []byte(yamlBuf.String()) // encoder appends trailing newline; keep it for blank line before closing fence
 				if i > 0 {
 					fmt.Fprintln(out)
 				}
@@ -158,11 +158,9 @@ func toolSchemaCmd() *cobra.Command {
 				fmt.Fprintln(&md, "**Schema:**")
 				fmt.Fprintln(&md, "```yaml")
 				md.Write(yamlBytes)
-				fmt.Fprintln(&md, "```")
+				fmt.Fprintf(&md, "\n```\n")
 				// Render through terminal Markdown renderer
-				sr := mdterminal.NewStreamRenderer(out)
-				_, _ = sr.Write([]byte(md.String()))
-				_ = sr.Flush()
+				_ = markdown.RenderToWriter(out, md.String())
 			}
 			return nil
 		},

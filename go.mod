@@ -8,7 +8,7 @@ require (
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/codewandler/llmadapter v1.0.0-rc.14
-	github.com/codewandler/markdown v0.0.0-00010101000000-000000000000
+	github.com/codewandler/markdown v0.35.1
 	github.com/codewandler/modeldb v0.13.2
 	github.com/invopop/jsonschema v0.13.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
@@ -24,6 +24,7 @@ require (
 require (
 	github.com/JohannesKaufmann/dom v0.2.0 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
+	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
 	github.com/amitybell/piper-asset v0.0.0-20231030194325-d36a29e3b1fd // indirect
 	github.com/amitybell/piper-bin-linux v0.0.0-20250621082830-f5d5d85fa076 // indirect
 	github.com/amitybell/piper-bin-windows v0.0.0-20231118093113-cc2cef2f6b74 // indirect
@@ -31,6 +32,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
@@ -41,5 +43,3 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 )
-
-replace github.com/codewandler/markdown => ../markdown
