@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
@@ -50,7 +53,111 @@ func rootCmd() *cobra.Command {
 	}))
 	cmd.AddCommand(discoverCmd())
 	cmd.AddCommand(modelsCmd())
+	cmd.AddCommand(toolCmd())
 	return cmd
+}
+
+func toolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "tool",
+		Short:         "Inspect tools registered in a resource bundle",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.AddCommand(toolSchemaCmd())
+	return cmd
+}
+
+func toolSchemaCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "schema [path] [name]",
+		Short: "Print tool JSON schemas as YAML",
+		Long:  "Print the JSON schema of every registered tool as YAML.\nOptionally filter to a single tool by name.\npath defaults to the current directory.",
+		Args:  cobra.MaximumNArgs(2),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := "."
+			toolName := ""
+			switch len(args) {
+			case 1:
+				if looksLikePath(args[0]) {
+					dir = args[0]
+				} else {
+					toolName = args[0]
+				}
+			case 2:
+				dir = args[0]
+				toolName = args[1]
+			}
+			policy := resource.DiscoveryPolicy{
+				IncludeGlobalUserResources: true,
+				IncludeExternalEcosystems:  true,
+				AllowRemote:                true,
+			}
+			resolved, err := agentdir.ResolveDirWithOptions(dir, agentdir.ResolveOptions{Policy: policy})
+			if err != nil {
+				return err
+			}
+			imported, err := app.New(app.WithResourceBundle(resolved.Bundle), app.WithoutBuiltins())
+			if err != nil {
+				return err
+			}
+			catalog := imported.ToolCatalog()
+			var names []string
+			if toolName != "" {
+				names = []string{toolName}
+			} else {
+				names = catalog.Names()
+			}
+			out := cmd.OutOrStdout()
+			for i, name := range names {
+				selected, err := catalog.Select([]string{name})
+				if err != nil {
+					return fmt.Errorf("tool %q: %w", name, err)
+				}
+				if len(selected) == 0 {
+					return fmt.Errorf("tool %q not found", name)
+				}
+				t := selected[0]
+				schema := t.Schema()
+				if schema == nil {
+					continue
+				}
+				raw, err := json.Marshal(schema)
+				if err != nil {
+					return fmt.Errorf("tool %q: marshal schema: %w", name, err)
+				}
+				var shaped any
+				if err := yaml.Unmarshal(raw, &shaped); err != nil {
+					return fmt.Errorf("tool %q: yaml unmarshal: %w", name, err)
+				}
+				yamlBytes, err := yaml.Marshal(shaped)
+				if err != nil {
+					return fmt.Errorf("tool %q: yaml marshal: %w", name, err)
+				}
+				if i > 0 {
+					fmt.Fprintln(out)
+				}
+				fmt.Fprintf(out, "# %s\n", name)
+				if guidance := t.Guidance(); guidance != "" {
+					for _, line := range strings.Split(strings.TrimSpace(guidance), "\n") {
+						fmt.Fprintf(out, "# guidance: %s\n", line)
+					}
+				}
+				_, _ = out.Write(yamlBytes)
+			}
+			return nil
+		},
+	}
+}
+
+// looksLikePath returns true if s looks like a filesystem path rather than a
+// tool name: starts with . or /, contains a path separator, or ends with /.
+func looksLikePath(s string) bool {
+	return strings.HasPrefix(s, ".") ||
+		strings.HasPrefix(s, "/") ||
+		strings.ContainsRune(s, os.PathSeparator)
 }
 
 func modelsCmd() *cobra.Command {
