@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/invopop/jsonschema"
 	jsv "github.com/santhosh-tekuri/jsonschema/v6"
@@ -69,6 +70,8 @@ func schemaFor[P any]() (map[string]any, *jsonschema.Schema) {
 	delete(params, "$schema")
 	delete(params, "$id")
 
+	params = injectRequiredFromTags[P](params)
+
 	cleanRaw, err := json.Marshal(params)
 	if err != nil {
 		return params, schema
@@ -78,6 +81,47 @@ func schemaFor[P any]() (map[string]any, *jsonschema.Schema) {
 		return params, schema
 	}
 	return params, &cleanSchema
+}
+
+// SchemaFor returns the JSON schema for type P, using the same reflector
+// configuration as tool.New. Useful for building composite schemas (e.g.
+// oneOf variants) without duplicating reflector setup.
+func SchemaFor[P any]() *jsonschema.Schema {
+	_, s := schemaFor[P]()
+	return s
+}
+
+// injectRequiredFromTags patches the "required" array in the schema map for
+// fields that carry jsonschema:"required" but whose types implement JSONSchema()
+// — causing the reflector to skip their struct tags entirely.
+func injectRequiredFromTags[P any](m map[string]any) map[string]any {
+	var zero P
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return m
+	}
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return m
+	}
+	var required []any
+	for i := range t.NumField() {
+		f := t.Field(i)
+		for _, token := range strings.Split(f.Tag.Get("jsonschema"), ",") {
+			if strings.TrimSpace(token) == "required" {
+				if name := strings.Split(f.Tag.Get("json"), ",")[0]; name != "" && name != "-" {
+					required = append(required, name)
+				}
+				break
+			}
+		}
+	}
+	if len(required) > 0 {
+		m["required"] = required
+	}
+	return m
 }
 
 // addExamplesToSchema adds examples to integer/number fields to help LLMs send correct types.

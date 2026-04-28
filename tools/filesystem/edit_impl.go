@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/invopop/jsonschema"
 	idiff "github.com/codewandler/agentsdk/internal/diff"
 	"github.com/codewandler/agentsdk/internal/humanize"
 )
@@ -21,32 +22,32 @@ var (
 // ── file_edit ─────────────────────────────────────────────────────────────────
 
 type FileEditParams struct {
-	Path         tool.StringSliceParam `json:"path"`
+	Path         tool.StringSliceParam `json:"path" jsonschema:"required"`
 	DryRun       bool                  `json:"dry_run,omitempty"`
 	AllowPartial bool                  `json:"allow_partial,omitempty"`
-	Operations   []Op                  `json:"operations"`
+	Operations   []Operation           `json:"operations" jsonschema:"required"`
 }
 
-// Op is a discriminated union of file edit operations.
-// Implementations: ReplaceOp, InsertOp, RemoveOp, AppendOp, PatchOp.
-//
-// JSONSchemaAlias tells the jsonschema.Reflector to generate a oneOf schema
-// from the variant structs below, instead of a generic object.
-type Op = Operation
-
-func (o Op) JSONSchemaAlias() any {
-	return OpSchema{}
-}
-
-// OpSchema is used by the reflector to generate the oneOf schema.
-// Each field corresponds to one variant; omitempty ensures the field is
-// only present when set, giving the LLM a clear discriminator.
-type OpSchema struct {
-	Replace *ReplaceOp `json:"replace,omitempty" jsonschema:"description=Replace text."`
-	Insert  *InsertOp  `json:"insert,omitempty" jsonschema:"description=Insert content before a line."`
-	Remove  *RemoveOp  `json:"remove,omitempty" jsonschema:"description=Remove text or lines."`
-	Append  *AppendOp  `json:"append,omitempty" jsonschema:"description=Append content to end of file."`
-	Patch   *PatchOp   `json:"patch,omitempty" jsonschema:"description=Apply a unified diff patch."`
+// JSONSchema returns a oneOf discriminated union schema for Operation.
+func (Operation) JSONSchema() *jsonschema.Schema {
+	makeVariant := func(key string, inner *jsonschema.Schema) *jsonschema.Schema {
+		props := jsonschema.NewProperties()
+		props.Set(key, inner)
+		return &jsonschema.Schema{
+			Properties:           props,
+			Required:             []string{key},
+			AdditionalProperties: jsonschema.FalseSchema,
+		}
+	}
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			makeVariant("replace", tool.SchemaFor[ReplaceOp]()),
+			makeVariant("insert",  tool.SchemaFor[InsertOp]()),
+			makeVariant("remove",  tool.SchemaFor[RemoveOp]()),
+			makeVariant("append",  tool.SchemaFor[AppendOp]()),
+			makeVariant("patch",   tool.SchemaFor[PatchOp]()),
+		},
+	}
 }
 
 type Operation struct {
@@ -90,9 +91,30 @@ type InsertOp struct {
 	Indent  string `json:"indent,omitempty" jsonschema:"description=Indentation mode: 'auto' (default) copies the target line's leading whitespace; 'none' preserves content exactly as written."`
 }
 
+// RemoveByString and RemoveByLines are the two concrete variants of RemoveOp.
+type RemoveByString struct {
+	OldString string `json:"old_string" jsonschema:"description=Exact text to find and remove. Mutually exclusive with lines.,required"`
+}
+
+type RemoveByLines struct {
+	Lines []int `json:"lines" jsonschema:"description=Line numbers to remove (1-indexed). One element [n] removes line n. Two elements [start end] removes that inclusive range.,required"`
+}
+
+// RemoveOp embeds both variants as optional pointers so JSON unmarshalling
+// works naturally for both shapes.
 type RemoveOp struct {
-	OldString string `json:"old_string,omitempty" jsonschema:"description=Exact text to find and remove. Mutually exclusive with lines."`
-	Lines     []int  `json:"lines,omitempty" jsonschema:"description=Line numbers to remove (1-indexed). One element [n] removes line n. Two elements [start end] removes that inclusive range."`
+	*RemoveByString
+	*RemoveByLines
+}
+
+// JSONSchema returns a oneOf schema requiring either old_string or lines.
+func (RemoveOp) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			tool.SchemaFor[RemoveByString](),
+			tool.SchemaFor[RemoveByLines](),
+		},
+	}
 }
 
 type AppendOp struct {
@@ -549,7 +571,7 @@ func resolveInsert(content string, op *InsertOp, opIndex int) ([]resolvedEdit, e
 }
 
 func resolveRemove(content string, op *RemoveOp, opIndex int) ([]resolvedEdit, error) {
-	if op.OldString != "" {
+	if op.RemoveByString != nil && op.OldString != "" {
 		idx := strings.Index(content, op.OldString)
 		if idx < 0 {
 			return nil, fmt.Errorf("old_string not found")
@@ -564,7 +586,7 @@ func resolveRemove(content string, op *RemoveOp, opIndex int) ([]resolvedEdit, e
 			endLine:   lineNumberForOffset(content, maxInt(end-1, idx)),
 		}}, nil
 	}
-	if len(op.Lines) == 0 {
+	if op.RemoveByLines == nil || len(op.Lines) == 0 {
 		return nil, fmt.Errorf("must specify old_string or lines")
 	}
 	if len(op.Lines) != 1 && len(op.Lines) != 2 {
