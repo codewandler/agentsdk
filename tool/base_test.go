@@ -173,3 +173,52 @@ func TestTypedTool_JSONSchemaValidation_ValidInput(t *testing.T) {
 		require.False(t, res.IsError(), "Valid input should not return error")
 	})
 }
+
+// ── hasRequiredToken + escaped comma tests ────────────────────────────────────
+
+func TestHasRequiredToken(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+		want bool
+	}{
+		{"simple required", "required", true},
+		{"required with description", "description=hello,required", true},
+		{"required first", "required,description=hello", true},
+		{"no required", "description=hello", false},
+		{"escaped comma before required", "description=a\\, b,required", true},
+		{"multiple escaped commas before required", "description=a\\, b\\, c,required", true},
+		{"required-like inside value", "description=required field,minLength=1", false},
+		{"empty tag", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasRequiredToken(tt.tag)
+			require.Equal(t, tt.want, got, "hasRequiredToken(%q)", tt.tag)
+		})
+	}
+}
+
+// TestSchemaFor_EscapedCommaDescription verifies that a field whose type
+// implements JSONSchema() still gets marked required and retains its
+// description when the jsonschema tag contains escaped commas (\\,).
+func TestSchemaFor_EscapedCommaDescription(t *testing.T) {
+	// This struct mirrors the pattern in FileEditParams: a StringSliceParam
+	// field (which implements JSONSchema()) with a description containing commas.
+	type Params struct {
+		Path StringSliceParam `json:"path" jsonschema:"description=Accepts a string\\, an array\\, or a glob.,required"`
+		Name string           `json:"name" jsonschema:"description=Simple name,required"`
+	}
+
+	s := SchemaFor[Params]()
+
+	// Both fields must be required
+	require.Contains(t, s.Required, "path", "path must be required")
+	require.Contains(t, s.Required, "name", "name must be required")
+
+	// The description with commas must be preserved (commas unescaped in output)
+	pathProp, ok := s.Properties.Get("path")
+	require.True(t, ok, "path property must exist")
+	require.Contains(t, pathProp.Description, "string, an array, or a glob",
+		"escaped commas must appear as literal commas in the description")
+}

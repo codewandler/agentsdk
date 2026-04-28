@@ -22,9 +22,9 @@ var (
 // ── file_edit ─────────────────────────────────────────────────────────────────
 
 type FileEditParams struct {
-	Path         tool.StringSliceParam `json:"path" jsonschema:"description=File path(s) to edit. Accepts a single string\, an array\, or a glob pattern (e.g. src/**/*.go).,required"`
-	DryRun       bool                  `json:"dry_run,omitempty" jsonschema:"description=If true\, show the diff without writing anything to disk."`
-	AllowPartial bool                  `json:"allow_partial,omitempty" jsonschema:"description=If true\, skip files that fail (symlinks\, missing\, too large\, conflicts) instead of aborting all."`
+	Path         tool.StringSliceParam `json:"path" jsonschema:"description=File path(s) to edit. Accepts a single string\\, an array\\, or a glob pattern (e.g. src/**/*.go).,required"`
+	DryRun       bool                  `json:"dry_run,omitempty" jsonschema:"description=If true\\, show the diff without writing anything to disk."`
+	AllowPartial bool                  `json:"allow_partial,omitempty" jsonschema:"description=If true\\, skip files that fail (symlinks\\, missing\\, too large\\, conflicts) instead of aborting all."`
 	Operations   []Operation           `json:"operations" jsonschema:"description=List of edit operations to apply. All operations are resolved against the original file content and merged before writing.,required"`
 }
 

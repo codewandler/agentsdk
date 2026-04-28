@@ -12,8 +12,8 @@ import (
 
 // Params are the parameters for the todo tool.
 type Params struct {
-	Action string `json:"action" jsonschema:"description=Action to perform: create, list, get, update, delete,required"`
-	ID     int    `json:"id,omitempty" jsonschema:"description=Todo id for get, update, or delete"`
+	Action string `json:"action" jsonschema:"description=Action to perform: create\\, list\\, get\\, update\\, delete,required"`
+	ID     int    `json:"id,omitempty" jsonschema:"description=Todo id for get\\, update\\, or delete"`
 	Title  string `json:"title,omitempty" jsonschema:"description=Todo title for create or update"`
 	Done   *bool  `json:"done,omitempty" jsonschema:"description=Completion status for update"`
 }

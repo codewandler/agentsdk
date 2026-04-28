@@ -722,4 +722,7 @@ func TestFileEditSchema_DescriptionsPresent(t *testing.T) {
 	require.Contains(t, s, "Mutually exclusive with lines")   // remove/byString
 	require.Contains(t, s, "Text to append to the end")       // append
 	require.Contains(t, s, "Unified diff patch")              // patch
+	// top-level descriptions with escaped commas must render correctly
+	require.Contains(t, s, "Accepts a single string, an array, or a glob pattern") // path (escaped commas)
+	require.Contains(t, s, "skip files that fail (symlinks, missing, too large, conflicts)") // allow_partial
 }
