@@ -139,13 +139,22 @@ func toolSchemaCmd() *cobra.Command {
 				if i > 0 {
 					fmt.Fprintln(out)
 				}
-				fmt.Fprintf(out, "# %s\n", name)
+				// Header
+				fmt.Fprintf(out, "## %s\n\n", name)
+				fmt.Fprintf(out, "%s\n\n", t.Description())
+				// Guidance block
 				if guidance := t.Guidance(); guidance != "" {
+					fmt.Fprintln(out, "**Guidance:**")
 					for _, line := range strings.Split(strings.TrimSpace(guidance), "\n") {
-						fmt.Fprintf(out, "# guidance: %s\n", line)
+						fmt.Fprintf(out, "- %s\n", line)
 					}
+					fmt.Fprintln(out)
 				}
+				// Schema code block
+				fmt.Fprintln(out, "**Schema:**")
+				fmt.Fprintln(out, "```yaml")
 				_, _ = out.Write(yamlBytes)
+				fmt.Fprint(out, "```")
 			}
 			return nil
 		},
