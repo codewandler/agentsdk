@@ -47,7 +47,6 @@ func rootCmd() *cobra.Command {
 		Short:       "Run an agent resource bundle",
 		ResourceArg: true,
 		AgentFlag:   true,
-		Prompt:      "agentsdk> ",
 	}))
 	cmd.AddCommand(discoverCmd())
 	cmd.AddCommand(modelsCmd())

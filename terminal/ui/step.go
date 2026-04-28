@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
-	"unicode"
 
-	extmd "github.com/codewandler/markdown"
+	mdterminal "github.com/codewandler/markdown/terminal"
 )
 
 type State int
@@ -20,40 +18,17 @@ const (
 
 // StepDisplay manages streamed output for one model/tool step.
 type StepDisplay struct {
-	w              io.Writer
-	state          State
-	buffer         *extmd.Buffer
-	render         Renderer
-	codeRenderer   nativeMarkdownRenderer
-	rendered       bool
-	atLineStart    bool
-	fenceCandidate string
-	code           *streamingCodeBlock
-	inlineBuf      string
-}
-
-type streamingCodeBlock struct {
-	marker   byte
-	length   int
-	language string
-	pending  string
+	w        io.Writer
+	state    State
+	sr       *mdterminal.StreamRenderer
+	rendered bool
 }
 
 func NewStepDisplay(w io.Writer) *StepDisplay {
-	return NewStepDisplayWithRenderer(w, NewMarkdownRendererForWriter(w))
-}
-
-func NewStepDisplayWithRenderer(w io.Writer, renderer Renderer) *StepDisplay {
-	if renderer == nil {
-		renderer = func(s string) string { return s }
+	return &StepDisplay{
+		w:  w,
+		sr: mdterminal.NewStreamRenderer(w),
 	}
-	d := &StepDisplay{w: w, render: renderer, codeRenderer: newNativeMarkdownRenderer(), atLineStart: true}
-	d.buffer = extmd.NewBuffer(func(blocks []extmd.Block) {
-		for _, block := range blocks {
-			d.writeRenderedMarkdown(block.Markdown)
-		}
-	})
-	return d
 }
 
 func (d *StepDisplay) WriteReasoning(chunk string) {
@@ -71,7 +46,8 @@ func (d *StepDisplay) WriteText(chunk string) {
 	if d.state != StateText {
 		d.state = StateText
 	}
-	d.writeTextChunk(chunk)
+	_, _ = d.sr.Write([]byte(chunk))
+	d.rendered = true
 }
 
 func (d *StepDisplay) PrintToolCall(name string, args map[string]any) {
@@ -79,7 +55,8 @@ func (d *StepDisplay) PrintToolCall(name string, args map[string]any) {
 	case StateReasoning:
 		fmt.Fprintf(d.w, "%s\n", Reset)
 	case StateText:
-		d.flushText()
+		_ = d.sr.Flush()
+		d.sr = mdterminal.NewStreamRenderer(d.w)
 		fmt.Fprint(d.w, "\n")
 	}
 	d.state = StateIdle
@@ -98,439 +75,10 @@ func (d *StepDisplay) End() {
 	case StateReasoning:
 		fmt.Fprintf(d.w, "%s\n", Reset)
 	case StateText:
-		d.flushText()
+		_ = d.sr.Flush()
+		d.sr = mdterminal.NewStreamRenderer(d.w)
 		fmt.Fprint(d.w, "\n")
 		d.rendered = false
 	}
 	d.state = StateIdle
-	d.atLineStart = true
-}
-
-func (d *StepDisplay) writeRenderedMarkdown(markdown string) {
-	rendered := d.render(markdown)
-	if rendered == "" {
-		return
-	}
-	if d.rendered && (d.atLineStart || strings.HasSuffix(markdown, "\n")) {
-		fmt.Fprint(d.w, "\n\n")
-	}
-	fmt.Fprint(d.w, rendered)
-	d.rendered = true
-	d.atLineStart = strings.HasSuffix(rendered, "\n")
-}
-
-func (d *StepDisplay) writeTextChunk(chunk string) {
-	for chunk != "" {
-		if d.code != nil {
-			chunk = d.writeCodeChunk(chunk)
-			continue
-		}
-		if d.fenceCandidate != "" || (d.atLineStart && maybeFenceOpeningPrefix(chunk)) {
-			chunk = d.writeFenceCandidate(chunk)
-			continue
-		}
-
-		n := len(chunk)
-		if idx := strings.IndexByte(chunk, '\n'); idx >= 0 {
-			n = idx + 1
-		}
-		part := chunk[:n]
-		if d.buffer.Pending() != "" || (d.atLineStart && shouldBufferMarkdownLineStart(part)) || shouldBufferInlineMarkdown(part) {
-			if d.inlineBuf != "" {
-				fmt.Fprint(d.w, d.inlineBuf)
-				d.inlineBuf = ""
-			}
-			_, _ = d.buffer.WriteString(part)
-			if d.buffer.Pending() == "" {
-				d.atLineStart = strings.HasSuffix(part, "\n")
-			}
-			chunk = chunk[n:]
-			continue
-		}
-		fmt.Fprint(d.w, part)
-		d.rendered = true
-		d.atLineStart = strings.HasSuffix(part, "\n")
-		chunk = chunk[n:]
-	}
-}
-
-func (d *StepDisplay) writeFenceCandidate(chunk string) string {
-	d.fenceCandidate += chunk
-	if !couldBeFenceOpening(d.fenceCandidate) {
-		fmt.Fprint(d.w, d.fenceCandidate)
-		d.rendered = true
-		d.atLineStart = strings.HasSuffix(d.fenceCandidate, "\n")
-		d.fenceCandidate = ""
-		return ""
-	}
-	idx := strings.IndexByte(d.fenceCandidate, '\n')
-	if idx < 0 {
-		return ""
-	}
-	line := d.fenceCandidate[:idx+1]
-	rest := d.fenceCandidate[idx+1:]
-	d.fenceCandidate = ""
-
-	open, ok := parseOpeningFence(line)
-	if !ok {
-		fmt.Fprint(d.w, line)
-		d.atLineStart = true
-		return rest
-	}
-
-	_ = d.buffer.Flush()
-	d.code = &streamingCodeBlock{
-		marker:   open.marker,
-		length:   open.length,
-		language: open.language,
-	}
-	d.atLineStart = true
-	return rest
-}
-
-func (d *StepDisplay) writeCodeChunk(chunk string) string {
-	d.code.pending += chunk
-	for {
-		idx := strings.IndexByte(d.code.pending, '\n')
-		if idx < 0 {
-			return ""
-		}
-		line := d.code.pending[:idx+1]
-		d.code.pending = d.code.pending[idx+1:]
-		if isClosingFence(line, d.code.marker, d.code.length) {
-			rest := d.code.pending
-			d.code = nil
-			d.atLineStart = true
-			return rest
-		}
-		d.writeStreamedCode(line)
-	}
-}
-
-func (d *StepDisplay) writeStreamedCode(code string) {
-	rendered := d.codeRenderer.highlightCodePreserve(code, d.code.language)
-	if rendered == "" {
-		return
-	}
-	fmt.Fprint(d.w, rendered)
-	d.rendered = true
-	d.atLineStart = strings.HasSuffix(code, "\n")
-}
-
-func (d *StepDisplay) flushText() {
-	d.flushFenceCandidate()
-	if d.code != nil {
-		d.flushCode()
-	}
-	if d.inlineBuf != "" {
-		fmt.Fprint(d.w, d.inlineBuf)
-		d.inlineBuf = ""
-	}
-	_ = d.buffer.Flush()
-}
-
-func (d *StepDisplay) flushFenceCandidate() {
-	if d.fenceCandidate == "" {
-		return
-	}
-	if open, ok := parseOpeningFence(d.fenceCandidate); ok {
-		d.code = &streamingCodeBlock{
-			marker:   open.marker,
-			length:   open.length,
-			language: open.language,
-		}
-		d.fenceCandidate = ""
-		return
-	}
-	fmt.Fprint(d.w, d.fenceCandidate)
-	d.rendered = true
-	d.atLineStart = strings.HasSuffix(d.fenceCandidate, "\n")
-	d.fenceCandidate = ""
-}
-
-func (d *StepDisplay) flushCode() {
-	if d.code.pending != "" && !isClosingFence(d.code.pending, d.code.marker, d.code.length) {
-		d.writeStreamedCode(d.code.pending)
-	}
-	d.code = nil
-	d.atLineStart = true
-}
-
-func maybeFenceOpeningPrefix(s string) bool {
-	if s == "" {
-		return false
-	}
-	segment := s
-	if idx := strings.IndexByte(segment, '\n'); idx >= 0 {
-		segment = segment[:idx]
-	}
-	trimmed := strings.TrimLeft(segment, " ")
-	indent := len(segment) - len(trimmed)
-	if indent > 3 {
-		return false
-	}
-	if trimmed == "" {
-		return !strings.Contains(s, "\n")
-	}
-	return trimmed[0] == '`' || trimmed[0] == '~'
-}
-
-func couldBeFenceOpening(s string) bool {
-	segment := s
-	if idx := strings.IndexByte(segment, '\n'); idx >= 0 {
-		segment = segment[:idx]
-	}
-	trimmed := strings.TrimLeft(segment, " ")
-	indent := len(segment) - len(trimmed)
-	if indent > 3 {
-		return false
-	}
-	if trimmed == "" {
-		return true
-	}
-	marker := trimmed[0]
-	if marker != '`' && marker != '~' {
-		return false
-	}
-	run := countLeadingByte(trimmed, marker)
-	if run >= 3 {
-		// Backtick fences cannot contain backticks in the info string.
-		if marker == '`' && strings.Contains(trimmed[run:], "`") {
-			return false
-		}
-		return true
-	}
-	return run == len(trimmed)
-}
-
-func shouldBufferMarkdownLineStart(s string) bool {
-	if s == "" {
-		return false
-	}
-	segment := s
-	if idx := strings.IndexByte(segment, '\n'); idx >= 0 {
-		segment = segment[:idx]
-	}
-	trimmed := strings.TrimLeft(segment, " ")
-	indent := len(segment) - len(trimmed)
-	if trimmed == "" {
-		return indent > 0 && indent <= 3 && !strings.Contains(s, "\n")
-	}
-	if indent >= 4 {
-		return true
-	}
-	switch trimmed[0] {
-	case '#', '>', '|', '<', '`', '~':
-		return true
-	case '-', '*', '+':
-		return len(trimmed) == 1 || trimmed[1] == ' ' || trimmed[1] == '\t' || trimmed[1] == trimmed[0]
-	default:
-		return startsOrderedList(trimmed)
-	}
-}
-
-func shouldBufferInlineMarkdown(s string) bool {
-	if s == "" {
-		return false
-	}
-	return hasPotentialInlineCode(s) ||
-		hasPotentialInlineEmphasis(s) ||
-		strings.Contains(s, "](") ||
-		strings.Contains(s, "~~") ||
-		hasPotentialInlineHTMLOrAutolink(s)
-}
-
-func hasPotentialInlineCode(s string) bool {
-	return strings.Contains(s, "`")
-}
-
-func hasPotentialInlineEmphasis(s string) bool {
-	for i := 0; i < len(s); i++ {
-		marker := s[i]
-		if marker != '*' && marker != '_' {
-			continue
-		}
-		run := 1
-		for i+run < len(s) && s[i+run] == marker {
-			run++
-		}
-		prev := byte(0)
-		if i > 0 {
-			prev = s[i-1]
-		}
-		next := byte(0)
-		if i+run < len(s) {
-			next = s[i+run]
-		}
-		if canBeMarkdownDelimiter(prev, next) {
-			return true
-		}
-		i += run - 1
-	}
-	return false
-}
-
-func canBeMarkdownDelimiter(prev, next byte) bool {
-	if next == 0 || isASCIISpace(next) {
-		return false
-	}
-	if isASCIIAlnum(prev) && isASCIIPunctuation(next) {
-		return false
-	}
-	return true
-}
-
-func hasPotentialInlineHTMLOrAutolink(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] != '<' || i+1 >= len(s) {
-			continue
-		}
-		next := s[i+1]
-		if isASCIIAlpha(next) || next == '/' || next == '!' || next == '?' {
-			return true
-		}
-	}
-	return false
-}
-
-func isASCIISpace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
-}
-
-func isASCIIAlpha(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
-}
-
-func isASCIIAlnum(b byte) bool {
-	return isASCIIAlpha(b) || (b >= '0' && b <= '9')
-}
-
-func isASCIIPunctuation(b byte) bool {
-	return (b >= '!' && b <= '/') || (b >= ':' && b <= '@') || (b >= '[' && b <= '`') || (b >= '{' && b <= '~')
-}
-
-func startsOrderedList(s string) bool {
-	if s == "" || !unicode.IsDigit(rune(s[0])) {
-		return false
-	}
-	for i, r := range s {
-		if !unicode.IsDigit(r) {
-			return (r == '.' || r == ')') && i+1 < len(s) && (s[i+1] == ' ' || s[i+1] == '\t')
-		}
-	}
-	return len(s) <= 9
-}
-
-// writeFastPathWithInline styles inline code spans on the fast path.
-// It tracks backtick runs and emits ANSI-colored spans for matched pairs.
-// Unmatched backticks at line/stream end are buffered and carried forward.
-func (d *StepDisplay) writeFastPathWithInline(s string) {
-	d.inlineBuf += s
-	d.inlineBuf = flushInlineStyles(d.inlineBuf, d.w)
-}
-
-func flushInlineStyles(buf string, w io.Writer) string {
-	keep := 0
-	for keep < len(buf) {
-		codeIdx := strings.IndexByte(buf[keep:], '`')
-		emphIdx := -1
-		for i := keep; i < len(buf); i++ {
-			if buf[i] == '*' || buf[i] == '_' {
-				emphIdx = i - keep
-				break
-			}
-		}
-		var start int
-		var isCode bool
-		if codeIdx >= 0 && (emphIdx < 0 || codeIdx < emphIdx) {
-			start = keep + codeIdx
-			isCode = true
-		} else if emphIdx >= 0 {
-			start = keep + emphIdx
-			isCode = false
-		} else {
-			fmt.Fprint(w, buf[keep:])
-			return ""
-		}
-		run := 1
-		for start+run < len(buf) && buf[start+run] == buf[start] {
-			run++
-		}
-		if isCode {
-			closeIdx := findBacktickRun(buf[start+run:], run)
-			if closeIdx < 0 {
-				if start > keep {
-					fmt.Fprint(w, buf[keep:start])
-				}
-				return buf[start:]
-			}
-			if start > keep {
-				fmt.Fprint(w, buf[keep:start])
-			}
-			contentStart := start + run
-			contentEnd := start + run + closeIdx
-			fmt.Fprint(w, CodePink+strings.TrimSpace(buf[contentStart:contentEnd])+Reset)
-			keep = contentEnd + run
-		} else {
-			closeIdx := findEmphasisRun(buf[start+run:], buf[start], run)
-			if closeIdx < 0 {
-				if start > keep {
-					fmt.Fprint(w, buf[keep:start])
-				}
-				return buf[start:]
-			}
-			if start > keep {
-				fmt.Fprint(w, buf[keep:start])
-			}
-			contentStart := start + run
-			contentEnd := start + run + closeIdx
-			text := strings.TrimSpace(buf[contentStart:contentEnd])
-			var style string
-			switch run {
-			case 1:
-				style = Italic + text + Reset
-			case 2:
-				style = Bold + text + Reset
-			default:
-				style = Bold + Italic + text + Reset
-			}
-			fmt.Fprint(w, style)
-			keep = contentEnd + run
-		}
-	}
-	return ""
-}
-
-func findBacktickRun(s string, want int) int {
-	for i := 0; i <= len(s)-want; i++ {
-		if s[i] != '`' {
-			continue
-		}
-		actual := 1
-		for i+actual < len(s) && s[i+actual] == '`' {
-			actual++
-		}
-		if actual == want {
-			return i
-		}
-		i += actual - 1
-	}
-	return -1
-}
-
-func findEmphasisRun(s string, marker byte, want int) int {
-	for i := 0; i <= len(s)-want; i++ {
-		if s[i] != marker {
-			continue
-		}
-		actual := 1
-		for i+actual < len(s) && s[i+actual] == marker {
-			actual++
-		}
-		if actual == want {
-			return i
-		}
-		i += actual - 1
-	}
-	return -1
 }

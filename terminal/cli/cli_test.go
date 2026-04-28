@@ -45,7 +45,7 @@ func TestRunStartsREPLWithoutTask(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Contains(t, out.String(), "> ")
+	require.Contains(t, out.String(), "agent(coder)> ")
 	require.Contains(t, out.String(), "session")
 }
 
@@ -296,7 +296,7 @@ func TestResourceArgCommandDefaultsToCurrentDirectory(t *testing.T) {
 	err := cmd.Execute()
 
 	require.NoError(t, err)
-	require.Contains(t, out.String(), "> ")
+	require.Contains(t, out.String(), "agent(default)> ")
 }
 
 func testBundle() fstest.MapFS {

@@ -63,6 +63,7 @@ type Config struct {
 type Loaded struct {
 	App       *app.App
 	Agent     *agent.Instance
+	AgentName string
 	Workspace string
 	In        io.Reader
 	Out       io.Writer
@@ -204,6 +205,7 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	return &Loaded{
 		App:       application,
 		Agent:     inst,
+		AgentName: name,
 		Workspace: workspace,
 		In:        in,
 		Out:       out,
@@ -243,8 +245,8 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	prompt := cfg.Prompt
-	if prompt == "" {
-		prompt = "> "
+	if prompt == "" || prompt == "agentsdk> " {
+		prompt = fmt.Sprintf("agent(%s)> ", loaded.AgentName)
 	}
 	return repl.Run(ctx, application, in, repl.WithPrompt(prompt))
 }
