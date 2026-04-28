@@ -10,6 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	mdterminal "github.com/codewandler/markdown/terminal"
+
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
@@ -139,22 +141,25 @@ func toolSchemaCmd() *cobra.Command {
 				if i > 0 {
 					fmt.Fprintln(out)
 				}
-				// Header
-				fmt.Fprintf(out, "## %s\n\n", name)
-				fmt.Fprintf(out, "%s\n\n", t.Description())
-				// Guidance block
+				// Build Markdown source
+				var md strings.Builder
+				fmt.Fprintf(&md, "## %s\n\n", name)
+				fmt.Fprintf(&md, "%s\n\n", t.Description())
 				if guidance := t.Guidance(); guidance != "" {
-					fmt.Fprintln(out, "**Guidance:**")
+					fmt.Fprintln(&md, "**Guidance:**")
 					for _, line := range strings.Split(strings.TrimSpace(guidance), "\n") {
-						fmt.Fprintf(out, "- %s\n", line)
+						fmt.Fprintf(&md, "- %s\n", line)
 					}
-					fmt.Fprintln(out)
+					fmt.Fprintln(&md)
 				}
-				// Schema code block
-				fmt.Fprintln(out, "**Schema:**")
-				fmt.Fprintln(out, "```yaml")
-				_, _ = out.Write(yamlBytes)
-				fmt.Fprint(out, "```")
+				fmt.Fprintln(&md, "**Schema:**")
+				fmt.Fprintln(&md, "```yaml")
+				md.Write(yamlBytes)
+				fmt.Fprintln(&md, "```")
+				// Render through terminal Markdown renderer
+				sr := mdterminal.NewStreamRenderer(out)
+				_, _ = sr.Write([]byte(md.String()))
+				_ = sr.Flush()
 			}
 			return nil
 		},
