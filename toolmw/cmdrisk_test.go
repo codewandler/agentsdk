@@ -1,6 +1,7 @@
 package toolmw
 
 import (
+	"context"
 	"testing"
 
 	"github.com/codewandler/agentsdk/tool"
@@ -39,37 +40,51 @@ func TestCmdRiskAssessor_ReusesPrecomputed(t *testing.T) {
 	require.Equal(t, "high", assessment.Confidence)
 }
 
-func TestCmdRiskAssessor_FallbackWithoutExtra(t *testing.T) {
+func TestCmdRiskAssessor_OpaqueWithoutAnalyzer(t *testing.T) {
 	assessor := NewCmdRiskAssessor(nil)
 	intent := tool.Intent{
 		Tool:      "bash",
 		ToolClass: "command_execution",
-		// No Extra — no pre-computed assessment.
+		Opaque:    true,
+		// No Extra, no Summary, no analyzer — opaque fallback.
 	}
 
 	assessment, err := assessor.Assess(riskCtx(), intent)
 	require.NoError(t, err)
 	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
-	require.Contains(t, assessment.Decision.Reasons, "opaque_command")
+	require.Contains(t, assessment.Decision.Reasons, "opaque_intent")
 }
 
-func TestCmdRiskAssessor_AcceptsIntent(t *testing.T) {
-	assessor := NewCmdRiskAssessor(nil)
+func TestCmdRiskAssessor_FallbackUsesAnalyzerWithSummary(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
 
-	// With Extra → accepts.
-	require.True(t, assessor.AcceptsIntent(tool.Intent{
-		Extra: &cmdrisk.Assessment{},
-	}))
-
-	// command_execution class → accepts.
-	require.True(t, assessor.AcceptsIntent(tool.Intent{
+	// No Extra, but Summary carries the command string → analyzer runs.
+	intent := tool.Intent{
+		Tool:      "bash",
 		ToolClass: "command_execution",
-	}))
+		Summary:   "ls -la",
+	}
 
-	// Other class → rejects.
-	require.False(t, assessor.AcceptsIntent(tool.Intent{
-		ToolClass: "filesystem_read",
-	}))
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	require.NotContains(t, assessment.Decision.Reasons, "opaque_intent")
+	require.NotEmpty(t, assessment.Confidence)
+}
+
+func TestCmdRiskAssessor_FallbackNoAnalyzerWithSummary(t *testing.T) {
+	// Has Summary but no analyzer → no_analyzer fallback.
+	assessor := NewCmdRiskAssessor(nil)
+	intent := tool.Intent{
+		Tool:      "bash",
+		ToolClass: "command_execution",
+		Summary:   "ls -la",
+	}
+
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
+	require.Contains(t, assessment.Decision.Reasons, "no_analyzer")
 }
 
 func TestCmdRiskAssessor_MapsAllActions(t *testing.T) {
@@ -80,7 +95,7 @@ func TestCmdRiskAssessor_MapsAllActions(t *testing.T) {
 		{cmdrisk.ActionAllow, ActionAllow},
 		{cmdrisk.ActionRequiresApproval, ActionRequiresApproval},
 		{cmdrisk.ActionReject, ActionReject},
-		{cmdrisk.ActionError, ActionReject},
+		{cmdrisk.ActionError, ActionError},
 	}
 
 	assessor := NewCmdRiskAssessor(nil)
@@ -121,8 +136,183 @@ func TestCmdRiskAssessor_WithRealAnalyzer(t *testing.T) {
 		Extra:     &assessment,
 	})
 	require.NoError(t, err)
-	// The action should be one of our valid actions (mapped from cmdrisk).
-	require.Contains(t, []Action{ActionAllow, ActionRequiresApproval, ActionReject}, result.Decision.Action)
-	// Confidence should be mapped from cmdrisk.
+	require.Contains(t, []Action{ActionAllow, ActionRequiresApproval, ActionReject, ActionError}, result.Decision.Action)
 	require.NotEmpty(t, result.Confidence)
 }
+
+func TestCmdRiskAssessor_FallbackReadsContextExtras(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	ctx := riskCtxWithExtras(map[string]any{
+		"cmdrisk.environment":    "ci",
+		"cmdrisk.command_origin": "machine_generated",
+		"cmdrisk.interactive":    false,
+	})
+
+	intent := tool.Intent{
+		Tool:      "bash",
+		ToolClass: "command_execution",
+		Summary:   "echo hello",
+	}
+
+	assessment, err := assessor.Assess(ctx, intent)
+	require.NoError(t, err)
+	require.NotContains(t, assessment.Decision.Reasons, "opaque_intent")
+}
+
+// ── Structured intent (AssessIntent path) ─────────────────────────────────────
+
+func TestCmdRiskAssessor_StructuredIntent_ReadWorkspace(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	intent := tool.Intent{
+		Tool:      "file_read",
+		ToolClass: "filesystem_read",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "file", Value: "/tmp/project/main.go", Locality: "workspace"},
+			Operation: "filesystem_read",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	require.Equal(t, ActionAllow, assessment.Decision.Action)
+	require.NotEmpty(t, assessment.Dimensions, "should have risk dimensions from cmdrisk")
+}
+
+func TestCmdRiskAssessor_StructuredIntent_WriteSystemFile(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	intent := tool.Intent{
+		Tool:      "file_write",
+		ToolClass: "filesystem_write",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "file", Value: "/etc/hosts", Locality: "system"},
+			Operation: "filesystem_write",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	// Writing to /etc/hosts → requires approval (absolute path, outside workspace).
+	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
+	require.NotEmpty(t, assessment.Dimensions)
+}
+
+func TestCmdRiskAssessor_StructuredIntent_PrivilegedAmplifies(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	ctx := riskCtxWithExtras(map[string]any{
+		"cmdrisk.is_privileged": true,
+	})
+
+	intent := tool.Intent{
+		Tool:      "file_write",
+		ToolClass: "filesystem_write",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "file", Value: "/etc/hosts"},
+			Operation: "filesystem_write",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
+	// Should mention privilege in reasons.
+	require.Contains(t, assessment.Decision.Reasons, "context:is_privileged")
+}
+
+func TestCmdRiskAssessor_StructuredIntent_DeleteSecretPath(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	ctx := riskCtxWithExtras(map[string]any{
+		"cmdrisk.secret_path_prefixes": []string{"/home/user/.ssh"},
+	})
+
+	intent := tool.Intent{
+		Tool:      "file_delete",
+		ToolClass: "filesystem_delete",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "file", Value: "/home/user/.ssh/id_rsa"},
+			Operation: "filesystem_delete",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(ctx, intent)
+	require.NoError(t, err)
+	require.NotEqual(t, ActionAllow, assessment.Decision.Action)
+	// Should have elevated data_sensitivity dimension.
+	dimByName := map[string]Dimension{}
+	for _, d := range assessment.Dimensions {
+		dimByName[d.Name] = d
+	}
+	require.Greater(t, dimByName["data_sensitivity"].Severity, 0)
+}
+
+func TestCmdRiskAssessor_StructuredIntent_NetworkFetch(t *testing.T) {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	assessor := NewCmdRiskAssessor(analyzer)
+
+	intent := tool.Intent{
+		Tool:      "web_fetch",
+		ToolClass: "network_access",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "url", Value: "https://example.com/api"},
+			Operation: "network_fetch",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	// Network fetch without trusted source → requires approval.
+	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
+}
+
+func TestCmdRiskAssessor_StructuredIntent_NoAnalyzer_FallsBack(t *testing.T) {
+	// Without analyzer, structured intents get no_analyzer fallback.
+	assessor := NewCmdRiskAssessor(nil)
+
+	intent := tool.Intent{
+		Tool:      "file_read",
+		ToolClass: "filesystem_read",
+		Operations: []tool.IntentOperation{{
+			Resource:  tool.IntentResource{Category: "file", Value: "/tmp/project/main.go"},
+			Operation: "filesystem_read",
+			Certain:   true,
+		}},
+		Confidence: "high",
+	}
+
+	assessment, err := assessor.Assess(riskCtx(), intent)
+	require.NoError(t, err)
+	require.Equal(t, ActionRequiresApproval, assessment.Decision.Action)
+	require.Contains(t, assessment.Decision.Reasons, "no_analyzer")
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func riskCtxWithExtras(extras map[string]any) tool.Ctx {
+	return riskTestCtxWithExtras{riskTestCtx{Context: context.Background()}, extras}
+}
+
+type riskTestCtxWithExtras struct {
+	riskTestCtx
+	extras map[string]any
+}
+
+func (c riskTestCtxWithExtras) Extra() map[string]any { return c.extras }

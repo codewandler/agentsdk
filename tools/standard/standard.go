@@ -15,11 +15,23 @@ import (
 	"github.com/codewandler/agentsdk/tools/vision"
 	"github.com/codewandler/agentsdk/tools/web"
 	"github.com/codewandler/agentsdk/websearch"
+	"github.com/codewandler/cmdrisk"
 )
 
 // Options configures a standard tool bundle.
 type Options struct {
 	WebSearchProvider websearch.Provider
+
+	// RiskAnalyzer is the cmdrisk analyzer used by the bash tool for
+	// command risk assessment. When nil, a default analyzer is created
+	// automatically (cmdrisk.New with default policy — no external deps).
+	// Set to an explicit analyzer to customise the cmdrisk policy.
+	RiskAnalyzer *cmdrisk.Analyzer
+
+	// NoDefaultRiskAnalyzer disables automatic creation of a default
+	// cmdrisk analyzer. When true and RiskAnalyzer is nil, the bash tool
+	// falls back to opaque intent (no command analysis).
+	NoDefaultRiskAnalyzer bool
 
 	IncludeGit            bool
 	IncludeNotify         bool
@@ -82,7 +94,7 @@ func (s *Toolset) ActiveTools() []tool.Tool {
 // Tools returns the common coding-agent tools plus optional extras.
 func Tools(opts Options) []tool.Tool {
 	var out []tool.Tool
-	out = append(out, shell.Tools()...)
+	out = append(out, shell.Tools(shellOpts(opts)...)...)
 	out = append(out, filesystem.Tools()...)
 	out = append(out, web.Tools(opts.WebSearchProvider)...)
 	out = append(out, skills.Tools()...)
@@ -144,4 +156,16 @@ func CatalogTools() []tool.Tool {
 		tools = append(tools, web.SearchTool(nil))
 	}
 	return tools
+}
+
+// shellOpts returns shell.Option values derived from the standard Options.
+func shellOpts(opts Options) []shell.Option {
+	analyzer := opts.RiskAnalyzer
+	if analyzer == nil && !opts.NoDefaultRiskAnalyzer {
+		analyzer = cmdrisk.New(cmdrisk.Config{})
+	}
+	if analyzer == nil {
+		return nil
+	}
+	return []shell.Option{shell.WithRiskAnalyzer(analyzer)}
 }

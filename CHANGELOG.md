@@ -10,6 +10,38 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+### Added
+
+- Added `Behaviors` field to `tool.Intent` for high-level semantic labels
+  (e.g. `filesystem_read`, `network_fetch`) shared with cmdrisk vocabulary.
+- Added `CmdRiskAssessor` in `toolmw` — unified risk assessor that bridges
+  cmdrisk scoring, policy, and allowances into the agentsdk middleware layer.
+  Supports four assessment strategies: pre-computed assessment reuse,
+  structured intent operations, command string parsing, and opaque fallback.
+- Added `buildCmdRiskContext` in both `toolmw` and `tools/shell` to construct
+  `cmdrisk.Context` from `tool.Ctx.Extra()` metadata (environment, trust,
+  allowances, path prefixes) with safe defaults.
+- Added `bashIntent` in `tools/shell` — typed `DeclareIntent` for the bash
+  tool with per-command cmdrisk analysis, worst-case multi-command merging,
+  and pre-computed assessment passthrough via `Intent.Extra`.
+- Added `RiskAnalyzer` and `NoDefaultRiskAnalyzer` options to
+  `tools/standard.Options`. Default tool bundles now automatically create a
+  cmdrisk analyzer; explicit analyzer injection and opt-out are supported.
+- Added comprehensive tests for shell intent declaration, risk context
+  threading, multi-command assessment merging, and standard toolset wiring
+  (`tools/shell/intent_test.go`, `tools/standard/standard_test.go`,
+  `toolmw/cmdrisk_test.go`, `toolmw/riskgate_test.go`).
+
+### Changed
+
+- Reworked `toolmw/cmdrisk.go` from a simple command-string assessor to a
+  multi-strategy intent assessor that handles structured operations, command
+  strings, and pre-computed assessments.
+- Reworked `tools/shell/intent.go` from a minimal stub to a full
+  cmdrisk-integrated intent provider with per-command analysis, assessment
+  merging, and context-aware risk context construction.
+- Updated `tools/vision/vision.go` default model to `anthropic/claude-sonnet-4`.
+
 ## [0.27.1] - 2026-04-28
 
 ### Fixed

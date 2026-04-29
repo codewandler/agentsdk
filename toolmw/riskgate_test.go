@@ -89,6 +89,25 @@ func TestRiskGate_Reject(t *testing.T) {
 	require.Contains(t, res.String(), "deleting system file")
 }
 
+// ── RiskGate: error action ────────────────────────────────────────────────────
+
+func TestRiskGate_ErrorAction(t *testing.T) {
+	base := &riskTestTool{
+		name:   "bash",
+		intent: tool.Intent{Tool: "bash", ToolClass: "command_execution", Confidence: "low"},
+	}
+
+	gate := tool.Apply(base, NewRiskGate(&staticAssessor{
+		assessment: Assessment{Decision: Decision{Action: ActionError, Rationale: "analysis pipeline failed"}},
+	}))
+
+	res, err := gate.Execute(riskCtx(), json.RawMessage(`{}`))
+	require.NoError(t, err) // result, not error
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "assessment error")
+	require.Contains(t, res.String(), "analysis pipeline failed")
+}
+
 // ── RiskGate: requires approval — approved ───────────────────────────────────
 
 func TestRiskGate_RequiresApproval_Approved(t *testing.T) {

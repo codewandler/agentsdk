@@ -34,6 +34,7 @@ const (
 	ActionAllow            Action = "allow"
 	ActionRequiresApproval Action = "requires_approval"
 	ActionReject           Action = "reject"
+	ActionError            Action = "error"
 )
 
 // Dimension is a single scored risk dimension.
@@ -118,6 +119,10 @@ func (m *RiskGate) OnInput(ctx tool.Ctx, inner tool.Tool, input json.RawMessage,
 
 	case ActionReject:
 		return nil, tool.Errorf("[risk gate] rejected: %s",
+			assessment.Decision.Rationale), nil
+
+	case ActionError:
+		return nil, tool.Errorf("[risk gate] assessment error: %s",
 			assessment.Decision.Rationale), nil
 
 	default:

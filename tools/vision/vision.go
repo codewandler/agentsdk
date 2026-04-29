@@ -5,7 +5,7 @@
 //
 // The tool uses an injected [unified.Client] for vision requests, independent
 // of the agent's main conversation client. The plugin layer is responsible for
-// constructing the client (typically OpenRouter with google/gemini-2.5-flash).
+// constructing the client (typically OpenRouter with anthropic/claude-sonnet-4).
 package vision
 
 import (
@@ -25,7 +25,7 @@ import (
 
 const (
 	// DefaultModel is the hardcoded vision model.
-	DefaultModel = "google/gemini-2.5-flash"
+	DefaultModel = "anthropic/claude-sonnet-4"
 
 	// maxFileSize is the maximum file size for local image reads (10 MB).
 	maxFileSize = 10 * 1024 * 1024

@@ -34,6 +34,12 @@ type Intent struct {
 	// Risk assessors should treat opaque intents conservatively.
 	Opaque bool `json:"opaque,omitempty"`
 
+	// Summary is a human-readable description of what this specific call
+	// will do. For command_execution tools this is the shell command string.
+	// Useful for audit logs, approval UIs, and assessors that need the
+	// raw input (e.g. cmdrisk).
+	Summary string `json:"summary,omitempty"`
+
 	// Extra carries tool-specific data that downstream consumers
 	// (assessors, audit) can type-assert. Not serialized to JSON.
 	Extra any `json:"-"`
