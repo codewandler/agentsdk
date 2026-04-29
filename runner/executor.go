@@ -121,19 +121,9 @@ func textFromParts(parts []unified.ContentPart) string {
 	return strings.Join(out, "\n")
 }
 
-type contextToolCtx struct {
-	tool.Ctx
-	context.Context
-}
-
-func (c *contextToolCtx) Deadline() (time.Time, bool) { return c.Context.Deadline() }
-func (c *contextToolCtx) Done() <-chan struct{}       { return c.Context.Done() }
-func (c *contextToolCtx) Err() error                  { return c.Context.Err() }
-func (c *contextToolCtx) Value(key any) any           { return c.Context.Value(key) }
-
 func withContext(base tool.Ctx, ctx context.Context) tool.Ctx {
 	if base == nil {
 		return &basicToolCtx{Context: ctx, extra: map[string]any{}}
 	}
-	return &contextToolCtx{Ctx: base, Context: ctx}
+	return tool.WrapCtx(base, ctx)
 }
