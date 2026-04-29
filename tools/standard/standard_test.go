@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/tools/phone"
 	"github.com/codewandler/cmdrisk"
 	"github.com/stretchr/testify/require"
 )
@@ -189,3 +190,38 @@ func (c testToolCtx) WorkDir() string       { return c.workDir }
 func (c testToolCtx) AgentID() string       { return "test" }
 func (c testToolCtx) SessionID() string     { return "sess" }
 func (c testToolCtx) Extra() map[string]any { return map[string]any{} }
+
+func TestTools_WithPhoneConfig(t *testing.T) {
+	tools := Tools(Options{
+		PhoneConfig: &phone.Config{SIPAddr: "asterisk:5062"},
+	})
+
+	names := map[string]bool{}
+	for _, tt := range tools {
+		names[tt.Name()] = true
+	}
+	require.True(t, names["phone"], "phone tool should be present")
+	require.True(t, names["bash"], "bash tool should still be present")
+}
+
+func TestTools_WithoutPhoneConfig(t *testing.T) {
+	tools := Tools(Options{})
+
+	names := map[string]bool{}
+	for _, tt := range tools {
+		names[tt.Name()] = true
+	}
+	require.False(t, names["phone"], "phone tool should not be present without config")
+}
+
+func TestTools_PhoneConfigEmptyAddr(t *testing.T) {
+	tools := Tools(Options{
+		PhoneConfig: &phone.Config{}, // SIPAddr empty
+	})
+
+	names := map[string]bool{}
+	for _, tt := range tools {
+		names[tt.Name()] = true
+	}
+	require.False(t, names["phone"], "phone tool should not be present with empty SIPAddr")
+}

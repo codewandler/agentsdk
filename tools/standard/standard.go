@@ -7,6 +7,7 @@ import (
 	"github.com/codewandler/agentsdk/tools/filesystem"
 	"github.com/codewandler/agentsdk/tools/git"
 	"github.com/codewandler/agentsdk/tools/notify"
+	"github.com/codewandler/agentsdk/tools/phone"
 	"github.com/codewandler/agentsdk/tools/shell"
 	"github.com/codewandler/agentsdk/tools/skills"
 	"github.com/codewandler/agentsdk/tools/todo"
@@ -39,6 +40,10 @@ type Options struct {
 	IncludeToolManagement bool
 	IncludeTurnDone       bool
 	IncludeVision         bool
+
+	// PhoneConfig configures the phone tool for SIP call origination.
+	// When non-nil and SIPAddr is set, the phone tool is included in the bundle.
+	PhoneConfig *phone.Config
 }
 
 // Toolset groups a standard tool bundle with the activation manager that owns
@@ -115,6 +120,9 @@ func Tools(opts Options) []tool.Tool {
 	}
 	if opts.IncludeVision {
 		out = append(out, vision.Tools(vision.ClientFromEnv())...)
+	}
+	if opts.PhoneConfig != nil {
+		out = append(out, phone.Tools(*opts.PhoneConfig)...)
 	}
 	return out
 }

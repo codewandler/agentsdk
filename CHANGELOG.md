@@ -12,6 +12,14 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- Added `phone` tool (`tools/phone`) for SIP call origination via
+  diago/sipgo. Supports `dial`, `hangup`, and `status` operations using
+  the `oneOf` discriminated-union parameter pattern. Each dial creates an
+  independent SIP user agent so multiple concurrent calls are fully
+  isolated. Includes a `Dialer` interface for testability.
+- Added `PhoneConfig` option to `tools/standard.Options` for wiring the
+  phone tool into standard bundles.
+
 - Added `Behaviors` field to `tool.Intent` for high-level semantic labels
   (e.g. `filesystem_read`, `network_fetch`) shared with cmdrisk vocabulary.
 - Added `CmdRiskAssessor` in `toolmw` — unified risk assessor that bridges
