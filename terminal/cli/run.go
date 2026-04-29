@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,6 +19,8 @@ import (
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
+	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/toolmw"
 	"github.com/codewandler/llmadapter/unified"
 	"gopkg.in/yaml.v3"
 )
@@ -175,6 +178,22 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	if sessionsDir != "" {
 		appOpts = append(appOpts, app.WithAgentSessionStoreDir(sessionsDir))
 	}
+	// Risk gate: log-only mode — observes all tool calls, always approves.
+	riskGate := &toolmw.RiskGate{
+		Assessor: toolmw.NewPolicyAssessor(),
+		Approver: func(_ tool.Ctx, intent tool.Intent, detail any) (bool, error) {
+			a, _ := detail.(toolmw.Assessment)
+			slog.Info("risk gate",
+				"tool", intent.Tool,
+				"class", intent.ToolClass,
+				"action", a.Decision.Action,
+				"rationale", a.Decision.Rationale,
+				"confidence", intent.Confidence,
+			)
+			return true, nil // observe only, always approve
+		},
+	}
+	appOpts = append(appOpts, app.WithToolMiddlewares(tool.HooksMiddleware(riskGate)))
 	appOpts = append(appOpts, cfg.AppOptions...)
 	application, err := app.New(appOpts...)
 	if err != nil {
