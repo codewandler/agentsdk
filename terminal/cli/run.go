@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,7 +19,6 @@ import (
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
 	"github.com/codewandler/agentsdk/tool"
-	"github.com/codewandler/agentsdk/toolmw"
 	"github.com/codewandler/llmadapter/unified"
 	"gopkg.in/yaml.v3"
 )
@@ -179,21 +177,9 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		appOpts = append(appOpts, app.WithAgentSessionStoreDir(sessionsDir))
 	}
 	// Risk gate: log-only mode — observes all tool calls, always approves.
-	riskGate := &toolmw.RiskGate{
-		Assessor: toolmw.NewPolicyAssessor(),
-		Approver: func(_ tool.Ctx, intent tool.Intent, detail any) (bool, error) {
-			a, _ := detail.(toolmw.Assessment)
-			slog.Info("risk gate",
-				"tool", intent.Tool,
-				"class", intent.ToolClass,
-				"action", a.Decision.Action,
-				"rationale", a.Decision.Rationale,
-				"confidence", intent.Confidence,
-			)
-			return true, nil // observe only, always approve
-		},
-	}
-	appOpts = append(appOpts, app.WithToolMiddlewares(tool.HooksMiddleware(riskGate)))
+	appOpts = append(appOpts, app.WithToolMiddlewares(
+		tool.HooksMiddleware(&riskLogMiddleware{out: out}),
+	))
 	appOpts = append(appOpts, cfg.AppOptions...)
 	application, err := app.New(appOpts...)
 	if err != nil {
@@ -332,4 +318,30 @@ func resolveSessionsDir(cfg Config) (string, error) {
 		return "", nil
 	}
 	return filepath.Abs(dir)
+}
+
+// riskLogMiddleware logs intent + risk assessment for every tool call.
+// It always allows execution — observation only.
+type riskLogMiddleware struct {
+	tool.HooksBase
+	out io.Writer
+}
+
+func (m *riskLogMiddleware) OnInput(ctx tool.Ctx, inner tool.Tool, input json.RawMessage, state tool.CallState) (json.RawMessage, tool.Result, error) {
+	intent := tool.ExtractIntent(inner, ctx, input)
+	state["intent"] = intent
+
+	var parts []string
+	parts = append(parts, fmt.Sprintf("tool=%s class=%s confidence=%s", intent.Tool, intent.ToolClass, intent.Confidence))
+	if intent.Opaque {
+		parts = append(parts, "opaque=true")
+	}
+	for _, op := range intent.Operations {
+		parts = append(parts, fmt.Sprintf("  %s %s:%s (%s)", op.Operation, op.Resource.Category, op.Resource.Value, op.Resource.Locality))
+	}
+	for _, b := range intent.Behaviors {
+		parts = append(parts, fmt.Sprintf("  behavior=%s", b))
+	}
+	fmt.Fprintf(m.out, "\n\033[2m[risk] %s\033[0m\n", strings.Join(parts, " | "))
+	return input, nil, nil
 }

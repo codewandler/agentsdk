@@ -4,4 +4,5 @@ tasks:
   install:
     desc: Install the agentsdk binary into GOPATH/bin
     cmds:
-      - go install ./cmd/agentsdk
+      - go install -ldflags="-s -w" ./cmd/agentsdk
+      - echo "installed $(du -h $(go env GOPATH)/bin/agentsdk | cut -f1) → $(go env GOPATH)/bin/agentsdk"
