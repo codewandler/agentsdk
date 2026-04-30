@@ -9,6 +9,23 @@ import (
 // Intent declarations for filesystem tools.
 // Each function returns a TypedToolOption that adds DeclareIntent to the tool.
 
+func dirCreateIntent() tool.TypedToolOption[DirCreateParams] {
+	return tool.WithDeclareIntent(func(ctx tool.Ctx, p DirCreateParams) (tool.Intent, error) {
+		path := resolvePath(p.Path, ctx.WorkDir())
+		return tool.Intent{
+			Tool:       "dir_create",
+			ToolClass:  "filesystem_write",
+			Confidence: "high",
+			Operations: []tool.IntentOperation{{
+				Resource:  tool.IntentResource{Category: "directory", Value: path, Locality: classifyLocality(ctx, path)},
+				Operation: "write",
+				Certain:   true,
+			}},
+			Behaviors: []string{"filesystem_write"},
+		}, nil
+	})
+}
+
 func dirListIntent() tool.TypedToolOption[DirListParams] {
 	return tool.WithDeclareIntent(func(ctx tool.Ctx, p DirListParams) (tool.Intent, error) {
 		path := resolvePath(p.Path, ctx.WorkDir())
@@ -115,6 +132,56 @@ func fileStatIntent() tool.TypedToolOption[FileStatParams] {
 				Certain:   true,
 			}},
 			Behaviors: []string{"filesystem_read"},
+		}, nil
+	})
+}
+
+func fileCopyIntent() tool.TypedToolOption[FileCopyParams] {
+	return tool.WithDeclareIntent(func(ctx tool.Ctx, p FileCopyParams) (tool.Intent, error) {
+		src := resolvePath(p.Src, ctx.WorkDir())
+		dst := resolvePath(p.Dst, ctx.WorkDir())
+		return tool.Intent{
+			Tool:       "file_copy",
+			ToolClass:  "filesystem_write",
+			Confidence: "high",
+			Operations: []tool.IntentOperation{
+				{
+					Resource:  tool.IntentResource{Category: "file", Value: src, Locality: classifyLocality(ctx, src)},
+					Operation: "read",
+					Certain:   true,
+				},
+				{
+					Resource:  tool.IntentResource{Category: "file", Value: dst, Locality: classifyLocality(ctx, dst)},
+					Operation: "write",
+					Certain:   true,
+				},
+			},
+			Behaviors: []string{"filesystem_read", "filesystem_write"},
+		}, nil
+	})
+}
+
+func fileMoveIntent() tool.TypedToolOption[FileMoveParams] {
+	return tool.WithDeclareIntent(func(ctx tool.Ctx, p FileMoveParams) (tool.Intent, error) {
+		src := resolvePath(p.Src, ctx.WorkDir())
+		dst := resolvePath(p.Dst, ctx.WorkDir())
+		return tool.Intent{
+			Tool:       "file_move",
+			ToolClass:  "filesystem_write",
+			Confidence: "high",
+			Operations: []tool.IntentOperation{
+				{
+					Resource:  tool.IntentResource{Category: "file", Value: src, Locality: classifyLocality(ctx, src)},
+					Operation: "delete",
+					Certain:   true,
+				},
+				{
+					Resource:  tool.IntentResource{Category: "file", Value: dst, Locality: classifyLocality(ctx, dst)},
+					Operation: "write",
+					Certain:   true,
+				},
+			},
+			Behaviors: []string{"filesystem_write", "filesystem_delete"},
 		}, nil
 	})
 }

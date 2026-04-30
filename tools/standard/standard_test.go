@@ -27,6 +27,9 @@ func TestToolsIncludesBaseAndOptionals(t *testing.T) {
 	for _, name := range []string{
 		"bash",
 		"file_read",
+		"dir_create",
+		"file_copy",
+		"file_move",
 		"web_fetch",
 		"git_status",
 		"git_add",
@@ -49,6 +52,9 @@ func TestDefaultToolsIncludesToolManagement(t *testing.T) {
 
 	require.True(t, names["bash"])
 	require.True(t, names["file_read"])
+	require.True(t, names["dir_create"])
+	require.True(t, names["file_copy"])
+	require.True(t, names["file_move"])
 	require.True(t, names["web_fetch"])
 	require.True(t, names["git_status"])
 	require.True(t, names["git_diff"])

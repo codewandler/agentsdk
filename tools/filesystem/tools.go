@@ -4,6 +4,7 @@ package filesystem
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,6 +38,11 @@ const (
 )
 
 // ── Parameter types ───────────────────────────────────────────────────────────
+
+type DirCreateParams struct {
+	Path    string `json:"path" jsonschema:"description=Directory path to create,required"`
+	Parents bool   `json:"parents,omitempty" jsonschema:"description=Create parent directories as needed (like mkdir -p)"`
+}
 
 type DirListParams struct {
 	Path       string `json:"path" jsonschema:"description=Directory path to list,required"`
@@ -73,6 +79,19 @@ type FileWriteParams struct {
 	Overwrite bool   `json:"overwrite,omitempty" jsonschema:"description=Overwrite file if it already exists (default false)"`
 }
 
+type FileCopyParams struct {
+	Src       string `json:"src" jsonschema:"description=Source file or directory path,required"`
+	Dst       string `json:"dst" jsonschema:"description=Destination path,required"`
+	Recursive bool   `json:"recursive,omitempty" jsonschema:"description=Copy directories recursively. Required when src is a directory"`
+	Overwrite bool   `json:"overwrite,omitempty" jsonschema:"description=Overwrite destination if it already exists"`
+}
+
+type FileMoveParams struct {
+	Src       string `json:"src" jsonschema:"description=Source file or directory path,required"`
+	Dst       string `json:"dst" jsonschema:"description=Destination path,required"`
+	Overwrite bool   `json:"overwrite,omitempty" jsonschema:"description=Overwrite destination if it already exists"`
+}
+
 type FileStatParams struct {
 	Path string `json:"path" jsonschema:"description=File or directory path to stat,required"`
 }
@@ -102,14 +121,48 @@ func Tools() []tool.Tool {
 	return []tool.Tool{
 		dirList(),
 		dirTree(),
+		dirCreate(),
 		fileRead(),
 		fileWrite(),
 		fileEdit(),
 		fileStat(),
+		fileCopy(),
+		fileMove(),
 		fileDelete(),
 		glob(),
 		grep(),
 	}
+}
+
+// ── dir_create ────────────────────────────────────────────────────────────────
+
+func dirCreate() tool.Tool {
+	return tool.New("dir_create",
+		"Create a directory. Set parents=true to create parent directories as needed.",
+		func(ctx tool.Ctx, p DirCreateParams) (tool.Result, error) {
+			if p.Path == "" {
+				return tool.Error("path cannot be empty"), nil
+			}
+			path := resolvePath(p.Path, ctx.WorkDir())
+			if p.Parents {
+				if err := os.MkdirAll(path, 0755); err != nil {
+					return nil, fmt.Errorf("create directory %s: %w", path, err)
+				}
+				return tool.Textf("Created directory %s", path), nil
+			}
+			if err := os.Mkdir(path, 0755); err != nil {
+				if os.IsExist(err) {
+					return tool.Errorf("directory already exists: %s", path), nil
+				}
+				if os.IsNotExist(err) {
+					return tool.Errorf("parent directory does not exist: %s (use parents=true to create parents)", filepath.Dir(path)), nil
+				}
+				return nil, fmt.Errorf("create directory %s: %w", path, err)
+			}
+			return tool.Textf("Created directory %s", path), nil
+		},
+		dirCreateIntent(),
+	)
 }
 
 // ── dir_list ──────────────────────────────────────────────────────────────────
@@ -621,6 +674,98 @@ func fileStat() tool.Tool {
 	)
 }
 
+// ── file_copy ─────────────────────────────────────────────────────────────────
+
+func fileCopy() tool.Tool {
+	return tool.New("file_copy",
+		"Copy a file or, with recursive=true, a directory. Refuses symlinks and existing destinations unless overwrite=true.",
+		func(ctx tool.Ctx, p FileCopyParams) (tool.Result, error) {
+			if p.Src == "" {
+				return tool.Error("src cannot be empty"), nil
+			}
+			if p.Dst == "" {
+				return tool.Error("dst cannot be empty"), nil
+			}
+			src := resolvePath(p.Src, ctx.WorkDir())
+			dst := resolvePath(p.Dst, ctx.WorkDir())
+			stats, err := prepareCopyMove(src, dst, p.Overwrite)
+			if err != nil {
+				return err, nil
+			}
+			if stats.srcInfo.IsDir() {
+				if !p.Recursive {
+					return tool.Errorf("source is a directory: %s (use recursive=true to copy directories)", src), nil
+				}
+				if isSubpath(src, dst) {
+					return tool.Errorf("refusing to copy directory into itself: %s -> %s", src, dst), nil
+				}
+				if stats.dstExists {
+					if err := removeExistingDestination(dst, stats.dstInfo); err != nil {
+						return err, nil
+					}
+				}
+				counts, err := copyDir(src, dst, stats.srcInfo.Mode().Perm())
+				if err != nil {
+					return nil, err
+				}
+				return tool.Textf("Copied directory %s to %s (%d file(s), %d directories)", src, dst, counts.files, counts.dirs), nil
+			}
+			if stats.dstExists {
+				if err := removeExistingDestination(dst, stats.dstInfo); err != nil {
+					return err, nil
+				}
+			}
+			if err := copyFile(src, dst, stats.srcInfo.Mode().Perm()); err != nil {
+				return nil, err
+			}
+			return tool.Textf("Copied file %s to %s (%s)", src, dst, humanize.Size(stats.srcInfo.Size())), nil
+		},
+		fileCopyIntent(),
+	)
+}
+
+// ── file_move ─────────────────────────────────────────────────────────────────
+
+func fileMove() tool.Tool {
+	return tool.New("file_move",
+		"Move or rename a file or directory. Refuses symlinks and existing destinations unless overwrite=true.",
+		func(ctx tool.Ctx, p FileMoveParams) (tool.Result, error) {
+			if p.Src == "" {
+				return tool.Error("src cannot be empty"), nil
+			}
+			if p.Dst == "" {
+				return tool.Error("dst cannot be empty"), nil
+			}
+			src := resolvePath(p.Src, ctx.WorkDir())
+			dst := resolvePath(p.Dst, ctx.WorkDir())
+			stats, err := prepareCopyMove(src, dst, p.Overwrite)
+			if err != nil {
+				return err, nil
+			}
+			if stats.srcInfo.IsDir() && isSubpath(src, dst) {
+				return tool.Errorf("refusing to move directory into itself: %s -> %s", src, dst), nil
+			}
+			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+				return nil, fmt.Errorf("create destination parent directory: %w", err)
+			}
+			if stats.dstExists {
+				if err := removeExistingDestination(dst, stats.dstInfo); err != nil {
+					return err, nil
+				}
+			}
+			if err := os.Rename(src, dst); err != nil {
+				return nil, fmt.Errorf("move %s to %s: %w", src, dst, err)
+			}
+			kind := "file"
+			if stats.srcInfo.IsDir() {
+				kind = "directory"
+			}
+			return tool.Textf("Moved %s %s to %s", kind, src, dst), nil
+		},
+		fileMoveIntent(),
+	)
+}
+
 // ── file_delete ───────────────────────────────────────────────────────────────
 
 func fileDelete() tool.Tool {
@@ -870,6 +1015,146 @@ func resolvePath(path, workdir string) string {
 		return path
 	}
 	return filepath.Join(workdir, path)
+}
+
+type copyMoveStats struct {
+	srcInfo   os.FileInfo
+	dstInfo   os.FileInfo
+	dstExists bool
+}
+
+type copyCounts struct {
+	files int
+	dirs  int
+}
+
+func prepareCopyMove(src, dst string, overwrite bool) (copyMoveStats, tool.Result) {
+	var stats copyMoveStats
+	if src == dst {
+		return stats, tool.Error("source and destination are the same path")
+	}
+
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return stats, tool.Errorf("source not found: %s", src)
+		}
+		return stats, tool.Errorf("lstat source %s: %v", src, err)
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return stats, tool.Errorf("refusing to copy or move symlink source: %s", src)
+	}
+	stats.srcInfo = srcInfo
+
+	dstInfo, err := os.Lstat(dst)
+	if err == nil {
+		if dstInfo.Mode()&os.ModeSymlink != 0 {
+			return stats, tool.Errorf("refusing to replace symlink destination: %s", dst)
+		}
+		if !overwrite {
+			return stats, tool.Errorf("destination already exists: %s (use overwrite=true to replace)", dst)
+		}
+		stats.dstInfo = dstInfo
+		stats.dstExists = true
+		return stats, nil
+	}
+	if !os.IsNotExist(err) {
+		return stats, tool.Errorf("lstat destination %s: %v", dst, err)
+	}
+	return stats, nil
+}
+
+func removeExistingDestination(path string, info os.FileInfo) tool.Result {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return tool.Errorf("refusing to replace symlink destination: %s", path)
+	}
+	if info.IsDir() {
+		if err := os.RemoveAll(path); err != nil {
+			return tool.Errorf("remove existing destination directory %s: %v", path, err)
+		}
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return tool.Errorf("remove existing destination file %s: %v", path, err)
+	}
+	return nil
+}
+
+func copyFile(src, dst string, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return fmt.Errorf("create destination parent directory: %w", err)
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open source %s: %w", src, err)
+	}
+	defer func() { _ = in.Close() }()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return fmt.Errorf("create destination %s: %w", dst, err)
+	}
+	defer func() { _ = out.Close() }()
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy %s to %s: %w", src, dst, err)
+	}
+	return nil
+}
+
+func copyDir(src, dst string, perm os.FileMode) (copyCounts, error) {
+	counts := copyCounts{dirs: 1}
+	if err := os.MkdirAll(dst, perm); err != nil {
+		return counts, fmt.Errorf("create destination directory %s: %w", dst, err)
+	}
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == src {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to copy symlink: %s", path)
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+				return fmt.Errorf("create directory %s: %w", target, err)
+			}
+			counts.dirs++
+			return nil
+		}
+		if err := copyFile(path, target, info.Mode().Perm()); err != nil {
+			return err
+		}
+		counts.files++
+		return nil
+	})
+	return counts, err
+}
+
+func isSubpath(parent, child string) bool {
+	parentClean, err := filepath.Abs(parent)
+	if err != nil {
+		parentClean = filepath.Clean(parent)
+	}
+	childClean, err := filepath.Abs(child)
+	if err != nil {
+		childClean = filepath.Clean(child)
+	}
+	rel, err := filepath.Rel(parentClean, childClean)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 // expandDirToGlob converts a directory path to a recursive glob pattern.

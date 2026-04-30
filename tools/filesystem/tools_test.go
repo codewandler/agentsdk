@@ -528,3 +528,117 @@ func TestFilesystem_Grep_SingularPath(t *testing.T) {
 }
 
 // ── Phase 2: Fuzzy Matching (AutoCorrect) ─────────────────────────────────────
+
+// ── dir_create / file_copy / file_move ───────────────────────────────────────
+
+func TestFilesystem_DirCreate_CreatesParentsWhenRequested(t *testing.T) {
+	dir := t.TempDir()
+	tl := dirCreate()
+
+	raw, _ := json.Marshal(DirCreateParams{Path: "a/b/c", Parents: true})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.False(t, res.IsError(), res.String())
+	require.DirExists(t, filepath.Join(dir, "a", "b", "c"))
+}
+
+func TestFilesystem_DirCreate_RequiresParentsForNestedPath(t *testing.T) {
+	dir := t.TempDir()
+	tl := dirCreate()
+
+	raw, _ := json.Marshal(DirCreateParams{Path: "a/b"})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "parents=true")
+}
+
+func TestFilesystem_FileCopy_CopiesFileAndRefusesOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "src.txt"), []byte("source"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dst.txt"), []byte("existing"), 0644))
+	tl := fileCopy()
+
+	raw, _ := json.Marshal(FileCopyParams{Src: "src.txt", Dst: "dst.txt"})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "overwrite=true")
+
+	raw, _ = json.Marshal(FileCopyParams{Src: "src.txt", Dst: "dst.txt", Overwrite: true})
+	res, err = tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.False(t, res.IsError(), res.String())
+	data, err := os.ReadFile(filepath.Join(dir, "dst.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "source", string(data))
+}
+
+func TestFilesystem_FileCopy_RecursiveDirectory(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "src", "nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "src", "nested", "file.txt"), []byte("content"), 0644))
+	tl := fileCopy()
+
+	raw, _ := json.Marshal(FileCopyParams{Src: "src", Dst: "dst"})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "recursive=true")
+
+	raw, _ = json.Marshal(FileCopyParams{Src: "src", Dst: "dst", Recursive: true})
+	res, err = tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.False(t, res.IsError(), res.String())
+	data, err := os.ReadFile(filepath.Join(dir, "dst", "nested", "file.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "content", string(data))
+	require.Contains(t, res.String(), "1 file(s)")
+}
+
+func TestFilesystem_FileCopy_RefusesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "target.txt"), []byte("target"), 0644))
+	if err := os.Symlink("target.txt", filepath.Join(dir, "link.txt")); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	tl := fileCopy()
+
+	raw, _ := json.Marshal(FileCopyParams{Src: "link.txt", Dst: "copy.txt"})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "symlink")
+}
+
+func TestFilesystem_FileMove_MovesFileAndOverwritesWhenRequested(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "src.txt"), []byte("source"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dst.txt"), []byte("existing"), 0644))
+	tl := fileMove()
+
+	raw, _ := json.Marshal(FileMoveParams{Src: "src.txt", Dst: "dst.txt"})
+	res, err := tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "overwrite=true")
+
+	raw, _ = json.Marshal(FileMoveParams{Src: "src.txt", Dst: "dst.txt", Overwrite: true})
+	res, err = tl.Execute(ctx(dir), raw)
+	require.NoError(t, err)
+	require.False(t, res.IsError(), res.String())
+	require.NoFileExists(t, filepath.Join(dir, "src.txt"))
+	data, err := os.ReadFile(filepath.Join(dir, "dst.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "source", string(data))
+}
+
+func TestFilesystem_ToolsIncludesCopyMoveCreate(t *testing.T) {
+	names := map[string]bool{}
+	for _, tl := range Tools() {
+		names[tl.Name()] = true
+	}
+	require.True(t, names["dir_create"])
+	require.True(t, names["file_copy"])
+	require.True(t, names["file_move"])
+}

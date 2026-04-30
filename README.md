@@ -381,7 +381,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `thread` | Thread event log, store interface, and memory store |
 | `thread/jsonlstore` | Append-only JSONL thread persistence |
 | `tool` | Tool definitions, schemas, execution contracts, and unified conversion |
-| `tools/filesystem` | File read, write, edit, glob, stat, delete, and directory tools |
+| `tools/filesystem` | File read, write, edit, copy, move, glob, stat, delete, and directory tools |
 | `tools/git` | Git status, diff, add, and commit tools |
 | `tools/notify` | Desktop notification and TTS tools |
 | `tools/shell` | Bash command execution with streaming and timeout |

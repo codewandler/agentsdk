@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions below are backfilled from the repository's implementation milestones. Tags
 match these entries as the project starts publishing releases.
 
+## [0.30.0] - 2026-04-30
+
+### Added
+
+- Added `dir_create`, `file_copy`, and `file_move` filesystem tools for native
+  directory creation plus conservative copy/move operations without shelling out.
+
 ## [0.29.0] - 2026-04-30
 
 ### Added
