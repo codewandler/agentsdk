@@ -382,7 +382,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `thread/jsonlstore` | Append-only JSONL thread persistence |
 | `tool` | Tool definitions, schemas, execution contracts, and unified conversion |
 | `tools/filesystem` | File read, write, edit, glob, stat, delete, and directory tools |
-| `tools/git` | Git status and diff tools |
+| `tools/git` | Git status, diff, add, and commit tools |
 | `tools/notify` | Desktop notification and TTS tools |
 | `tools/shell` | Bash command execution with streaming and timeout |
 | `tools/standard` | Default tool bundle assembly with activation manager |

@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions below are backfilled from the repository's implementation milestones. Tags
 match these entries as the project starts publishing releases.
 
+## [0.29.0] - 2026-04-30
+
+### Added
+
+- Added `git_add` and `git_commit` tools to the git tool bundle and default
+  standard toolset for explicit staging and commit creation without shelling out
+  to `bash`.
+- Added `summary` mode to the git context provider with changed-file, staged,
+  unstaged, and untracked counts.
+- Added `show_lines` support to `dir_tree` so directory exploration can include
+  compact per-file line counts in tree and flat modes.
+- Added a consolidated implementation plan for context-provider and tooling
+  improvements derived from `.agents/reviews/`.
+
+### Changed
+
+- Enabled git tools in the default standard toolset and the `examples/engineer`
+  resource bundle.
+- Improved planner single-plan lifecycle errors and guidance when `create_plan`
+  is called after a plan already exists.
+- Improved `bash` multi-command output with a compact success/failure summary.
+- Improved `file_edit` guidance and `old_string not found` diagnostics.
+
 ## [0.28.0] - 2026-04-30
 
 ### Added
@@ -28,12 +51,6 @@ match these entries as the project starts publishing releases.
   `github.com/codewandler/markdown` v0.41.0 with GFM autolinks, OSC8
   clickable URLs, live table redraws, and Markdown rendering for reasoning
   output.
-- Added `git_add` and `git_commit` tools to the git tool bundle and default
-  standard toolset for explicit staging and commit creation without shelling out
-  to `bash`.
-- Added `summary` mode to the git context provider with changed-file, staged,
-  unstaged, and untracked counts.
-
 - Added `Behaviors` field to `tool.Intent` for high-level semantic labels
   (e.g. `filesystem_read`, `network_fetch`) shared with cmdrisk vocabulary.
 - Added `CmdRiskAssessor` in `toolmw` — unified risk assessor that bridges
