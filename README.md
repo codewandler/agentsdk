@@ -360,6 +360,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `activation` | Reusable tool activation manager with glob-based activate/deactivate |
 | `agent` | Agent resource definitions, model policy, and evidence evaluation |
 | `agentcontext` | Context manager, context providers, render records, and fingerprinting |
+| `agentcontext/contextproviders` | Built-in context providers including environment, git, time, file, command, and project inventory |
 | `agentdir` | Agent directory loading, external resource resolution, and source discovery |
 | `app` | App manifest loading, plugin bundles, and skill wiring |
 | `capabilities/planner` | Built-in planner capability for structured task plans |

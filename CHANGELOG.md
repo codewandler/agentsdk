@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions below are backfilled from the repository's implementation milestones. Tags
 match these entries as the project starts publishing releases.
 
+## [0.32.0] - 2026-04-30
+
+### Added
+
+- Added a project inventory context provider that summarizes repository root,
+  language counts, package-manager files, key directories, test patterns, and
+  entrypoints.
+- Enabled project inventory in the default standard plugin set.
+
 ## [0.31.0] - 2026-04-30
 
 ### Added
