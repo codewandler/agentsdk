@@ -30,6 +30,7 @@ func TestToolsIncludesBaseAndOptionals(t *testing.T) {
 		"dir_create",
 		"file_copy",
 		"file_move",
+		"json_query",
 		"web_fetch",
 		"git_status",
 		"git_add",
@@ -55,6 +56,7 @@ func TestDefaultToolsIncludesToolManagement(t *testing.T) {
 	require.True(t, names["dir_create"])
 	require.True(t, names["file_copy"])
 	require.True(t, names["file_move"])
+	require.True(t, names["json_query"])
 	require.True(t, names["web_fetch"])
 	require.True(t, names["git_status"])
 	require.True(t, names["git_diff"])

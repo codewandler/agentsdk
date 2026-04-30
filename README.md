@@ -383,6 +383,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `tool` | Tool definitions, schemas, execution contracts, and unified conversion |
 | `tools/filesystem` | File read, write, edit, copy, move, glob, stat, delete, and directory tools |
 | `tools/git` | Git status, diff, add, and commit tools |
+| `tools/jsonquery` | JSON file query tool with field, index, and wildcard selectors |
 | `tools/notify` | Desktop notification and TTS tools |
 | `tools/shell` | Bash command execution with streaming and timeout |
 | `tools/standard` | Default tool bundle assembly with activation manager |

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions below are backfilled from the repository's implementation milestones. Tags
 match these entries as the project starts publishing releases.
 
+## [0.31.0] - 2026-04-30
+
+### Added
+
+- Added `json_query` for querying JSON files with jq-like field, index, and
+  wildcard selectors without shelling out to Python or `jq`.
+
 ## [0.30.0] - 2026-04-30
 
 ### Added

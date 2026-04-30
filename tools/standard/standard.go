@@ -6,6 +6,7 @@ import (
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/filesystem"
 	"github.com/codewandler/agentsdk/tools/git"
+	"github.com/codewandler/agentsdk/tools/jsonquery"
 	"github.com/codewandler/agentsdk/tools/notify"
 	"github.com/codewandler/agentsdk/tools/phone"
 	"github.com/codewandler/agentsdk/tools/shell"
@@ -102,6 +103,7 @@ func Tools(opts Options) []tool.Tool {
 	var out []tool.Tool
 	out = append(out, shell.Tools(shellOpts(opts)...)...)
 	out = append(out, filesystem.Tools()...)
+	out = append(out, jsonquery.Tools()...)
 	out = append(out, web.Tools(opts.WebSearchProvider)...)
 	out = append(out, skills.Tools()...)
 	if opts.IncludeGit {
