@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/codewandler/agentsdk/action"
+	"github.com/codewandler/agentsdk/thread"
 )
 
 // ActionRef identifies an action used by a workflow. Resolution is owned by the
@@ -33,6 +34,67 @@ type Result struct {
 	Data        any
 }
 
+const (
+	EventStarted       thread.EventKind = "workflow.started"
+	EventStepStarted   thread.EventKind = "workflow.step_started"
+	EventStepCompleted thread.EventKind = "workflow.step_completed"
+	EventStepFailed    thread.EventKind = "workflow.step_failed"
+	EventCompleted     thread.EventKind = "workflow.completed"
+	EventFailed        thread.EventKind = "workflow.failed"
+)
+
+// EventDefinitions returns persistent thread-event definitions for workflow
+// execution events. Live workflow events use the same concrete payload structs;
+// persistence adapters choose the matching Event* kind when appending to a
+// thread log.
+func EventDefinitions() []thread.EventDefinition {
+	return []thread.EventDefinition{
+		thread.DefineEvent[Started](EventStarted),
+		thread.DefineEvent[StepStarted](EventStepStarted),
+		thread.DefineEvent[StepCompleted](EventStepCompleted),
+		thread.DefineEvent[StepFailed](EventStepFailed),
+		thread.DefineEvent[Completed](EventCompleted),
+		thread.DefineEvent[Failed](EventFailed),
+	}
+}
+
+type Started struct {
+	WorkflowName string `json:"workflow_name"`
+}
+
+type StepStarted struct {
+	WorkflowName string `json:"workflow_name"`
+	StepID       string `json:"step_id"`
+	ActionName   string `json:"action_name"`
+}
+
+type StepCompleted struct {
+	WorkflowName string `json:"workflow_name"`
+	StepID       string `json:"step_id"`
+	ActionName   string `json:"action_name"`
+	Data         any    `json:"data,omitempty"`
+}
+
+type StepFailed struct {
+	WorkflowName string `json:"workflow_name"`
+	StepID       string `json:"step_id"`
+	ActionName   string `json:"action_name"`
+	Error        string `json:"error"`
+}
+
+type Completed struct {
+	WorkflowName string `json:"workflow_name"`
+	Data         any    `json:"data,omitempty"`
+}
+
+type Failed struct {
+	WorkflowName string `json:"workflow_name"`
+	Error        string `json:"error"`
+}
+
+// EventHandler receives concrete workflow event payloads as they occur.
+type EventHandler func(action.Ctx, action.Event)
+
 // Resolver resolves action references at execution time.
 type Resolver interface {
 	ResolveAction(action.Ctx, ActionRef) (action.Action, bool)
@@ -60,35 +122,55 @@ func (r RegistryResolver) ResolveAction(_ action.Ctx, ref ActionRef) (action.Act
 // Executor executes workflows over resolved actions.
 type Executor struct {
 	Resolver Resolver
+	OnEvent  EventHandler
 }
 
 // Execute runs def and returns a workflow result in action.Result.Data. Execution
 // stops at the first failed or unresolved step; partial step results are kept in
 // Result.StepResults.
 func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Result {
+	var events []action.Event
+	emit := func(event action.Event) {
+		events = append(events, event)
+		if e.OnEvent != nil {
+			e.OnEvent(ctx, event)
+		}
+	}
+	fail := func(err error, data any) action.Result {
+		emit(Failed{WorkflowName: def.Name, Error: err.Error()})
+		return action.Result{Data: data, Error: err, Events: events}
+	}
+
 	if e.Resolver == nil {
-		return action.Result{Error: fmt.Errorf("workflow %q has no action resolver", def.Name)}
+		return fail(fmt.Errorf("workflow %q has no action resolver", def.Name), nil)
 	}
 	ordered, err := validateAndOrder(def.Steps)
 	if err != nil {
-		return action.Result{Error: err}
+		return fail(err, nil)
 	}
+	emit(Started{WorkflowName: def.Name})
 	results := make(map[string]action.Result, len(ordered))
 	var last any = input
 	for _, step := range ordered {
 		a, ok := e.Resolver.ResolveAction(ctx, step.Action)
 		if !ok || a == nil {
-			return action.Result{Data: Result{StepResults: results, Data: last}, Error: fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name)}
+			return fail(fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name), Result{StepResults: results, Data: last})
 		}
 		stepInput := stepInput(step, input, results)
+		emit(StepStarted{WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name})
 		res := a.Execute(ctx, stepInput)
 		results[step.ID] = res
+		events = append(events, res.Events...)
 		if res.Error != nil {
-			return action.Result{Data: Result{StepResults: results, Data: last}, Error: fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, res.Error), Events: res.Events}
+			err := fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, res.Error)
+			emit(StepFailed{WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Error: res.Error.Error()})
+			return fail(err, Result{StepResults: results, Data: last})
 		}
 		last = res.Data
+		emit(StepCompleted{WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Data: res.Data})
 	}
-	return action.Result{Data: Result{StepResults: results, Data: last}}
+	emit(Completed{WorkflowName: def.Name, Data: last})
+	return action.Result{Data: Result{StepResults: results, Data: last}, Events: events}
 }
 
 func stepInput(step Step, initial any, results map[string]action.Result) any {

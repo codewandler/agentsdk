@@ -2,10 +2,12 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/codewandler/agentsdk/action"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/stretchr/testify/require"
 )
 
@@ -96,4 +98,83 @@ func TestWorkflowActionExposesDefinition(t *testing.T) {
 	result := wa.Execute(context.Background(), "hi")
 	require.NoError(t, result.Error)
 	require.Equal(t, "hi", result.Data.(Result).Data)
+}
+
+func TestExecutorEmitsWorkflowEvents(t *testing.T) {
+	reg := action.NewRegistry()
+	require.NoError(t, reg.Register(
+		action.New(action.Spec{Name: "upper"}, func(_ action.Ctx, input any) action.Result {
+			return action.Result{Data: "HELLO", Events: []action.Event{"action-event"}}
+		}),
+		action.New(action.Spec{Name: "suffix"}, func(_ action.Ctx, input any) action.Result {
+			return action.Result{Data: input.(string) + "!"}
+		}),
+	))
+	def := Definition{Name: "shout", Steps: []Step{
+		{ID: "upper", Action: ActionRef{Name: "upper"}},
+		{ID: "suffix", Action: ActionRef{Name: "suffix"}, DependsOn: []string{"upper"}},
+	}}
+	var live []action.Event
+	exec := Executor{Resolver: RegistryResolver{Registry: reg}, OnEvent: func(_ action.Ctx, event action.Event) {
+		live = append(live, event)
+	}}
+
+	result := exec.Execute(context.Background(), def, "hello")
+	require.NoError(t, result.Error)
+	require.Equal(t, "HELLO!", result.Data.(Result).Data)
+	require.Len(t, live, 6)
+	require.Equal(t, []thread.EventKind{EventStarted, EventStepStarted, EventStepCompleted, EventStepStarted, EventStepCompleted, EventCompleted}, eventKinds(live))
+	require.Equal(t, "upper", live[1].(StepStarted).StepID)
+	require.Equal(t, "HELLO!", live[5].(Completed).Data)
+	require.Contains(t, result.Events, action.Event("action-event"))
+	require.Contains(t, result.Events, action.Event(Completed{WorkflowName: "shout", Data: "HELLO!"}))
+}
+
+func TestExecutorEmitsFailureEvents(t *testing.T) {
+	boom := errors.New("boom")
+	reg := action.NewRegistry()
+	require.NoError(t, reg.Register(action.New(action.Spec{Name: "fail"}, func(action.Ctx, any) action.Result {
+		return action.Result{Error: boom}
+	})))
+	def := Definition{Name: "failflow", Steps: []Step{{ID: "fail", Action: ActionRef{Name: "fail"}}}}
+	var live []action.Event
+	exec := Executor{Resolver: RegistryResolver{Registry: reg}, OnEvent: func(_ action.Ctx, event action.Event) {
+		live = append(live, event)
+	}}
+
+	result := exec.Execute(context.Background(), def, nil)
+	require.ErrorIs(t, result.Error, boom)
+	require.Equal(t, []thread.EventKind{EventStarted, EventStepStarted, EventStepFailed, EventFailed}, eventKinds(live))
+	require.Equal(t, boom.Error(), live[2].(StepFailed).Error)
+	require.Contains(t, result.Events, action.Event(StepFailed{WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Error: boom.Error()}))
+}
+
+func eventKinds(events []action.Event) []thread.EventKind {
+	out := make([]thread.EventKind, len(events))
+	for i, event := range events {
+		switch event.(type) {
+		case Started:
+			out[i] = EventStarted
+		case StepStarted:
+			out[i] = EventStepStarted
+		case StepCompleted:
+			out[i] = EventStepCompleted
+		case StepFailed:
+			out[i] = EventStepFailed
+		case Completed:
+			out[i] = EventCompleted
+		case Failed:
+			out[i] = EventFailed
+		}
+	}
+	return out
+}
+
+func TestEventDefinitionsValidateConcretePayloads(t *testing.T) {
+	registry, err := thread.NewEventRegistry(EventDefinitions()...)
+	require.NoError(t, err)
+	payload, err := json.Marshal(StepStarted{WorkflowName: "wf", StepID: "step", ActionName: "action"})
+	require.NoError(t, err)
+	require.NoError(t, registry.Validate(thread.Event{Kind: EventStepStarted, Payload: payload}))
+	require.Error(t, registry.Validate(thread.Event{Kind: EventStepStarted, Payload: []byte(`{`)}))
 }

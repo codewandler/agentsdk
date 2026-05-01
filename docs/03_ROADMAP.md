@@ -168,6 +168,9 @@ go run ./cmd/agentsdk discover testdata-or-example-path
 
 Goal: define datasources, workflows, and actions as first-class domain concepts, with a top-level `action` package as the central execution primitive. Actions must be independent of LLMs/tools; tool and command surfaces wrap or trigger actions.
 
+Status: mostly complete for the initial Go-defined model.
+
+Current implementation includes a top-level `action` package, standalone `datasource` package, `workflow` definitions/executor, `action.Ref`, `workflow.ActionRef`, action/tool adapters, datasource/workflow validation, and tests. Remaining Milestone 3 work is mostly refinement: richer datasource schema semantics, broader adapter coverage, and continued migration of legacy tool concepts where useful.
 Current state to reuse:
 
 - `tool.TypedTool` already has typed params, schema generation, execution, result formatting, intent declaration, context, and middleware patterns. Execution, result, intent, context, events, and middleware are action responsibilities currently living near the tool package; JSON schema generation and transcript formatting are tool-surface responsibilities.
@@ -178,8 +181,8 @@ Current state to reuse:
 
 Tasks:
 
-1. Add `workflow` package.
-2. Define domain types:
+1. Add `workflow` package. ✅
+2. Define domain types: ✅ initial Go-defined model exists
 
    ```text
    Datasource
@@ -206,16 +209,16 @@ Tasks:
    Middleware chain
    ```
 
-3. Define datasource as a data boundary accessed by actions, including config schema, record/item schema, provenance, credential/config references, paging/cursor/checkpoint state, and consistency/freshness expectations.
-4. Define how datasources provide or reference standard actions such as `fetch`, `list`, `search`, `sync`, `map`, and `transform`.
-5. Define `action.Action` as the owner of Go-native execution metadata currently mixed into tools: name, description, input/output `action.Type`, intent declaration, `action.Ctx`, `action.Result`, execution function, emitted events, and middleware chain.
-6. Define `action.Type` as the reusable input/output contract value that carries Go `reflect.Type` plus optional `*jsonschema.Schema` metadata, with helper methods for creating values, encoding, decoding, validation, and schema projection added as needed.
-7. Move middleware concepts completely to `action.*`; keep `tool` middleware as aliases/adapters during migration.
-8. Define `tool.Tool` as embedding or wrapping `action.Action`, adding LLM-facing concerns such as guidance, activation, provider/tool-call projection, serializable schema constraints, and transcript rendering.
-9. Decide how `tool.Ctx`, `tool.Result`, and `tool.Intent` alias/adapt to `action.Ctx`, `action.Result`, and action intent for compatibility, while keeping tool JSON serialization/schema constraints as tool-specific projection concerns.
-10. Add adapters: action-to-tool, tool-to-action for legacy tools, command-triggering-action/action-backed-command where useful, keep `command.Tool` for deliberate agent-callable command projection, and define command-result mapping for channel-triggered actions/workflows.
-11. Support Go-defined datasources, workflows, and actions first.
-12. Add tests for model validation, `action.Type` construction/validation, datasource action references, step references, adapters, middleware ordering, and simple pipeline construction.
+3. Define datasource as a data boundary accessed by actions, including config schema, record/item schema, provenance, credential/config references, paging/cursor/checkpoint state, and consistency/freshness expectations. ✅ initial standalone `datasource` package exists
+4. Define how datasources provide or reference standard actions such as `fetch`, `list`, `search`, `sync`, `map`, and `transform`. ✅ via `datasource.Actions` and `action.Ref`
+5. Define `action.Action` as the owner of Go-native execution metadata currently mixed into tools: name, description, input/output `action.Type`, intent declaration, `action.Ctx`, `action.Result`, execution function, emitted events, and middleware chain. ✅
+6. Define `action.Type` as the reusable input/output contract value that carries Go `reflect.Type` plus optional `*jsonschema.Schema` metadata, with helper methods for creating values, encoding, decoding, validation, and schema projection added as needed. ✅ initial implementation exists
+7. Move middleware concepts completely to `action.*`; keep `tool` middleware as aliases/adapters during migration. ✅ action middleware exists; compatibility migration remains incremental
+8. Define `tool.Tool` as embedding or wrapping `action.Action`, adding LLM-facing concerns such as guidance, activation, provider/tool-call projection, serializable schema constraints, and transcript rendering. ✅ via action-backed tool projection
+9. Decide how `tool.Ctx`, `tool.Result`, and `tool.Intent` alias/adapt to `action.Ctx`, `action.Result`, and action intent for compatibility, while keeping tool JSON serialization/schema constraints as tool-specific projection concerns. ✅ initial aliases/adapters exist
+10. Add adapters: action-to-tool, tool-to-action for legacy tools, command-triggering-action/action-backed-command where useful, keep `command.Tool` for deliberate agent-callable command projection, and define command-result mapping for channel-triggered actions/workflows. ✅ command-triggered workflows now exist; further command/action adapters remain future refinements
+11. Support Go-defined datasources, workflows, and actions first. ✅
+12. Add tests for model validation, `action.Type` construction/validation, datasource action references, step references, adapters, middleware ordering, and simple pipeline construction. ✅ initial coverage exists
 
 Acceptance criteria:
 
@@ -236,6 +239,9 @@ go test ./tool/... ./command/...
 
 Goal: make datasources/workflows/actions part of the existing app/plugin model.
 
+Status: complete for the initial app/plugin composition slice.
+
+Current implementation adds app/plugin facets and app-level registries for actions, datasource definitions, and workflow definitions. `app.App` consumes resource-bundle datasource/workflow contributions and plugin-contributed actions/datasources/workflows. `app.App` is currently the composition root/registry host; longer-term harness/session code should own process and execution lifecycle rather than expanding `app.App` into a permanent god object.
 Current state:
 
 - `app.Plugin` facets already contribute commands, agent specs, tools, skill sources, context providers, and middleware.
@@ -243,12 +249,12 @@ Current state:
 
 Tasks:
 
-1. Add plugin facets for datasources/workflows/actions.
-2. Add app-level registries for datasources/workflows/actions.
-3. Register datasource/workflow/action contributions from resource bundles.
-4. Register datasource/workflow/action contributions from plugins.
-5. Add app APIs to list/get datasources/workflows/actions.
-6. Keep existing tool/command/skill behavior unchanged.
+1. Add plugin facets for datasources/workflows/actions. ✅
+2. Add app-level registries for datasources/workflows/actions. ✅
+3. Register datasource/workflow/action contributions from resource bundles. ✅ datasource/workflow resources; action implementations are Go/plugin-defined
+4. Register datasource/workflow/action contributions from plugins. ✅
+5. Add app APIs to list/get datasources/workflows/actions. ✅
+6. Keep existing tool/command/skill behavior unchanged. ✅
 
 Acceptance criteria:
 
@@ -269,6 +275,12 @@ Goal: execute a simple sequential pipeline using `action.Action` while adapting 
 
 Current state to reuse:
 
+Status: partially complete.
+
+Current implementation supports Go-defined sequential workflows over `action.Action`, app-owned workflow execution through `App.ExecuteWorkflow`, workflow-as-action exposure, slash-command workflow triggers through `App.RegisterWorkflowCommand`, and concrete workflow event payload structs returned through `action.Result.Events` plus an optional live event handler. Workflow event definitions are registered in the same `thread.EventDefinition` style used elsewhere so persistence adapters can map concrete payloads into thread events later.
+
+These workflow events are live telemetry shaped for future persistence; they are not yet durable workflow state. Before thread append integration, workflow needs run identity, run/step status, attempt metadata, value references for serializable inputs/outputs, and a projector/materializer that can rebuild `workflow.RunState` from events. Remaining work includes that run-state model, thread append integration, prompt/model-turn actions, richer validation/output contracts, and a concrete dogfood workflow resource that exercises the full path.
+
 - `runtime.Engine` can run model/tool turns and can be wrapped by prompt/model-turn actions.
 - Existing `tool.Tool` values can be adapted to actions during migration, but new workflow code should depend on `action.Action` through `workflow.ActionRef` resolution.
 - Existing `command.Command` values can trigger actions or workflows where appropriate; command parsing and channel-result semantics remain outside `action.Result`.
@@ -278,14 +290,14 @@ Current state to reuse:
 
 Tasks:
 
-1. Implement a minimal workflow executor for sequential pipelines.
-2. Define `workflow.ActionRef` as the graph-level reference to an `action.Action`; workflow owns references/dataflow, action owns execution.
+1. Implement a minimal workflow executor for sequential pipelines. ✅
+2. Define `workflow.ActionRef` as the graph-level reference to an `action.Action`; workflow owns references/dataflow, action owns execution. ✅ aliases `action.Ref`
 3. Support initial action implementations:
 
    - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially;
    - legacy tool adapter action wrapping `tool.Tool` where needed;
-   - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer;
-   - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result;
+   - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer; ✅ initial app helper exists
+   - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result; ✅ initial workflow command adapter exists
    - no-op/transform action for tests.
 
 4. Add a dogfood workflow example for the documentation refinement loop used to evolve these docs:
@@ -302,22 +314,22 @@ Tasks:
 
    This should be documented as a command-triggered workflow where each step is an action and the workflow can be rerun iteratively.
 
-5. Emit workflow/action events to the existing thread event log when a thread is available; emit datasource events for sync/checkpoint state when relevant.
-6. Add per-step input/output passing.
-7. Add basic output validation.
+5. Emit workflow/action events to the existing thread event log when a thread is available; emit datasource events for sync/checkpoint state when relevant. Concrete workflow event payloads and `thread.EventDefinition`s exist; workflow run state/projector and thread append integration remain future work.
+6. Add per-step input/output passing. ✅ initial dependency-output passing exists
+7. Add basic output validation. Not started
 8. Defer parallel DAG execution until sequential pipeline semantics are proven.
 
 Acceptance criteria:
 
-- A Go-defined pipeline can execute end-to-end.
-- Workflow steps use `workflow.ActionRef` resolved to `action.Action`.
-- Output from one step can feed the next.
-- A prompt/model-turn can run as an action.
-- A workflow can be exposed as an action.
-- A command can trigger the documentation refinement workflow as a concrete dogfood example.
+- A Go-defined pipeline can execute end-to-end. ✅
+- Workflow steps use `workflow.ActionRef` resolved to `action.Action`. ✅
+- Output from one step can feed the next. ✅
+- A prompt/model-turn can run as an action. Not started
+- A workflow can be exposed as an action. ✅
+- A command can trigger a workflow through `app.App`; the documentation refinement dogfood workflow remains to be added.
 - Action intent can be inspected before execution, including actions exposed as tools.
-- Execution is observable through events.
-- Thread-backed runs can persist workflow events.
+- Execution is observable through events. ✅ initial in-memory workflow events exist
+- Thread-backed runs can persist workflow events. Not started; requires run identity and state projection first
 
 Verification:
 

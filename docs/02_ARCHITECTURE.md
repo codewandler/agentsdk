@@ -235,17 +235,17 @@ Current strengths:
 
 - `agentdir` resolves `.agents`, compatibility roots, app manifests, global/user resources, local roots, embedded/FS roots, and declarative git sources.
 - `resource.ContributionBundle` normalizes discovered contributions.
-- `app.App` composes bundles, plugins, commands, tools, skill sources, context providers, middleware, and agent specs.
-- `app.Plugin` already has facets for commands, agent specs, tools, skill sources, context providers, agent-context providers, and tool middleware.
+- `app.App` composes bundles, plugins, commands, tools, skill sources, context providers, middleware, agent specs, actions, datasource definitions, and workflow definitions.
+- `app.Plugin` has facets for commands, agent specs, tools, skill sources, context providers, agent-context providers, tool middleware, actions, datasources, and workflows.
 - App manifests already declare default agent, discovery policy, model policy, and sources.
 
 Evolution:
 
-- Extend `agentdir` to discover `.agents/datasources/*.yaml` and `.agents/workflows/*.yaml`.
-- Extend `resource.ContributionBundle` with datasource/workflow/action contributions.
-- Extend `app.Plugin` with datasource/workflow/action facets.
-- Let `app.App` register datasources/workflows/actions the same way it registers commands/tools/skills today.
-- Let harness build on `app.App` instead of bypassing it.
+- `agentdir` discovers `.agents/datasources/*.yaml` and `.agents/workflows/*.yaml`.
+- `resource.ContributionBundle` includes datasource and workflow contributions.
+- `app.Plugin` includes datasource/workflow/action facets.
+- `app.App` registers datasources/workflows/actions the same way it registers commands/tools/skills today.
+- `app.App` currently exposes workflow execution and workflow-command helpers as pragmatic integration seams; long-term harness/session code should own process, channel, and execution lifecycle while reusing app composition instead of bypassing it.
 
 ### Terminal as current channel
 
@@ -502,9 +502,9 @@ Exact interface names should be decided when the workflow package is implemented
 
 ### Persistence
 
-Workflow runs should emit thread events using the existing event registry pattern.
+Workflow execution should emit concrete events. Harness/session adapters should persist only the subset needed for replay, resumability, audit, context reconstruction, or user-visible history using the existing thread event registry pattern.
 
-Potential event kinds:
+Potential persistent event kinds:
 
 ```text
 workflow.started
@@ -518,6 +518,12 @@ action.decision_recorded
 action.result_recorded
 ```
 
+Persistence should be driven by statefulness and timescale, not by package boundaries. Do not persist every short-lived command/action event by default: commands are usually invocation surfaces, actions are usually operation-scale execution, workflows are run-scale state, datasources may have sync/checkpoint-scale state, and capabilities may have session-scale state.
+
+The initial workflow event model should follow the same persistent-event style as the rest of the codebase: concrete payload structs registered through `thread.EventDefinition`, not a single discriminator-bearing payload struct. Live workflow execution may pass those same concrete payload structs through `action.Result.Events` or an event handler; a persistence adapter can later choose the corresponding `thread.EventKind` when appending to a thread.
+
+However, live workflow events are not yet durable workflow state. They are telemetry payloads shaped to be compatible with future persistence. A durable workflow system still needs explicit run identity, run/step status, attempt metadata, value references for serializable inputs/outputs, and a projector/materializer that can rebuild `workflow.RunState` from events. Thread persistence should come after that state model exists.
+
 Do not create a separate workflow database until thread events prove insufficient.
 
 ### Runtime relationship
@@ -528,8 +534,9 @@ Workflow belongs to the broader runtime system, but not inside the low-level mod
 runner.RunTurn         = one model/tool loop; can be used by a prompt/model action
 runtime.Engine         = high-level turn engine over history/thread/context
 workflow.Executor      = DAG/pipeline orchestration over workflow.ActionRef -> action.Action
-workflow.Action        = adapter exposing a workflow run as action.Action
-harness.Service        = hosts apps, sessions, workflows, channels, triggers
+workflow.WorkflowAction = adapter exposing a workflow run as action.Action
+app.App               = current composition root and registry host; exposes transitional workflow execution helpers
+harness.Service        = future host for apps, sessions, workflows, channels, triggers
 ```
 
 A prompt or model turn is also an action when treated as an executable unit: it has input, output, context, policy, and result semantics. The fact that it calls an LLM is an implementation detail of that action implementation, not a reason to make workflows depend directly on LLM concepts.
@@ -645,9 +652,9 @@ Recommendation: evolve in place. Add missing seams, then move code behind those 
 
 ### Harness vs app.App
 
-`app.App` already composes agents, resources, commands, plugins, tools, and skill sources. A harness should not duplicate this.
+`app.App` already composes agents, resources, commands, plugins, tools, skill sources, actions, datasources, and workflows. It is currently best understood as the composition root / registry host plus a lightweight compatibility facade, not the final process runtime.
 
-Recommendation: harness hosts `app.App` first. Later, if `app.App` becomes too session-oriented or not session-oriented enough, split responsibilities deliberately.
+Recommendation: harness hosts `app.App` first and reuses its registries. Lifecycle-heavy responsibilities such as multi-session management, channel routing, trigger dispatch, and durable workflow execution should move to harness/session APIs over time. Keep `app.App` from becoming a permanent god object by splitting responsibilities deliberately when harness lands.
 
 ### Workflow as new system vs extension of resources/plugins/thread
 
