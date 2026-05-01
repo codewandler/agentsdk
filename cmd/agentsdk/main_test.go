@@ -39,6 +39,8 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "---\nname: main\ndescription: Main agent\n---\nmain")
 	writeTestFile(t, filepath.Join(dir, ".agents", "commands", "review.md"), "---\ndescription: Review command\n---\nreview")
 	writeTestFile(t, filepath.Join(dir, ".agents", "skills", "go", "SKILL.md"), "---\nname: go\ndescription: Go skill\n---\n# Go")
+	writeTestFile(t, filepath.Join(dir, ".agents", "datasources", "docs.yaml"), "name: docs\ndescription: Documentation corpus\nkind: corpus\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "workflows", "sync-docs.yaml"), "name: sync_docs\ndescription: Sync documentation\n")
 	writeTestFile(t, filepath.Join(dir, "Makefile"), "test:\n\tgo test ./...\n")
 
 	cmd := rootCmd()
@@ -58,6 +60,12 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	require.Contains(t, text, "Skills:")
 	require.Contains(t, text, "go")
 	require.Contains(t, text, "Go skill")
+	require.Contains(t, text, "Datasources:")
+	require.Contains(t, text, "docs")
+	require.Contains(t, text, "Documentation corpus")
+	require.Contains(t, text, "Workflows:")
+	require.Contains(t, text, "sync_docs")
+	require.Contains(t, text, "Sync documentation")
 	require.Contains(t, text, "Disabled suggestions:")
 	require.Contains(t, text, "Makefile")
 }

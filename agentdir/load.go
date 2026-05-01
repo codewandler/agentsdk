@@ -16,6 +16,7 @@ import (
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/llmadapter/unified"
+	"gopkg.in/yaml.v3"
 )
 
 type AgentFrontmatter struct {
@@ -201,6 +202,26 @@ func LoadFSWithSource(fsys fs.FS, root string, source resource.SourceRef) (resou
 		}
 		out.AgentSpecs = append(out.AgentSpecs, loaded.Specs...)
 		out.Skills = append(out.Skills, loaded.Skills...)
+	}
+	for _, dir := range []string{
+		path.Join(root, ".agents", "datasources"),
+		path.Join(root, "datasources"),
+	} {
+		datasources, err := loadDataSourceContributions(fsys, dir, source)
+		if err != nil {
+			return resource.ContributionBundle{}, err
+		}
+		out.DataSources = append(out.DataSources, datasources...)
+	}
+	for _, dir := range []string{
+		path.Join(root, ".agents", "workflows"),
+		path.Join(root, "workflows"),
+	} {
+		workflows, err := loadWorkflowContributions(fsys, dir, source)
+		if err != nil {
+			return resource.ContributionBundle{}, err
+		}
+		out.Workflows = append(out.Workflows, workflows...)
 	}
 	for order, dir := range []string{
 		path.Join(root, ".agents", "skills"),
@@ -474,4 +495,111 @@ func qualifiedResourcePath(source resource.SourceRef, file string) string {
 		return file
 	}
 	return path.Join(sourcePath, file)
+}
+
+type dataSourceResourceFile struct {
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description"`
+	Kind        string         `yaml:"kind"`
+	Type        string         `yaml:"type"`
+	Config      map[string]any `yaml:"config"`
+	Metadata    map[string]any `yaml:"metadata"`
+}
+
+type workflowResourceFile struct {
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description"`
+	Metadata    map[string]any `yaml:"metadata"`
+}
+
+func loadDataSourceContributions(fsys fs.FS, dir string, source resource.SourceRef) ([]resource.DataSourceContribution, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []resource.DataSourceContribution
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+			continue
+		}
+		file := path.Join(dir, entry.Name())
+		data, err := fs.ReadFile(fsys, file)
+		if err != nil {
+			return nil, fmt.Errorf("read datasource %q: %w", file, err)
+		}
+		var spec dataSourceResourceFile
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return nil, fmt.Errorf("parse datasource %q: %w", file, err)
+		}
+		name := strings.TrimSpace(spec.Name)
+		if name == "" {
+			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		}
+		kind := strings.TrimSpace(spec.Kind)
+		if kind == "" {
+			kind = strings.TrimSpace(spec.Type)
+		}
+		out = append(out, resource.DataSourceContribution{
+			ID:          resource.QualifiedID(source, "datasource", name, qualifiedResourcePath(source, file)),
+			Name:        name,
+			Description: strings.TrimSpace(spec.Description),
+			Kind:        kind,
+			Source:      source,
+			Path:        file,
+			Config:      spec.Config,
+			Metadata:    spec.Metadata,
+		})
+	}
+	return out, nil
+}
+
+func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef) ([]resource.WorkflowContribution, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []resource.WorkflowContribution
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+			continue
+		}
+		file := path.Join(dir, entry.Name())
+		data, err := fs.ReadFile(fsys, file)
+		if err != nil {
+			return nil, fmt.Errorf("read workflow %q: %w", file, err)
+		}
+		var spec workflowResourceFile
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return nil, fmt.Errorf("parse workflow %q: %w", file, err)
+		}
+		var definition map[string]any
+		if err := yaml.Unmarshal(data, &definition); err != nil {
+			return nil, fmt.Errorf("parse workflow definition %q: %w", file, err)
+		}
+		name := strings.TrimSpace(spec.Name)
+		if name == "" {
+			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		}
+		out = append(out, resource.WorkflowContribution{
+			ID:          resource.QualifiedID(source, "workflow", name, qualifiedResourcePath(source, file)),
+			Name:        name,
+			Description: strings.TrimSpace(spec.Description),
+			Source:      source,
+			Path:        file,
+			Metadata:    spec.Metadata,
+			Definition:  definition,
+		})
+	}
+	return out, nil
+}
+
+func isYAMLFile(name string) bool {
+	ext := strings.ToLower(path.Ext(name))
+	return ext == ".yaml" || ext == ".yml"
 }

@@ -12,6 +12,9 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- Added declarative datasource and workflow resource discovery for
+  `.agents/datasources/*.yaml` and `.agents/workflows/*.yaml`, including
+  `agentsdk discover` output.
 - Promoted the engineer dogfood agent to `apps/engineer` and reserved
   `apps/builder` for the planned `agentsdk build` app.
 

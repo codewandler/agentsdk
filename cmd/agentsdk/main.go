@@ -72,10 +72,10 @@ func toolCmd() *cobra.Command {
 
 func toolSchemaCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "schema [path] [name]",
-		Short: "Print tool JSON schemas as YAML",
-		Long:  "Print the JSON schema of every registered tool as YAML.\nOptionally filter to a single tool by name.\npath defaults to the current directory.",
-		Args:  cobra.MaximumNArgs(2),
+		Use:           "schema [path] [name]",
+		Short:         "Print tool JSON schemas as YAML",
+		Long:          "Print the JSON schema of every registered tool as YAML.\nOptionally filter to a single tool by name.\npath defaults to the current directory.",
+		Args:          cobra.MaximumNArgs(2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -445,6 +445,8 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 	for _, skill := range skills {
 		fmt.Fprintf(out, "  %s  %s  %s\n", skill.Name, displayDescription(skill.Description), skill.ID)
 	}
+	printDiscoveryDataSources(out, resolved.Bundle.DataSources)
+	printDiscoveryWorkflows(out, resolved.Bundle.Workflows)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Skill sources:")
 	skillSources := imported.SkillSources()
@@ -477,6 +479,34 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 		fmt.Fprintf(out, "  %s  %s  %s\n", diag.Severity, diag.Source.Label(), diag.Message)
 	}
 	return nil
+}
+
+func printDiscoveryDataSources(out discoveryWriter, datasources []resource.DataSourceContribution) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Datasources:")
+	if len(datasources) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, datasource := range datasources {
+		kind := datasource.Kind
+		if kind == "" {
+			kind = "unknown"
+		}
+		fmt.Fprintf(out, "  %s  %s  kind=%s  %s\n", datasource.Name, displayDescription(datasource.Description), kind, datasource.ID)
+	}
+}
+
+func printDiscoveryWorkflows(out discoveryWriter, workflows []resource.WorkflowContribution) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Workflows:")
+	if len(workflows) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, workflow := range workflows {
+		fmt.Fprintf(out, "  %s  %s  %s\n", workflow.Name, displayDescription(workflow.Description), workflow.ID)
+	}
 }
 
 func printModelEvaluations(out discoveryWriter, model string, evidenceErr error, evaluations []compatibility.Evaluation) error {

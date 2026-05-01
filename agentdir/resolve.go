@@ -329,6 +329,8 @@ func bundleHasResources(bundle resource.ContributionBundle) bool {
 		len(bundle.Commands) > 0 ||
 		len(bundle.Skills) > 0 ||
 		len(bundle.SkillSources) > 0 ||
+		len(bundle.DataSources) > 0 ||
+		len(bundle.Workflows) > 0 ||
 		len(bundle.Tools) > 0 ||
 		len(bundle.Hooks) > 0 ||
 		len(bundle.Permissions) > 0 ||

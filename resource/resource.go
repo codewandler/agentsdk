@@ -109,6 +109,27 @@ type SkillContribution struct {
 	Metadata    skill.SkillMetadata
 }
 
+type DataSourceContribution struct {
+	ID          string
+	Name        string
+	Description string
+	Kind        string
+	Source      SourceRef
+	Path        string
+	Config      map[string]any
+	Metadata    map[string]any
+}
+
+type WorkflowContribution struct {
+	ID          string
+	Name        string
+	Description string
+	Source      SourceRef
+	Path        string
+	Metadata    map[string]any
+	Definition  map[string]any
+}
+
 type HookContribution struct {
 	ID       string
 	Name     string
@@ -131,6 +152,8 @@ type ContributionBundle struct {
 	Commands     []command.Command
 	Skills       []SkillContribution
 	SkillSources []skill.Source
+	DataSources  []DataSourceContribution
+	Workflows    []WorkflowContribution
 	Tools        []ToolContribution
 	Hooks        []HookContribution
 	Permissions  []Permission
@@ -145,6 +168,8 @@ func (b *ContributionBundle) Append(other ContributionBundle) {
 	b.Commands = append(b.Commands, other.Commands...)
 	b.Skills = append(b.Skills, other.Skills...)
 	b.SkillSources = append(b.SkillSources, other.SkillSources...)
+	b.DataSources = append(b.DataSources, other.DataSources...)
+	b.Workflows = append(b.Workflows, other.Workflows...)
 	b.Tools = append(b.Tools, other.Tools...)
 	b.Hooks = append(b.Hooks, other.Hooks...)
 	b.Permissions = append(b.Permissions, other.Permissions...)

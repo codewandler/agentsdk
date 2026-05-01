@@ -123,28 +123,32 @@ go run ./cmd/agentsdk run apps/engineer --help
 
 ## Milestone 2 — Extend resource discovery for datasources and workflows
 
+Status: complete.
+
 Goal: introduce datasource and workflow specs through the existing resource pipeline.
 
 Current state:
 
-- `agentdir` loads agents, commands, and skills from `.agents`, compatibility roots, and plugin roots.
+- `agentdir` loads agents, commands, skills, datasource specs, and workflow specs from `.agents`, compatibility roots, and plugin roots.
 - `resource.ContributionBundle` normalizes discovered contributions.
-- `app.App` consumes contribution bundles.
+- `agentsdk discover` reports datasource and workflow resources.
+- Datasource/workflow loading is declarative-only; execution remains later work.
+- `app.App` consumes current runnable contribution types; datasource/workflow app registries are added in Milestone 4.
 
 Tasks:
 
-1. Add datasource and workflow resource representations to `resource.ContributionBundle`.
-2. Add datasource/workflow metadata and source provenance similar to skills/commands.
-3. Extend `agentdir` to discover:
+1. Add datasource and workflow resource representations to `resource.ContributionBundle`. ✅
+2. Add datasource/workflow metadata and source provenance similar to skills/commands. ✅
+3. Extend `agentdir` to discover: ✅
 
    ```text
    .agents/datasources/*.yaml
    .agents/workflows/*.yaml
    ```
 
-4. Keep datasource/workflow loading declarative-only at first; do not require execution.
-5. Update `agentsdk discover` to show discovered datasource and workflow resources.
-6. Update `docs/RESOURCES.md` with the chosen datasource/workflow resource conventions and note whether they are agentsdk-specific.
+4. Keep datasource/workflow loading declarative-only at first; do not require execution. ✅
+5. Update `agentsdk discover` to show discovered datasource and workflow resources. ✅
+6. Update `docs/RESOURCES.md` with the chosen datasource/workflow resource conventions and note whether they are agentsdk-specific. ✅
 
 Acceptance criteria:
 
@@ -658,13 +662,12 @@ go test ./...
 
 The next practical sequence should be:
 
-1. extend resource discovery for datasources and workflows;
-2. finish the datasource/workflow/action core model;
-3. extend app/plugin composition;
-4. add minimal workflow executor integrations;
-5. introduce harness as wrapper over existing app/agent flow;
-6. migrate terminal onto harness;
-7. validate with an anonymized support-assistant case study;
-8. only then perform larger dependency cleanup.
+1. finish the datasource/workflow/action core model;
+2. extend app/plugin composition;
+3. add minimal workflow executor integrations;
+4. introduce harness as wrapper over existing app/agent flow;
+5. migrate terminal onto harness;
+6. validate with an anonymized support-assistant case study;
+7. only then perform larger dependency cleanup.
 
 This keeps the architecture grounded in working code while moving toward the product vision.

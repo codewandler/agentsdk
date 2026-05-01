@@ -99,6 +99,57 @@ supported source APIs; explicit source APIs restrict both selection and runtime
 routing. Relative `evidence_path` values are resolved relative to the manifest
 directory.
 
+## Agentsdk Native Datasource and Workflow Resources
+
+Agentsdk discovers datasource and workflow YAML resources from native `.agents`
+layouts:
+
+```text
+.agents/datasources/*.yaml
+.agents/workflows/*.yaml
+```
+
+When a manifest source points directly at a resource root such as `.agents`, the
+same resources are loaded from the corresponding plugin-root layout:
+
+```text
+datasources/*.yaml
+workflows/*.yaml
+```
+
+These datasource and workflow YAML files are agentsdk-specific discovery
+resources. They are deliberately declarative-only at first: `agentsdk discover`
+loads and reports their name, description, kind/source metadata, and provenance,
+but workflow execution and datasource runtime behavior are wired in later
+milestones through the action/workflow/app registries.
+
+Initial datasource metadata keys:
+
+```yaml
+name: docs
+description: Documentation corpus
+kind: corpus
+config:
+  path: docs
+metadata:
+  owner: example
+```
+
+`kind` may also be written as `type` for compatibility with common YAML naming.
+
+Initial workflow metadata keys:
+
+```yaml
+name: sync_docs
+description: Sync documentation
+steps:
+  - id: fetch
+    action: docs.fetch
+```
+
+The loader preserves the full workflow YAML mapping as a declarative definition
+for future validation/execution layers.
+
 ## Project Instructions
 
 - AGENTS.md: https://agents.md/

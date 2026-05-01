@@ -33,6 +33,12 @@ You are a coder.`),
 		".agents/skills/coder/SKILL.md": {
 			Data: []byte("---\nname: coder\ndescription: Coder skill\n---\n# Coder"),
 		},
+		".agents/datasources/docs.yaml": {
+			Data: []byte("name: docs\ndescription: Documentation corpus\nkind: corpus\nconfig:\n  path: docs\n"),
+		},
+		".agents/workflows/sync-docs.yaml": {
+			Data: []byte("name: sync_docs\ndescription: Sync documentation\nsteps:\n  - id: fetch\n    action: docs.fetch\n"),
+		},
 	}
 
 	bundle, err := LoadFS(fsys, ".")
@@ -54,6 +60,15 @@ You are a coder.`),
 	require.Equal(t, []string{".agents/agents/AGENTS.md", ".agents/AGENTS.md", "AGENTS.md"}, bundle.AgentSpecs[0].InstructionPaths)
 	require.Equal(t, "coder", bundle.Skills[0].Name)
 	require.Equal(t, "Coder skill", bundle.Skills[0].Description)
+	require.Len(t, bundle.DataSources, 1)
+	require.Equal(t, "docs", bundle.DataSources[0].Name)
+	require.Equal(t, "Documentation corpus", bundle.DataSources[0].Description)
+	require.Equal(t, "corpus", bundle.DataSources[0].Kind)
+	require.Equal(t, "agents:embedded:docs#.agents/datasources/docs.yaml", bundle.DataSources[0].ID)
+	require.Len(t, bundle.Workflows, 1)
+	require.Equal(t, "sync_docs", bundle.Workflows[0].Name)
+	require.Equal(t, "Sync documentation", bundle.Workflows[0].Description)
+	require.Equal(t, "agents:embedded:sync_docs#.agents/workflows/sync-docs.yaml", bundle.Workflows[0].ID)
 }
 
 func TestLoadFSAcceptsClaudeStringToolList(t *testing.T) {
