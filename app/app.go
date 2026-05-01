@@ -10,56 +10,66 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/datasource"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/agentsdk/usage"
+	"github.com/codewandler/agentsdk/workflow"
 )
 
 // App is the user-facing composition root. It owns command dispatch and one or
 // more running agent instances.
 type App struct {
-	out                 io.Writer
-	commands            *command.Registry
-	agents              map[string]*agent.Instance
-	specs               map[string]agent.Spec
-	specCommands        map[string][]string
-	protected           map[string]bool
-	diagnostics         []resource.Diagnostic
-	defaultAgent        string
+	out                   io.Writer
+	commands              *command.Registry
+	agents                map[string]*agent.Instance
+	specs                 map[string]agent.Spec
+	specCommands          map[string][]string
+	protected             map[string]bool
+	diagnostics           []resource.Diagnostic
+	defaultAgent          string
 	plugins               map[string]Plugin
-	toolMiddlewarePlugins  []ToolMiddlewarePlugin
-	toolTargetedMwPlugins  []ToolTargetedMiddlewarePlugin
-	toolMwApplied          bool
-	contextProviders       []agentcontext.Provider
-	agentContextPlugins    []AgentContextPlugin
-	skillSources        []skill.Source
-	agentOptions        []agent.Option
-	tools               *tool.Catalog
-	defaultTools        []tool.Tool
-	turnID              int
+	toolMiddlewarePlugins []ToolMiddlewarePlugin
+	toolTargetedMwPlugins []ToolTargetedMiddlewarePlugin
+	toolMwApplied         bool
+	contextProviders      []agentcontext.Provider
+	agentContextPlugins   []AgentContextPlugin
+	skillSources          []skill.Source
+	agentOptions          []agent.Option
+	actions               *action.Registry
+	datasources           *datasource.Registry
+	workflows             map[string]workflow.Definition
+	workflowOrder         []string
+	tools                 *tool.Catalog
+	defaultTools          []tool.Tool
+	turnID                int
 }
 
 type Option func(*config)
 
 type config struct {
-	out              io.Writer
-	commands         []command.Command
-	agents           map[string]*agent.Instance
-	specs            []agent.Spec
-	defaultAgent     string
-	plugins          []Plugin
-	bundles          []resource.ContributionBundle
-	skillSources     []skill.Source
-	discoveries      []SkillSourceDiscovery
-	agentOptions     []agent.Option
-	tools            []tool.Tool
-	noBuiltins       bool
-	toolMiddlewares  []tool.Middleware
+	out             io.Writer
+	commands        []command.Command
+	agents          map[string]*agent.Instance
+	specs           []agent.Spec
+	defaultAgent    string
+	plugins         []Plugin
+	bundles         []resource.ContributionBundle
+	skillSources    []skill.Source
+	discoveries     []SkillSourceDiscovery
+	agentOptions    []agent.Option
+	actions         []action.Action
+	datasources     []datasource.Definition
+	workflows       []workflow.Definition
+	tools           []tool.Tool
+	noBuiltins      bool
+	toolMiddlewares []tool.Middleware
 }
 
 func New(opts ...Option) (*App, error) {
@@ -90,6 +100,9 @@ func New(opts ...Option) (*App, error) {
 		plugins:      map[string]Plugin{},
 		skillSources: discoveredSources,
 		agentOptions: append([]agent.Option(nil), cfg.agentOptions...),
+		actions:      action.NewRegistry(),
+		datasources:  datasource.NewRegistry(),
+		workflows:    map[string]workflow.Definition{},
 	}
 	defaultTools := standard.DefaultTools()
 	defaultTools = append(defaultTools, cfg.tools...)
@@ -131,6 +144,15 @@ func New(opts ...Option) (*App, error) {
 		if err := a.RegisterCommands(cfg.commands...); err != nil {
 			return nil, err
 		}
+	}
+	if err := a.RegisterActions(cfg.actions...); err != nil {
+		return nil, err
+	}
+	if err := a.RegisterDataSources(cfg.datasources...); err != nil {
+		return nil, err
+	}
+	if err := a.RegisterWorkflows(cfg.workflows...); err != nil {
+		return nil, err
 	}
 	for _, spec := range cfg.specs {
 		if err := a.RegisterAgentSpec(spec); err != nil {
@@ -227,6 +249,18 @@ func WithTools(tools ...tool.Tool) Option {
 	return func(c *config) { c.tools = append(c.tools, tools...) }
 }
 
+func WithActions(actions ...action.Action) Option {
+	return func(c *config) { c.actions = append(c.actions, actions...) }
+}
+
+func WithDataSources(defs ...datasource.Definition) Option {
+	return func(c *config) { c.datasources = append(c.datasources, defs...) }
+}
+
+func WithWorkflows(defs ...workflow.Definition) Option {
+	return func(c *config) { c.workflows = append(c.workflows, defs...) }
+}
+
 func WithoutBuiltins() Option {
 	return func(c *config) { c.noBuiltins = true }
 }
@@ -259,6 +293,86 @@ func (a *App) RegisterCommands(commands ...command.Command) error {
 	return a.commands.Register(commands...)
 }
 
+func (a *App) RegisterActions(actions ...action.Action) error {
+	if a.actions == nil {
+		a.actions = action.NewRegistry()
+	}
+	return a.actions.Register(actions...)
+}
+
+func (a *App) ActionRegistry() *action.Registry {
+	if a == nil {
+		return nil
+	}
+	return a.actions
+}
+
+func (a *App) Actions() []action.Action {
+	if a == nil || a.actions == nil {
+		return nil
+	}
+	return a.actions.All()
+}
+
+func (a *App) RegisterDataSources(defs ...datasource.Definition) error {
+	if a.datasources == nil {
+		a.datasources = datasource.NewRegistry()
+	}
+	return a.datasources.Register(defs...)
+}
+
+func (a *App) DataSource(name string) (datasource.Definition, bool) {
+	if a == nil || a.datasources == nil {
+		return datasource.Definition{}, false
+	}
+	return a.datasources.Get(name)
+}
+
+func (a *App) DataSources() []datasource.Definition {
+	if a == nil || a.datasources == nil {
+		return nil
+	}
+	return a.datasources.All()
+}
+
+func (a *App) RegisterWorkflows(defs ...workflow.Definition) error {
+	if a.workflows == nil {
+		a.workflows = map[string]workflow.Definition{}
+	}
+	for _, def := range defs {
+		if def.Name == "" {
+			return fmt.Errorf("app: workflow name is required")
+		}
+		if err := workflow.Validate(def); err != nil {
+			return err
+		}
+		if _, exists := a.workflows[def.Name]; exists {
+			return fmt.Errorf("app: workflow %q already registered", def.Name)
+		}
+		a.workflows[def.Name] = def
+		a.workflowOrder = append(a.workflowOrder, def.Name)
+	}
+	return nil
+}
+
+func (a *App) Workflow(name string) (workflow.Definition, bool) {
+	if a == nil {
+		return workflow.Definition{}, false
+	}
+	def, ok := a.workflows[name]
+	return def, ok
+}
+
+func (a *App) Workflows() []workflow.Definition {
+	if a == nil {
+		return nil
+	}
+	out := make([]workflow.Definition, 0, len(a.workflowOrder))
+	for _, name := range a.workflowOrder {
+		out = append(out, a.workflows[name])
+	}
+	return out
+}
 func (a *App) RegisterAgent(name string, inst *agent.Instance) error {
 	if name == "" {
 		return fmt.Errorf("app: agent name is required")
@@ -470,6 +584,21 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 		return fmt.Errorf("app: plugin %q already registered", plugin.Name())
 	}
 	a.plugins[plugin.Name()] = plugin
+	if ap, ok := plugin.(ActionsPlugin); ok {
+		if err := a.RegisterActions(ap.Actions()...); err != nil {
+			return fmt.Errorf("app: register plugin %q actions: %w", plugin.Name(), err)
+		}
+	}
+	if dp, ok := plugin.(DataSourcesPlugin); ok {
+		if err := a.RegisterDataSources(dp.DataSources()...); err != nil {
+			return fmt.Errorf("app: register plugin %q datasources: %w", plugin.Name(), err)
+		}
+	}
+	if wp, ok := plugin.(WorkflowsPlugin); ok {
+		if err := a.RegisterWorkflows(wp.Workflows()...); err != nil {
+			return fmt.Errorf("app: register plugin %q workflows: %w", plugin.Name(), err)
+		}
+	}
 	if cp, ok := plugin.(CommandsPlugin); ok {
 		for _, cmd := range cp.Commands() {
 			if err := a.registerCommandFromSource(cmd, resource.SourceRef{ID: plugin.Name()}); err != nil {
@@ -519,9 +648,35 @@ func (a *App) RegisterResourceBundle(bundle resource.ContributionBundle) error {
 			return err
 		}
 	}
+	for _, contribution := range bundle.DataSources {
+		if err := a.RegisterDataSources(datasourceFromContribution(contribution)); err != nil {
+			return err
+		}
+	}
+	for _, contribution := range bundle.Workflows {
+		if err := a.RegisterWorkflows(workflowFromContribution(contribution)); err != nil {
+			return err
+		}
+	}
 	a.skillSources = append(a.skillSources, bundle.SkillSources...)
 	a.diagnostics = append(a.diagnostics, bundle.Diagnostics...)
 	return nil
+}
+
+func datasourceFromContribution(c resource.DataSourceContribution) datasource.Definition {
+	return datasource.Definition{
+		Name:        c.Name,
+		Description: c.Description,
+		Kind:        datasource.Kind(c.Kind),
+		Metadata:    c.Metadata,
+	}
+}
+
+func workflowFromContribution(c resource.WorkflowContribution) workflow.Definition {
+	return workflow.Definition{
+		Name:        c.Name,
+		Description: c.Description,
+	}
 }
 
 func (a *App) registerCommandFromSource(cmd command.Command, source resource.SourceRef) error {

@@ -9,14 +9,17 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/datasource"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/workflow"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
 )
@@ -42,6 +45,61 @@ func TestAppRegistersBundleResources(t *testing.T) {
 	require.True(t, ok)
 }
 
+func TestAppRegistersDatasourceWorkflowActionResources(t *testing.T) {
+	actionDef := action.New(action.Spec{Name: "docs.search"}, func(action.Ctx, any) action.Result {
+		return action.Result{Data: "ok"}
+	})
+	app, err := New(
+		WithActions(actionDef),
+		WithDataSources(datasource.Definition{
+			Name:    "docs",
+			Kind:    datasource.KindCorpus,
+			Actions: datasource.Actions{Search: action.Ref{Name: "docs.search"}},
+		}),
+		WithWorkflows(workflow.Definition{
+			Name:  "search_docs",
+			Steps: []workflow.Step{{ID: "search", Action: workflow.ActionRef{Name: "docs.search"}}},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	require.Equal(t, []action.Action{actionDef}, app.Actions())
+
+	ds, ok := app.DataSource("docs")
+	require.True(t, ok)
+	require.Equal(t, datasource.KindCorpus, ds.Kind)
+	require.Equal(t, []datasource.Definition{ds}, app.DataSources())
+
+	wf, ok := app.Workflow("search_docs")
+	require.True(t, ok)
+	require.Equal(t, []workflow.Definition{wf}, app.Workflows())
+}
+
+func TestAppRegistersBundleDatasourceAndWorkflowContributions(t *testing.T) {
+	bundle := resource.ContributionBundle{
+		DataSources: []resource.DataSourceContribution{{
+			Name:        "docs",
+			Description: "Documentation corpus",
+			Kind:        "corpus",
+			Metadata:    map[string]any{"owner": "docs-team"},
+		}},
+		Workflows: []resource.WorkflowContribution{{
+			Name:        "sync_docs",
+			Description: "Sync documentation",
+		}},
+	}
+	app, err := New(WithResourceBundle(bundle), WithOutput(&bytes.Buffer{}))
+	require.NoError(t, err)
+
+	ds, ok := app.DataSource("docs")
+	require.True(t, ok)
+	require.Equal(t, datasource.KindCorpus, ds.Kind)
+	require.Equal(t, "docs-team", ds.Metadata["owner"])
+
+	wf, ok := app.Workflow("sync_docs")
+	require.True(t, ok)
+	require.Equal(t, "Sync documentation", wf.Description)
+}
 func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {
 	app, err := New(
 		WithResourceBundle(resource.ContributionBundle{AgentSpecs: []agent.Spec{{Name: "reviewer", System: "one"}}}),
@@ -536,6 +594,43 @@ func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
 }
 
 // ── Multi-facet plugin integration test ───────────────────────────────────
+
+type testDWAPlugin struct {
+	name        string
+	actions     []action.Action
+	datasources []datasource.Definition
+	workflows   []workflow.Definition
+}
+
+func (p testDWAPlugin) Name() string { return p.name }
+func (p testDWAPlugin) Actions() []action.Action {
+	return append([]action.Action(nil), p.actions...)
+}
+func (p testDWAPlugin) DataSources() []datasource.Definition {
+	return append([]datasource.Definition(nil), p.datasources...)
+}
+func (p testDWAPlugin) Workflows() []workflow.Definition {
+	return append([]workflow.Definition(nil), p.workflows...)
+}
+
+func TestPluginRegistersActionsDataSourcesAndWorkflows(t *testing.T) {
+	actionDef := action.New(action.Spec{Name: "docs.fetch"}, func(action.Ctx, any) action.Result { return action.Result{} })
+	app, err := New(
+		WithPlugin(testDWAPlugin{
+			name:        "docs",
+			actions:     []action.Action{actionDef},
+			datasources: []datasource.Definition{{Name: "docs", Kind: datasource.KindCorpus, Actions: datasource.Actions{Fetch: action.Ref{Name: "docs.fetch"}}}},
+			workflows:   []workflow.Definition{{Name: "fetch_docs", Steps: []workflow.Step{{ID: "fetch", Action: workflow.ActionRef{Name: "docs.fetch"}}}}},
+		}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	require.Equal(t, []action.Action{actionDef}, app.Actions())
+	_, ok := app.DataSource("docs")
+	require.True(t, ok)
+	_, ok = app.Workflow("fetch_docs")
+	require.True(t, ok)
+}
 
 // testMultiFacetPlugin implements ToolsPlugin + ContextProvidersPlugin.
 type testMultiFacetPlugin struct {

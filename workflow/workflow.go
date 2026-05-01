@@ -9,9 +9,7 @@ import (
 
 // ActionRef identifies an action used by a workflow. Resolution is owned by the
 // executor so workflows can stay declarative and serializable.
-type ActionRef struct {
-	Name string
-}
+type ActionRef = action.Ref
 
 // Step is one workflow node.
 type Step struct {
@@ -71,7 +69,7 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 	if e.Resolver == nil {
 		return action.Result{Error: fmt.Errorf("workflow %q has no action resolver", def.Name)}
 	}
-	ordered, err := topo(def.Steps)
+	ordered, err := validateAndOrder(def.Steps)
 	if err != nil {
 		return action.Result{Error: err}
 	}
@@ -111,11 +109,37 @@ func stepInput(step Step, initial any, results map[string]action.Result) any {
 	}
 }
 
-func topo(steps []Step) ([]Step, error) {
+// Validate checks workflow definition invariants that are independent of action
+// resolution.
+func Validate(def Definition) error {
+	_, err := validateAndOrder(def.Steps)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateActions checks that each workflow action reference resolves in reg.
+func ValidateActions(def Definition, reg *action.Registry) error {
+	if err := Validate(def); err != nil {
+		return err
+	}
+	for _, step := range def.Steps {
+		if _, ok := reg.Get(step.Action.Name); !ok {
+			return fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name)
+		}
+	}
+	return nil
+}
+
+func validateAndOrder(steps []Step) ([]Step, error) {
 	byID := make(map[string]Step, len(steps))
 	for _, step := range steps {
 		if step.ID == "" {
 			return nil, fmt.Errorf("workflow step id is required")
+		}
+		if step.Action.Name == "" {
+			return nil, fmt.Errorf("workflow step %q action name is required", step.ID)
 		}
 		if _, exists := byID[step.ID]; exists {
 			return nil, fmt.Errorf("duplicate workflow step %q", step.ID)

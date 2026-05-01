@@ -2,11 +2,14 @@
 package app
 
 import (
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/datasource"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/workflow"
 )
 
 // Plugin is a named contribution bundle. Plugins may implement any of the
@@ -30,6 +33,20 @@ type ToolsPlugin interface {
 	Tools() []tool.Tool
 }
 
+type ActionsPlugin interface {
+	Plugin
+	Actions() []action.Action
+}
+
+type DataSourcesPlugin interface {
+	Plugin
+	DataSources() []datasource.Definition
+}
+
+type WorkflowsPlugin interface {
+	Plugin
+	Workflows() []workflow.Definition
+}
 type SkillsPlugin interface {
 	Plugin
 	SkillSources() []skill.Source
