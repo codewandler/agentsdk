@@ -8,7 +8,7 @@ import (
 )
 
 // TestSchemaOutput_integerFields verifies that integer fields have proper type annotations
-// and examples to help LLMs send correct types (not strings).
+// without injecting synthetic examples into the schema.
 func TestSchemaOutput_integerFields(t *testing.T) {
 	tl := New("test_tool", "A test tool.", func(ctx Ctx, p struct {
 		Path  string `json:"path" jsonschema:"description=File path,required"`
@@ -45,16 +45,8 @@ func TestSchemaOutput_integerFields(t *testing.T) {
 	// Check type is integer
 	require.Equal(t, "integer", limitProp["type"], "limit should be integer type")
 
-	// Check if examples exist - this helps LLMs send correct types
-	examples, hasExamples := limitProp["examples"]
-	if hasExamples {
-		exampleArr, ok := examples.([]any)
-		require.True(t, ok, "examples should be array")
-		require.NotEmpty(t, exampleArr, "examples should not be empty")
-		t.Logf("Has examples for limit field: %v", exampleArr)
-	} else {
-		t.Log("No examples for limit field (will be added by LLM)")
-	}
+	_, hasExamples := limitProp["examples"]
+	require.False(t, hasExamples, "schema projection should not inject synthetic examples")
 }
 
 // TestSchemaOutput_nestedIntegerFields verifies nested integer fields in arrays.
@@ -87,8 +79,7 @@ func TestSchemaOutput_nestedIntegerFields(t *testing.T) {
 	require.Equal(t, "integer", itemProps["start"].(map[string]any)["type"])
 	require.Equal(t, "integer", itemProps["end"].(map[string]any)["type"])
 
-	// Check examples were added to nested integer fields
 	startProp := itemProps["start"].(map[string]any)
 	_, hasStartExamples := startProp["examples"]
-	require.True(t, hasStartExamples, "nested integer fields should have examples")
+	require.False(t, hasStartExamples, "schema projection should not inject synthetic examples")
 }

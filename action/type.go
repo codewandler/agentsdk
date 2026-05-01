@@ -19,7 +19,7 @@ type Type struct {
 // schema projection, such as channels, functions, or interfaces.
 func TypeOf[T any]() Type {
 	goType := reflect.TypeOf((*T)(nil)).Elem()
-	return Type{GoType: goType, Schema: schemaForType(goType)}
+	return Type{GoType: goType, Schema: SchemaForType(goType)}
 }
 
 // IsZero reports whether t has no type or schema metadata.
@@ -91,28 +91,6 @@ func (t Type) ValidateJSON(data []byte) error {
 		return err
 	}
 	return compiled.Validate(decoded)
-}
-
-func schemaForType(t reflect.Type) *jsonschema.Schema {
-	if t == nil || !jsonSchemaEligible(t, map[reflect.Type]bool{}) {
-		return nil
-	}
-	reflector := jsonschema.Reflector{
-		DoNotReference:             true,
-		Anonymous:                  true,
-		AllowAdditionalProperties:  false,
-		RequiredFromJSONSchemaTags: true,
-	}
-	ptr := reflect.New(t)
-	if t.Kind() == reflect.Ptr {
-		ptr = reflect.New(t.Elem())
-	}
-	schema := reflector.Reflect(ptr.Interface())
-	if schema == nil {
-		return nil
-	}
-	schema.Version = ""
-	return schema
 }
 
 func jsonSchemaEligible(t reflect.Type, seen map[reflect.Type]bool) bool {

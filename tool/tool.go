@@ -4,10 +4,10 @@
 package tool
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/invopop/jsonschema"
 )
@@ -16,7 +16,7 @@ import (
 // It embeds context.Context (for cancellation/deadline) and provides
 // agent/session metadata available at execution time.
 type Ctx interface {
-	context.Context
+	action.Ctx
 	WorkDir() string
 	AgentID() string
 	SessionID() string

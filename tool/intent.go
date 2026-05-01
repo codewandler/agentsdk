@@ -1,76 +1,20 @@
 package tool
 
-import "encoding/json"
+import (
+	"encoding/json"
 
-// Intent describes what a tool call is about to do, expressed as
-// operations on resources. This is the abstract layer that risk
-// assessment, approval gates, and audit systems consume.
-type Intent struct {
-	// Tool is the tool name.
-	Tool string `json:"tool"`
+	"github.com/codewandler/agentsdk/action"
+)
 
-	// ToolClass is the static intent category of the tool itself,
-	// independent of parameters. Known at registration time.
-	// Examples: "command_execution", "filesystem_read", "filesystem_write",
-	// "filesystem_delete", "network_access", "repository_access", "vision",
-	// "agent_control".
-	ToolClass string `json:"tool_class"`
-
-	// Operations is the set of resource+operation pairs this specific
-	// call will perform. Derived from the actual params at call time.
-	Operations []IntentOperation `json:"operations,omitempty"`
-
-	// Behaviors are high-level semantic labels (e.g. filesystem_read,
-	// network_fetch). Same vocabulary as cmdrisk.
-	Behaviors []string `json:"behaviors,omitempty"`
-
-	// Confidence indicates how certain the intent extraction is.
-	//   "high"     — fully determined from typed params
-	//   "moderate" — mostly determined, some inference
-	//   "low"      — heuristic or opaque
-	Confidence string `json:"confidence"`
-
-	// Opaque is true when the tool's semantics could not be determined.
-	// Risk assessors should treat opaque intents conservatively.
-	Opaque bool `json:"opaque,omitempty"`
-
-	// Summary is a human-readable description of what this specific call
-	// will do. For command_execution tools this is the shell command string.
-	// Useful for audit logs, approval UIs, and assessors that need the
-	// raw input (e.g. cmdrisk).
-	Summary string `json:"summary,omitempty"`
-
-	// Extra carries tool-specific data that downstream consumers
-	// (assessors, audit) can type-assert. Not serialized to JSON.
-	Extra any `json:"-"`
-}
+// Intent describes what a tool call is about to do. It aliases the
+// surface-neutral action intent model during migration.
+type Intent = action.Intent
 
 // IntentOperation is a single resource+operation pair.
-type IntentOperation struct {
-	// Resource identifies what is being acted upon.
-	Resource IntentResource `json:"resource"`
-
-	// Operation is the action: read, write, delete, execute,
-	// network_read, network_write, persistence_modify, device_write.
-	Operation string `json:"operation"`
-
-	// Certain indicates whether this operation is definitely happening
-	// (true) or inferred/conditional (false).
-	Certain bool `json:"certain"`
-}
+type IntentOperation = action.IntentOperation
 
 // IntentResource identifies a resource being acted upon.
-type IntentResource struct {
-	// Category: file, directory, url, host, service, device, process,
-	// repo, config, secret, environment_variable.
-	Category string `json:"category"`
-
-	// Value is the concrete identifier: path, URL, hostname, etc.
-	Value string `json:"value"`
-
-	// Locality: workspace, sensitive, secret, system, network, unknown.
-	Locality string `json:"locality"`
-}
+type IntentResource = action.IntentResource
 
 // IntentProvider is an optional interface a Tool can implement to declare
 // what it's about to do before execution. This enables risk assessment,
@@ -89,16 +33,6 @@ type IntentProvider interface {
 
 // ExtractIntent gets the intent from a tool, then walks the middleware
 // chain outward letting each layer amend it via OnIntent.
-//
-// Flow:
-//  1. Find the innermost tool via Unwrap chain.
-//  2. If it implements IntentProvider, call DeclareIntent for the base intent.
-//     Otherwise, create an opaque fallback intent.
-//  3. Walk the wrapper chain from inside out, calling onIntent on each
-//     hookedTool layer so middlewares can enrich/amend the intent.
-//
-// This means the inner tool declares "I will read file X", and an outer
-// middleware can add "...and I will write an audit log to Y".
 func ExtractIntent(t Tool, ctx Ctx, input json.RawMessage) Intent {
 	// 1. Get base intent from innermost IntentProvider.
 	target := Innermost(t)
@@ -107,10 +41,22 @@ func ExtractIntent(t Tool, ctx Ctx, input json.RawMessage) Intent {
 		var err error
 		intent, err = provider.DeclareIntent(ctx, input)
 		if err != nil {
-			intent = Intent{Tool: target.Name(), ToolClass: "unknown", Opaque: true, Confidence: "low"}
+			intent = opaqueToolIntent(target)
 		}
 	} else {
-		intent = Intent{Tool: target.Name(), ToolClass: "unknown", Opaque: true, Confidence: "low"}
+		intent = opaqueToolIntent(target)
+	}
+	if intent.Tool == "" && target != nil {
+		intent.Tool = target.Name()
+	}
+	if intent.Action == "" {
+		intent.Action = intent.Tool
+	}
+	if intent.Class == "" && intent.ToolClass != "" {
+		intent.Class = intent.ToolClass
+	}
+	if intent.ToolClass == "" && intent.Class != "" {
+		intent.ToolClass = intent.Class
 	}
 
 	// 2. Collect middleware layers (outermost-first via Unwrap walk).
@@ -139,4 +85,12 @@ func ExtractIntent(t Tool, ctx Ctx, input json.RawMessage) Intent {
 	}
 
 	return intent
+}
+
+func opaqueToolIntent(t Tool) Intent {
+	name := ""
+	if t != nil {
+		name = t.Name()
+	}
+	return Intent{Action: name, Tool: name, Class: "unknown", ToolClass: "unknown", Opaque: true, Confidence: "low"}
 }

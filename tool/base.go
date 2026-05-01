@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/invopop/jsonschema"
 	jsv "github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -28,10 +28,7 @@ type TypedTool[P any] struct {
 // New creates a typed Tool. The schema is derived from the zero value of P.
 // It uses local JSON Schema reflection and compiles the schema for validation.
 func New[P any](name, description string, handler func(ctx Ctx, p P) (Result, error), opts ...TypedToolOption[P]) *TypedTool[P] {
-	params, rawSchema := schemaFor[P]()
-
-	// Enhance the schema for LLM compatibility (add examples to numeric fields)
-	schema := addExamplesToSchema(rawSchema)
+	params, schema := schemaFor[P]()
 
 	// Compile map directly for validation (avoids Schema conversion issues).
 	validated := compileMapForValidation(params)
@@ -50,183 +47,22 @@ func New[P any](name, description string, handler func(ctx Ctx, p P) (Result, er
 }
 
 func schemaFor[P any]() (map[string]any, *jsonschema.Schema) {
-	r := jsonschema.Reflector{
-		DoNotReference:             true,
-		Anonymous:                  true,
-		AllowAdditionalProperties:  false,
-		RequiredFromJSONSchemaTags: true,
-	}
-	schema := r.Reflect(new(P))
-	schema.Version = ""
-
-	raw, err := json.Marshal(schema)
-	if err != nil {
-		return nil, schema
-	}
-
-	var params map[string]any
-	if err := json.Unmarshal(raw, &params); err != nil {
-		return nil, schema
-	}
-	delete(params, "$schema")
-	delete(params, "$id")
-
-	params = injectRequiredFromTags[P](params)
-
-	cleanRaw, err := json.Marshal(params)
-	if err != nil {
-		return params, schema
-	}
-	var cleanSchema jsonschema.Schema
-	if err := json.Unmarshal(cleanRaw, &cleanSchema); err != nil {
-		return params, schema
-	}
-	return params, &cleanSchema
+	schema := action.SchemaFor[P]()
+	params := action.SchemaMapFor[P]()
+	return params, schema
 }
 
-// SchemaFor returns the JSON schema for type P, using the same reflector
-// configuration as tool.New. Useful for building composite schemas (e.g.
-// oneOf variants) without duplicating reflector setup.
-func SchemaFor[P any]() *jsonschema.Schema {
-	_, s := schemaFor[P]()
-	return s
-}
+// SchemaFor returns the JSON schema for type P. Deprecated: use action.SchemaFor.
+func SchemaFor[P any]() *jsonschema.Schema { return action.SchemaFor[P]() }
 
+// hasRequiredToken is kept for compatibility with older package tests. Deprecated:
+// use action.HasRequiredToken.
+func hasRequiredToken(tag string) bool { return action.HasRequiredToken(tag) }
 
-// hasRequiredToken reports whether a jsonschema tag value contains "required"
-// as a standalone comma-separated token, respecting \, escapes inside values.
-func hasRequiredToken(tag string) bool {
-	for len(tag) > 0 {
-		// Find next unescaped comma
-		i := 0
-		for i < len(tag) {
-			if tag[i] == '\\' {
-				i += 2 // skip escaped char
-				continue
-			}
-			if tag[i] == ',' {
-				break
-			}
-			i++
-		}
-		token := strings.TrimSpace(tag[:i])
-		if token == "required" {
-			return true
-		}
-		if i >= len(tag) {
-			break
-		}
-		tag = tag[i+1:]
-	}
-	return false
-}
-
-// injectRequiredFromTags patches the "required" array in the schema map for
-// fields that carry jsonschema:"required" but whose types implement JSONSchema()
-// — causing the reflector to skip their struct tags entirely.
+// injectRequiredFromTags is kept for compatibility with older package tests.
+// Deprecated: use action.InjectRequiredFromTags.
 func injectRequiredFromTags[P any](m map[string]any) map[string]any {
-	var zero P
-	t := reflect.TypeOf(zero)
-	if t == nil {
-		return m
-	}
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	if t.Kind() != reflect.Struct {
-		return m
-	}
-	var required []any
-	for i := range t.NumField() {
-		f := t.Field(i)
-		// Split on unescaped commas only (escaped commas \, are part of values).
-		if hasRequiredToken(f.Tag.Get("jsonschema")) {
-			if name := strings.Split(f.Tag.Get("json"), ",")[0]; name != "" && name != "-" {
-				required = append(required, name)
-			}
-		}
-	}
-	if len(required) > 0 {
-		m["required"] = required
-	}
-	return m
-}
-
-// addExamplesToSchema adds examples to integer/number fields to help LLMs send correct types.
-func addExamplesToSchema(schema *jsonschema.Schema) *jsonschema.Schema {
-	if schema == nil {
-		return nil
-	}
-
-	raw, err := json.Marshal(schema)
-	if err != nil {
-		return schema
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return schema
-	}
-
-	// Add examples to numeric fields recursively
-	addExamplesToMap(m)
-
-	cleanRaw, err := json.Marshal(m)
-	if err != nil {
-		return schema
-	}
-
-	var result jsonschema.Schema
-	if err := json.Unmarshal(cleanRaw, &result); err != nil {
-		return schema
-	}
-
-	return &result
-}
-
-// addExamplesToMap recursively adds examples to numeric fields in a map-based schema.
-func addExamplesToMap(m map[string]any) {
-	if m == nil {
-		return
-	}
-
-	if typ, ok := m["type"].(string); ok {
-		switch typ {
-		case "integer":
-			if _, has := m["example"]; !has {
-				if examples, ok := m["examples"].([]any); !ok || len(examples) == 0 {
-					m["examples"] = []any{10}
-				}
-			}
-		case "number":
-			if _, has := m["example"]; !has {
-				if examples, ok := m["examples"].([]any); !ok || len(examples) == 0 {
-					m["examples"] = []any{1.5}
-				}
-			}
-		}
-	}
-
-	if props, ok := m["properties"].(map[string]any); ok {
-		for _, prop := range props {
-			if propMap, ok := prop.(map[string]any); ok {
-				addExamplesToMap(propMap)
-			}
-		}
-	}
-
-	if items, ok := m["items"].(map[string]any); ok {
-		addExamplesToMap(items)
-	} else if items, ok := m["items"].([]any); ok {
-		for _, item := range items {
-			if itemMap, ok := item.(map[string]any); ok {
-				addExamplesToMap(itemMap)
-			}
-		}
-	}
-
-	// Do not recurse into oneOf/anyOf/allOf — those are discriminated union
-	// variants, not simple parameter fields. Adding examples there is noise.
+	return action.InjectRequiredFromTags(reflect.TypeOf((*P)(nil)).Elem(), m)
 }
 
 // compileMapForValidation compiles a map[string]any
