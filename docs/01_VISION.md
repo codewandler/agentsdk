@@ -175,8 +175,9 @@ Command
   -> can call an action, start a workflow, or execute a prompt/model-turn action
 
 Capability
-  -> attachable agent/session feature with tools, context, and event-sourced state
-  -> not a workflow; capabilities extend what an agent is, workflows define what happens
+  -> attachable agent/session feature with lifecycle, context, and optional event-sourced state
+  -> may expose actions, tools, and context, but those are surfaces over the attached state/feature
+  -> not a workflow; capabilities extend what an agent/session has available, workflows define what happens
 
 Bundle / plugin
   -> packaging and contribution mechanisms
@@ -280,9 +281,11 @@ An embedded Go application may construct workflows directly in code instead of u
 
 ### Capability
 
-A capability is an attachable feature module that can provide tools, context, and event-sourced state. Capabilities are useful for stateful agent features such as planning.
+A capability is an attachable agent/session feature with lifecycle, context, and optional event-sourced state. Capabilities are useful for ambient, durable features such as planning, memory-like state, session-local registries, or interactive control state.
 
-Today the planner capability is a concrete example. Workflows should not replace capabilities; they address a different concern. Capabilities extend an agent/session, while workflows orchestrate multi-step execution.
+A capability is not an action, workflow, plugin, or datasource. It can expose actions for workflow/app use and separately expose tools for LLM use, but those sets are not identical: some capability actions may be internal, workflow-only, or unsafe/noisy for direct model invocation. Its defining feature is that it attaches stateful behavior to a live agent/session and can contribute context derived from that state.
+
+Today the planner capability is a concrete example: the plan is event-sourced session state, planner context renders the current plan back into the agent context, and the `plan` tool is just an LLM-facing projection for mutating that state. Workflows should not replace capabilities; they address a different concern. Capabilities extend what an agent/session has available, while workflows orchestrate multi-step execution.
 
 ### Skill
 

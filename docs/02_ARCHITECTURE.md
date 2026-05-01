@@ -158,16 +158,20 @@ Current packages:
 
 Current strengths:
 
-- Capabilities are attachable modules that provide tools, context, and state.
+- Capabilities are attachable modules that provide context, optional tools, and optional state.
 - Stateful capabilities apply event-sourced state events.
 - `capability.Manager` and `capability.Registry` already support factory-based creation and replay.
-- Planner is a working built-in stateful capability.
+- Capability context providers render state back into the agent context.
+- Planner is a working built-in stateful capability: plan mutations are state events; planner context renders current plan state; the `plan` tool is a model-facing projection over that state.
 
 Evolution:
 
-- Keep capabilities for attached stateful agent/session features.
-- Do not overload capabilities to mean workflows.
-- Allow workflows to require or attach capabilities when needed.
+- Keep capabilities for attached stateful agent/session features with lifecycle, context, and optional event-sourced state.
+- Do not overload capabilities to mean workflows, actions, plugins, or datasources.
+- Let capabilities expose actions for workflow/app use and tool projections for LLM use, but do not assume the two sets are identical.
+- Some capability actions may be internal, workflow-only, or unsuitable for direct model invocation; tools remain the deliberate LLM-facing subset/projection.
+- In the action migration, add a capability action facet while keeping `Capability.Tools()` as the LLM-facing compatibility/projection surface.
+- Allow workflows to require an attached capability or call capability actions when needed.
 - Consider workflow execution state as either thread events or a capability only if there is a concrete need; default should be workflow-specific thread events.
 
 ### Context
@@ -372,8 +376,9 @@ Command
   may call an action, start a workflow, or execute a prompt/model-turn action
 
 Capability
-  is attached agent/session state plus optional tools/context
-  may expose tools/actions, but its defining feature is stateful extension of an agent
+  is attached agent/session feature state plus lifecycle/context
+  may expose actions for workflow/app use and tools for LLM use; these sets need not be identical
+  defining feature is stateful extension of an agent/session, often replayed from thread events
 
 Plugin / bundle
   are packaging/contribution mechanisms, not execution primitives
@@ -575,8 +580,8 @@ harness.Service
 | `runner` | Keep low-level model/tool loop. |
 | `conversation` | Keep conversation projection/history model. |
 | `thread` | Keep durable event/store model; add workflow events. |
-| `capability` | Keep attachable stateful feature model. |
-| `capabilities/planner` | Keep as built-in capability. |
+| `capability` | Keep attachable stateful feature model; add action facet for workflow/app use while keeping tools as deliberate LLM-facing projections. |
+| `capabilities/planner` | Keep as built-in capability and dogfood example of event-sourced session state plus context plus action/tool projection. |
 | `agentcontext` | Keep context provider/render model; reuse for workflow steps. |
 | `skill` | Keep instruction/reference resource model. |
 | `command` | Keep slash command model; optionally expose as workflow actions. |

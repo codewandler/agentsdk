@@ -26,7 +26,7 @@ Before adding anything, recognize the reusable pieces already present:
 | `conversation`, `thread`, `thread/jsonlstore` | durable session and future datasource/workflow/action event persistence. |
 | `runtime.ThreadRuntime` | thread-bound capability and context replay; future harness sessions. |
 | `tool`, `activation`, `tools/*`, `toolmw` | tool/action schema, execution, intent, middleware, risk assessment. |
-| `capability`, `capabilities/planner` | attachable stateful features; planner remains a capability, not a workflow. |
+| `capability`, `capabilities/planner` | attachable stateful agent/session features; planner remains a capability because it is event-sourced session state plus context plus action/tool projection, not a workflow. |
 | `agentcontext` | selected context for turns and future workflow steps. |
 | `skill` | instruction/reference resources; not a workflow replacement. |
 | `command` | slash commands and possible command actions. |
@@ -167,6 +167,7 @@ Current state to reuse:
 - `tool.TypedTool` already has typed params, schema generation, execution, result formatting, intent declaration, context, and middleware patterns. These are action responsibilities currently living in the tool package.
 - `command.Command` already models slash-command invocation with command-specific policy and result kinds. Commands should trigger actions/workflows or render prompts; they should not become the base execution abstraction.
 - `thread.EventDefinition` already supports registering typed event payloads.
+- `capability` already provides attach/replay/state-event machinery for ambient session features such as planner; capabilities should be able to expose actions for workflow/app use and a separate deliberate tool subset/projection for LLM use.
 - A representative support-assistant case study has a concrete datasource-shaped pipeline: documentation API client, HTML parser, vision extraction, condensation, and markdown/index output.
 
 Tasks:
@@ -266,6 +267,7 @@ Current state to reuse:
 - Existing `tool.Tool` values can be adapted to actions during migration, but new workflow code should depend on `action.Action` through `workflow.ActionRef` resolution.
 - Existing `command.Command` values can trigger actions or workflows where appropriate; command-specific result semantics remain outside `action.Result`.
 - `agentcontext.Manager` can provide context fragments.
+- Capabilities can provide context and state that workflow steps may require, but workflow execution state should remain workflow events by default.
 - `thread.Event` can persist execution records.
 
 Tasks:
@@ -546,7 +548,7 @@ Current state to reuse:
 - `apps/engineer`/dogfood agent pattern.
 - Agentdir/app manifest/resource formats.
 - Filesystem/shell/git tools.
-- Planner capability.
+- Planner capability as the first dogfood example of event-sourced session state exposed through context and action/tool surfaces.
 - Terminal channel.
 - Future datasource/workflow/action scaffolding.
 
