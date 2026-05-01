@@ -13,7 +13,7 @@ The roadmap should therefore be read as an evolution plan, not a greenfield buil
 3. Reuse existing packages before creating new parallel systems.
 4. Extend `resource.ContributionBundle`, `app.Plugin`, thread events, and app manifests rather than bypassing them.
 5. Add missing boundaries before moving large amounts of code.
-6. Let real apps such as `cs-bot` validate abstractions before generalizing them.
+6. Let real apps validate abstractions before generalizing them; document them publicly as hypothetical or anonymized case studies.
 7. Keep compatibility shims or migration notes for public API moves.
 
 ## Current foundation to reuse
@@ -23,15 +23,15 @@ Before adding anything, recognize the reusable pieces already present:
 | Existing subsystem | Reuse for future work |
 | --- | --- |
 | `runtime.Engine`, `runner.RunTurn` | model/tool turn execution; workflow model-step action implementation. |
-| `conversation`, `thread`, `thread/jsonlstore` | durable session and future workflow/action event persistence. |
+| `conversation`, `thread`, `thread/jsonlstore` | durable session and future datasource/workflow/action event persistence. |
 | `runtime.ThreadRuntime` | thread-bound capability and context replay; future harness sessions. |
 | `tool`, `activation`, `tools/*`, `toolmw` | tool/action schema, execution, intent, middleware, risk assessment. |
 | `capability`, `capabilities/planner` | attachable stateful features; planner remains a capability, not a workflow. |
 | `agentcontext` | selected context for turns and future workflow steps. |
 | `skill` | instruction/reference resources; not a workflow replacement. |
 | `command` | slash commands and possible command actions. |
-| `agentdir`, `resource` | workflow/action resource discovery should extend this. |
-| `app`, `plugins/*` | workflow/action registration should extend this plugin/app model. |
+| `agentdir`, `resource` | datasource/workflow/action resource discovery should extend this. |
+| `app`, `plugins/*` | datasource/workflow/action registration should extend this plugin/app model. |
 | `terminal/*` | first channel; should migrate onto harness/session APIs. |
 | `agent.Spec`, `agent.Instance` | current blueprint/session façade; migrate responsibilities gradually. |
 
@@ -58,6 +58,22 @@ Verification:
 ```bash
 go test ./...
 ```
+
+## Phasing
+
+The milestones are ordered to avoid a rewrite:
+
+```text
+Document and preserve current behavior
+  -> move dogfood apps into the right product category
+  -> extend existing resource/app/plugin models for datasources/workflows/actions
+  -> add execution for workflows on top of existing runtime/thread/tool systems
+  -> extract harness/channel seams from the current terminal run path
+  -> validate with an anonymized support-assistant case study and builder
+  -> reduce package coupling after the seams are proven
+```
+
+This order is deliberate. Workflow resources and app/plugin registration should be added before a full harness rewrite, because they naturally extend systems that already exist. The harness can then host both ordinary agent turns and workflow runs.
 
 ## Milestone 1 — Promote and preserve dogfood apps
 
@@ -103,34 +119,36 @@ go run ./cmd/agentsdk discover apps/engineer
 go run ./cmd/agentsdk run apps/engineer --help
 ```
 
-## Milestone 2 — Extend resource discovery for workflows
+## Milestone 2 — Extend resource discovery for datasources and workflows
 
-Goal: introduce workflow specs through the existing resource pipeline.
+Goal: introduce datasource and workflow specs through the existing resource pipeline.
 
 Current state:
 
-- `agentdir` loads agents, commands, and skills from `.agents`, `.claude`, and plugin roots.
+- `agentdir` loads agents, commands, and skills from `.agents`, compatibility roots, and plugin roots.
 - `resource.ContributionBundle` normalizes discovered contributions.
 - `app.App` consumes contribution bundles.
 
 Tasks:
 
-1. Add workflow resource representation to `resource.ContributionBundle`.
-2. Add workflow metadata/source provenance similar to skills/commands.
+1. Add datasource and workflow resource representations to `resource.ContributionBundle`.
+2. Add datasource/workflow metadata and source provenance similar to skills/commands.
 3. Extend `agentdir` to discover:
 
    ```text
+   .agents/datasources/*.yaml
    .agents/workflows/*.yaml
    ```
 
-4. Keep workflow loading declarative-only at first; do not require execution.
-5. Update `agentsdk discover` to show discovered workflow resources.
-6. Update `docs/RESOURCES.md` with the chosen workflow resource convention and note whether it is agentsdk-specific.
+4. Keep datasource/workflow loading declarative-only at first; do not require execution.
+5. Update `agentsdk discover` to show discovered datasource and workflow resources.
+6. Update `docs/RESOURCES.md` with the chosen datasource/workflow resource conventions and note whether they are agentsdk-specific.
 
 Acceptance criteria:
 
+- A datasource YAML file under `.agents/datasources/` is discoverable.
 - A workflow YAML file under `.agents/workflows/` is discoverable.
-- Discovery output includes workflow name/source/diagnostics.
+- Discovery output includes datasource/workflow name/source/diagnostics.
 - Existing agent/command/skill discovery is unchanged.
 
 Verification:
@@ -140,15 +158,16 @@ go test ./agentdir/... ./resource/... ./cmd/agentsdk/...
 go run ./cmd/agentsdk discover testdata-or-example-path
 ```
 
-## Milestone 3 — Add workflow/action core model
+## Milestone 3 — Add datasource/workflow/action core model
 
-Goal: define workflows and actions as first-class domain concepts while reusing tool patterns.
+Goal: define datasources, workflows, and actions as first-class domain concepts, with a top-level `action` package as the central execution primitive. Actions must be independent of LLMs/tools; tool and command surfaces wrap or trigger actions.
 
 Current state to reuse:
 
-- `tool.TypedTool` already has typed params, schema generation, execution, result formatting, and intent declaration patterns.
-- `command.Command` already models named app actions with policy and result kinds.
+- `tool.TypedTool` already has typed params, schema generation, execution, result formatting, intent declaration, context, and middleware patterns. These are action responsibilities currently living in the tool package.
+- `command.Command` already models slash-command invocation with command-specific policy and result kinds. Commands should trigger actions/workflows or render prompts; they should not become the base execution abstraction.
 - `thread.EventDefinition` already supports registering typed event payloads.
+- A representative support-assistant case study has a concrete datasource-shaped pipeline: documentation API client, HTML parser, vision extraction, condensation, and markdown/index output.
 
 Tasks:
 
@@ -156,6 +175,14 @@ Tasks:
 2. Define domain types:
 
    ```text
+   Datasource
+   DatasourceKind
+   Config schema
+   Record/item schema
+   Provenance metadata
+   Credential/config references
+   Paging/cursor/checkpoint state
+   Consistency/freshness expectations
    Workflow
    Pipeline
    Step
@@ -163,21 +190,33 @@ Tasks:
    ActionRef
    Action
    ActionKind
+   Description
    Input schema
    Output schema
+   Intent declaration
+   action.Ctx
+   action.Result
+   Result contract
+   Middleware chain
    ```
 
-3. Decide how much of `tool.Result` can be reused for `ActionResult`.
-4. Decide how `tool.Intent` generalizes to action intent without duplicating risk machinery.
-5. Support Go-defined workflows and actions first.
-6. Add tests for model validation, step references, and simple pipeline construction.
+3. Define datasource as a data boundary accessed by actions, including config schema, record/item schema, provenance, credential/config references, paging/cursor/checkpoint state, and consistency/freshness expectations.
+4. Define how datasources provide or reference standard actions such as `fetch`, `list`, `search`, `sync`, `map`, and `transform`.
+5. Define `action.Action` as the owner of metadata currently split across tools: name, description, kind, input/output schemas, intent declaration, `action.Ctx`, `action.Result`, execution function, and middleware chain.
+6. Move middleware concepts completely to `action.*`; keep `tool` middleware as aliases/adapters during migration.
+7. Define `tool.Tool` as embedding or wrapping `action.Action`, adding LLM-facing concerns such as guidance, activation, provider/tool-call projection, and transcript rendering.
+8. Decide how `tool.Ctx`, `tool.Result`, and `tool.Intent` alias/adapt to `action.Ctx`, `action.Result`, and action intent for compatibility.
+9. Add adapters: action-to-tool, tool-to-action for legacy tools, command-triggering-action/action-backed-command where useful.
+10. Support Go-defined datasources, workflows, and actions first.
+11. Add tests for model validation, datasource action references, step references, adapters, middleware ordering, and simple pipeline construction.
 
 Acceptance criteria:
 
-- Workflows/actions can be constructed in Go.
+- Datasources/workflows/actions can be constructed in Go.
+- A datasource can expose at least one typed action.
 - A pipeline is represented as a workflow with sequenced edges.
-- Invalid workflow references are caught by validation.
-- Action schema/intent design reuses existing tool concepts where possible.
+- Invalid datasource/action/workflow references are caught by validation.
+- `action.Action`, `action.Ctx`, `action.Result`, action intent, and action middleware are the canonical execution design, with existing tool concepts aliased or compatibility-adapted rather than duplicated.
 
 Verification:
 
@@ -186,9 +225,9 @@ go test ./workflow/...
 go test ./tool/... ./command/...
 ```
 
-## Milestone 4 — Extend app/plugin composition for workflows/actions
+## Milestone 4 — Extend app/plugin composition for datasources/workflows/actions
 
-Goal: make workflows/actions part of the existing app/plugin model.
+Goal: make datasources/workflows/actions part of the existing app/plugin model.
 
 Current state:
 
@@ -197,19 +236,19 @@ Current state:
 
 Tasks:
 
-1. Add plugin facets for workflows/actions.
-2. Add app-level registries for workflows/actions.
-3. Register workflow/action contributions from resource bundles.
-4. Register workflow/action contributions from plugins.
-5. Add app APIs to list/get workflows/actions.
+1. Add plugin facets for datasources/workflows/actions.
+2. Add app-level registries for datasources/workflows/actions.
+3. Register datasource/workflow/action contributions from resource bundles.
+4. Register datasource/workflow/action contributions from plugins.
+5. Add app APIs to list/get datasources/workflows/actions.
 6. Keep existing tool/command/skill behavior unchanged.
 
 Acceptance criteria:
 
-- A plugin can contribute an action implementation.
-- A resource bundle can contribute a workflow definition.
-- `app.App` can resolve workflow definitions and action implementations.
-- No separate workflow plugin system exists.
+- A plugin can contribute a datasource and action implementation.
+- A resource bundle can contribute datasource and workflow definitions.
+- `app.App` can resolve datasource definitions, workflow definitions, and action implementations.
+- No separate datasource/workflow plugin system exists.
 
 Verification:
 
@@ -219,36 +258,41 @@ go test ./app/... ./plugins/... ./resource/...
 
 ## Milestone 5 — Minimal workflow executor
 
-Goal: execute a simple sequential pipeline using existing runtime/tool infrastructure.
+Goal: execute a simple sequential pipeline using `action.Action` while adapting existing runtime/tool/command infrastructure.
 
 Current state to reuse:
 
-- `runtime.Engine` can run model/tool turns.
-- `tool.Tool` can execute typed operations.
-- `command.Command` can run slash-command-like app actions.
+- `runtime.Engine` can run model/tool turns and can be wrapped by prompt/model-turn actions.
+- Existing `tool.Tool` values can be adapted to actions during migration, but new workflow code should depend on `action.Action` through `workflow.ActionRef` resolution.
+- Existing `command.Command` values can trigger actions or workflows where appropriate; command-specific result semantics remain outside `action.Result`.
 - `agentcontext.Manager` can provide context fragments.
 - `thread.Event` can persist execution records.
 
 Tasks:
 
 1. Implement a minimal workflow executor for sequential pipelines.
-2. Support initial action kinds:
+2. Define `workflow.ActionRef` as the graph-level reference to an `action.Action`; workflow owns references/dataflow, action owns execution.
+3. Support initial action kinds:
 
-   - model/agent turn action using `runtime.Engine` or `agent.Instance` initially;
-   - tool action wrapping `tool.Tool`;
-   - command action wrapping `command.Command` where appropriate;
+   - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially;
+   - legacy tool adapter action wrapping `tool.Tool` where needed;
+   - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer;
+   - command trigger invoking an action or workflow where appropriate;
    - no-op/transform action for tests.
 
-3. Emit workflow/action events to the existing thread event log when a thread is available.
-4. Add per-step input/output passing.
-5. Add basic output validation.
-6. Defer parallel DAG execution until sequential pipeline semantics are proven.
+4. Emit workflow/action events to the existing thread event log when a thread is available; emit datasource events for sync/checkpoint state when relevant.
+5. Add per-step input/output passing.
+6. Add basic output validation.
+7. Defer parallel DAG execution until sequential pipeline semantics are proven.
 
 Acceptance criteria:
 
 - A Go-defined pipeline can execute end-to-end.
+- Workflow steps use `workflow.ActionRef` resolved to `action.Action`.
 - Output from one step can feed the next.
-- Tool/action intent can be inspected before execution.
+- A prompt/model-turn can run as an action.
+- A workflow can be exposed as an action.
+- Action intent can be inspected before execution, including actions exposed as tools.
 - Execution is observable through events.
 - Thread-backed runs can persist workflow events.
 
@@ -331,7 +375,7 @@ go run ./cmd/agentsdk run apps/engineer
 
 ## Milestone 8 — Safety policy expansion
 
-Goal: evolve existing tool intent/middleware/cmdrisk into a broader safety layer.
+Goal: evolve existing tool intent/middleware/cmdrisk into an action-centered safety layer that tools, commands, workflows, datasources, and triggers share.
 
 Current state:
 
@@ -345,10 +389,10 @@ Current state:
 Tasks:
 
 1. Define safety decision types: allow, deny, require approval, require sandbox, require network policy.
-2. Extend intent concepts to workflow actions.
-3. Add approval interfaces that terminal channel can satisfy first.
-4. Add audit event payloads using thread events.
-5. Keep current tool middleware working.
+2. Move or adapt intent concepts to `action.*` so workflow actions, datasource actions, command-triggered actions, and tool-exposed actions share risk semantics.
+3. Move middleware concepts to action execution; keep current tool middleware working through aliases/adapters.
+4. Add approval interfaces that terminal channel can satisfy first.
+5. Add audit event payloads using thread events.
 6. Prepare adapter interfaces for Bubblewrap/network interception, but do not implement all sandboxing yet.
 
 Acceptance criteria:
@@ -393,48 +437,89 @@ Verification:
 go test ./trigger/... ./harness/... ./workflow/...
 ```
 
-## Milestone 10 — cs-bot MVP validation
+## Milestone 10 — Support-assistant case study validation
 
-Goal: validate the architecture with a real support/ticket triage application in `~/babelforce/projects/cs-bot`.
+Goal: validate the architecture with an anonymized support-assistant case study that exercises datasources, workflows, actions, tools, resources, and channels without encoding company-specific details in this public repository.
 
-Current cs-bot should not wait for every agentsdk refactor. It should use existing agentsdk pieces and feed lessons back.
+The case study should represent a realistic support assistant, but all public docs and fixtures must use generic names and synthetic data. Private application repositories can keep their real connector names, prompts, endpoints, and customer-specific details.
+
+Representative scaffold to validate:
+
+- a resource app with `agentsdk.app.json`, a default orchestrator agent, and local-only discovery;
+- one developer/configuration agent for implementation-heavy tasks;
+- command resources for lookup, summarize, debug, and scaffold-style tasks;
+- a documentation datasource pipeline:
+  - documentation API client with pagination and metadata;
+  - HTML parser preserving text/image interleaving;
+  - optional vision extractor for screenshot descriptions;
+  - optional condenser for retrieval-optimized documents;
+  - output writer or indexer for searchable documents;
+  - CLI entry point exposing bounded sync runs.
 
 Recommended scope:
 
-1. Pick one connector first: Jira or Zendesk.
-2. Implement connector operations as tools and/or actions.
-3. Create a triage agent spec using existing resource loading.
-4. Create a ticket triage workflow as Go-defined workflow first or `.agents/workflows/ticket_triage.yaml` if YAML support is ready.
-5. Run triage manually from CLI first.
-6. Add approval before any write/update operation.
-7. Add interval/cron-like trigger only after manual flow works.
-8. Persist session/thread state.
+1. Treat the documentation corpus as the first concrete **datasource** case study.
+2. Model the ingestion flow as a pipeline of actions:
+   - fetch collections/documents;
+   - parse document HTML or markdown;
+   - extract screenshot knowledge where enabled;
+   - condense/normalize document content;
+   - write or index searchable documents.
+3. Expose datasource actions as tools only where the agent needs direct access:
+   - search documentation;
+   - fetch source document;
+   - cite source metadata.
+4. Keep the resource app as the first app-level integration point.
+5. Run the agent manually from CLI first; add triggers only after the datasource pipeline is reliable.
+6. Add ticket/helpdesk triage later as a second datasource/workflow after the documentation datasource proves the model.
 
-Suggested first workflow:
+Suggested first workflow/pipeline:
 
 ```text
-load ticket
-  -> summarize/classify
-  -> determine severity/team/action
-  -> propose update
-  -> approval gate for writes
-  -> apply label/comment/assignment
-  -> emit result
+sync_documentation
+  -> fetch_documents
+  -> parse_document_content
+  -> extract_image_knowledge
+  -> condense_document
+  -> write_documents
+  -> build_or_refresh_search_index
+```
+
+Suggested first agent-facing tools over that datasource:
+
+```text
+docs_search(query) -> ranked source snippets
+docs_fetch(document_id | url | title) -> full sourced document
 ```
 
 Acceptance criteria:
 
-- A real ticket can be loaded.
-- The workflow produces structured triage output.
-- Writes require approval.
-- The run is observable and persisted.
-- Any missing generic abstractions are identified before extracting them into agentsdk.
+- A bounded sync command can run the documentation pipeline against synthetic or sanitized fixtures.
+- The datasource pipeline can process text and image-bearing documents without losing source URL/title/frontmatter/provenance.
+- Vision extraction can be disabled for cheap deterministic runs and enabled for screenshot-sensitive runs.
+- The orchestrator agent can answer at least five sourced documentation questions using generated documents or a search tool.
+- At least one question must require screenshot-derived knowledge from a synthetic fixture.
+- The case study identifies what belongs in agentsdk generically:
+  - datasource model;
+  - action/pipeline model;
+  - search/index tool pattern;
+  - provenance/citation metadata;
+  - triggerable sync semantics.
+- The case study identifies what remains app-specific/private:
+  - product prompts;
+  - connector quirks;
+  - condensation prompts;
+  - product-specific skills and commands;
+  - real endpoints, credentials, customer data, and proprietary terminology.
 
 Verification:
 
+Use synthetic or sanitized fixtures only:
+
 ```bash
-# in cs-bot
 go test ./...
+go run ./cmd/sync-docs --fixture ./testdata/docs --no-vision --no-condense --limit 5 -v
+agentsdk run ./testdata/support-app "Summarize how to configure the sample workflow, citing sources."
 ```
 
 ## Milestone 11 — Builder app MVP
@@ -448,7 +533,7 @@ Current state to reuse:
 - Filesystem/shell/git tools.
 - Planner capability.
 - Terminal channel.
-- Future workflow/action scaffolding.
+- Future datasource/workflow/action scaffolding.
 
 Tasks:
 
@@ -543,6 +628,7 @@ go test ./...
 - gRPC/WebSocket/telnet channels.
 - Parallel DAG workflow executor.
 - Durable workflow pause/resume/wait semantics.
+- Workflow-as-action composition for nested workflows and reusable automations.
 - Advanced sub-agent orchestration semantics.
 - Bubblewrap sandbox adapter.
 - Network interception adapter.
@@ -555,13 +641,13 @@ The next practical sequence should be:
 
 1. finalize these docs;
 2. promote/preserve engineer as dogfood app;
-3. extend resource discovery for workflows;
-4. add workflow/action core model;
+3. extend resource discovery for datasources and workflows;
+4. add datasource/workflow/action core model;
 5. extend app/plugin composition;
 6. add minimal workflow executor;
 7. introduce harness as wrapper over existing app/agent flow;
 8. migrate terminal onto harness;
-9. validate with cs-bot;
+9. validate with an anonymized support-assistant case study;
 10. only then perform larger dependency cleanup.
 
 This keeps the architecture grounded in working code while moving toward the product vision.

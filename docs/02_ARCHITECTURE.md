@@ -30,7 +30,41 @@ The future architecture should mainly clarify ownership:
 - `app`/`agentdir`/`resource`/`plugins` should remain the app composition and discovery foundation.
 - `terminal` should evolve into one channel over a general harness/session API.
 - `agent.Instance` should shrink or become a compatibility façade around clearer session/runtime/harness concepts.
-- workflows/actions should extend resource/plugin/app composition instead of introducing a separate parallel ecosystem.
+- datasources/workflows/actions should extend resource/plugin/app composition instead of introducing a separate parallel ecosystem.
+
+## Current execution path
+
+The current `agentsdk run` path is already a prototype harness, but the responsibilities are spread across packages:
+
+```text
+cmd/agentsdk
+  -> terminal/cli.Config
+  -> terminal/cli.Load
+     -> Resources.Resolve(policy)
+     -> agentdir/resource resolution
+     -> app.New(...resource bundle, plugins, builtins, middleware...)
+     -> app.InstantiateDefaultAgent(...agent options...)
+     -> agent.Instance
+        -> model routing / policy
+        -> toolset and activation state
+        -> skill repository and activation state
+        -> context providers
+        -> optional JSONL thread/session store
+        -> optional ThreadRuntime for capabilities/context replay
+        -> runtime.Engine
+  -> terminal/repl or one-shot task
+  -> runner events rendered by terminal/ui
+```
+
+A future harness should not throw this away. It should extract and name the reusable parts:
+
+- resource/app loading;
+- session open/resume;
+- event subscription;
+- turn/workflow dispatch;
+- channel lifecycle;
+- trigger lifecycle;
+- safety policy installation.
 
 ## Existing bounded contexts
 
@@ -51,14 +85,18 @@ Current strengths:
 - `tool.Result` supports deterministic model-facing output and persistence.
 - `tool.Intent` and `IntentProvider` provide side-effect declaration.
 - Middleware can wrap tools for logging, risk gates, timeouts, and approval.
+- These concepts are not inherently model-only; they should move into a top-level `action` package centered on `action.Action`, `action.Ctx`, `action.Result`, action intent, and action middleware.
 - `activation.Manager` already models active/inactive tool visibility.
 - `tools/standard` provides useful batteries-included assembly.
 
 Evolution:
 
-- Keep `tool` as public core API.
-- Reuse tool schema/result/intent machinery for workflow actions where possible.
-- Keep generic local tools under `tools/`.
+- Add a top-level `action` package.
+- Introduce `action.Action` as the stable executable primitive that owns name, description, kind, input schema, output schema, intent declaration, `action.Ctx`, `action.Result`, result contract, and middleware chain.
+- Move middleware completely to `action.*`; `tool` can alias or adapt it during migration.
+- Treat `tool.Tool` as embedding or wrapping `action.Action`, adding only LLM-facing concerns such as guidance, provider/tool-call projection, activation/visibility, and transcript rendering.
+- Keep `tool` as public compatibility API during migration, with aliases for `tool.Ctx`, `tool.Result`, `tool.Intent`, and middleware where practical.
+- Keep generic local tools under `tools/` while adding action-backed constructors over time.
 - Treat `tools/standard` as an app/bundle convenience, not a low-level runtime dependency.
 - Move product/service/environment-specific integrations toward adapters or integration packages as they appear.
 
@@ -108,7 +146,7 @@ Current strengths:
 Evolution:
 
 - Reuse thread events for workflow execution records rather than inventing a separate persistence mechanism.
-- Add workflow/action event kinds through the existing `thread.EventDefinition` pattern.
+- Add datasource/workflow/action event kinds through the existing `thread.EventDefinition` pattern where state changes need persistence.
 - Keep provider history immutability and explicit compaction as design constraints.
 
 ### Capabilities
@@ -171,8 +209,9 @@ Current strengths:
 Evolution:
 
 - Keep skills as instruction/reference resources, not workflows.
-- Keep commands as user/app actions and prompt templates, not workflow replacement.
-- Allow command actions in workflows where useful, but keep command result semantics distinct from tool/action results.
+- Keep commands as user/app invocation surfaces and prompt templates, not workflow replacement.
+- Prefer action-backed commands for typed work, with command-specific metadata for aliases, argument hints, caller policy, slash-command wiring, and channel/user visibility.
+- Allow commands to trigger actions or workflows where useful, but keep command result semantics distinct from action execution results.
 
 ### App/resource/plugin composition
 
@@ -186,7 +225,7 @@ Current packages:
 
 Current strengths:
 
-- `agentdir` resolves `.agents`, `.claude`, app manifests, global/user resources, local roots, embedded/FS roots, and declarative git sources.
+- `agentdir` resolves `.agents`, compatibility roots, app manifests, global/user resources, local roots, embedded/FS roots, and declarative git sources.
 - `resource.ContributionBundle` normalizes discovered contributions.
 - `app.App` composes bundles, plugins, commands, tools, skill sources, context providers, middleware, and agent specs.
 - `app.Plugin` already has facets for commands, agent specs, tools, skill sources, context providers, agent-context providers, and tool middleware.
@@ -194,10 +233,10 @@ Current strengths:
 
 Evolution:
 
-- Extend `agentdir` to discover `.agents/workflows/*.yaml`.
-- Extend `resource.ContributionBundle` with workflow/action contributions.
-- Extend `app.Plugin` with workflow/action facets.
-- Let `app.App` register workflows/actions the same way it registers commands/tools/skills today.
+- Extend `agentdir` to discover `.agents/datasources/*.yaml` and `.agents/workflows/*.yaml`.
+- Extend `resource.ContributionBundle` with datasource/workflow/action contributions.
+- Extend `app.Plugin` with datasource/workflow/action facets.
+- Let `app.App` register datasources/workflows/actions the same way it registers commands/tools/skills today.
 - Let harness build on `app.App` instead of bypassing it.
 
 ### Terminal as current channel
@@ -276,7 +315,7 @@ triggers/*
   -> harness trigger sink/session APIs
 
 workflow
-  -> action registry + runtime/tool/command/context/thread abstractions
+  -> datasource/action registry + runtime/tool/command/context/thread abstractions
 
 runtime
   -> conversation/thread/tool/capability/agentcontext abstractions
@@ -296,34 +335,114 @@ new plugins -> separate from existing app.Plugin facets
 new persistence -> separate from thread events
 ```
 
-## Workflow/action architecture
+## Concept composition model
 
-Workflow/action support should be an extension of existing app/resource/plugin/runtime concepts.
+The core domain should make overlapping concepts compositional rather than competing:
+
+```text
+Adapter / connector
+  owns integration details for an external system or runtime environment
+  may provide datasources, actions, tools, context providers, or triggers
+
+Datasource
+  owns a configured data boundary: collection/API/index/stream, schema, provenance, credentials/config references, sync state
+  is accessed by actions; it is not the execution primitive
+  may provide standard action definitions such as read/sync/search/map
+  may be exposed to a model only indirectly through tool-wrapped actions
+
+Action
+  is the smallest typed executable unit in package `action`
+  is independent of LLMs, agents, and tools
+  owns stable execution metadata: name, description, kind, input schema, output schema, implementation, intent, `action.Ctx`, `action.Result`, result contract, and middleware chain
+  can be called by workflows, tools, commands, triggers, datasources, or app code
+
+Tool
+  embeds or wraps `action.Action`
+  is the LLM-facing projection of executable power
+  adds model/provider-specific exposure: activation, guidance, schema projection, provider conversion, and transcript-oriented result rendering
+
+Workflow / pipeline
+  composes `workflow.ActionRef`s with data flow and control flow
+  orchestrates action execution, retries, step policy, context selection, and durable progress
+  pipeline is the linear workflow case
+  may itself be exposed through an action wrapper
+
+Command
+  is a human/app-facing invocation surface
+  may call an action, start a workflow, or execute a prompt/model-turn action
+
+Capability
+  is attached agent/session state plus optional tools/context
+  may expose tools/actions, but its defining feature is stateful extension of an agent
+
+Plugin / bundle
+  are packaging/contribution mechanisms, not execution primitives
+  plugin is Go-code contribution; bundle/resource is declarative/discovered contribution
+
+Channel
+  is ingress/egress between users/systems and the harness
+
+Event
+  is either live telemetry (runner/channel events) or durable state/history (thread events)
+  should be reused for workflow/action/datasource observability before adding a separate event bus
+
+Trigger
+  is an event/time source that asks the harness to start/resume work
+```
+
+This model avoids treating every concept as a synonym for "function." The smallest executable unit is the action; tools, commands, workflows, triggers, datasources, and channels are different ways to expose, compose, or initiate actions. The current `tool.Tool` package already contains much of this action machinery, so the migration should factor it into `action.*` carefully rather than introduce a duplicate workflow-only action stack.
+
+## Datasource/workflow/action architecture
+
+Datasource/workflow/action support should be an extension of existing app/resource/plugin/runtime concepts.
 
 ### Definitions
 
 ```text
+Datasource
+  name
+  kind/type
+  config schema
+  record/item schema
+  provenance metadata
+  credential/config references
+  paging/cursor/checkpoint state
+  consistency/freshness expectations
+  standard action refs: fetch/list/search/sync/map/transform
+
 Action
   name
+  description
   kind/type
   input schema
   output schema
   implementation
   intent declaration
+  action.Ctx
+  action.Result
+  result contract
+  middleware chain
+  observability labels
 
 Workflow
   name
   description
   input schema
   output schema
-  steps/actions
-  edges
+  steps with workflow.ActionRef
+  edges / dataflow mappings
   policy
+  retries / timeout / concurrency limits
   context selection
+  durable progress semantics
   metadata
 
 Pipeline
   workflow whose DAG is a simple sequence
+
+WorkflowAction
+  adapter that exposes a workflow as action.Action
+  useful for commands, triggers, tools, and parent workflows
 ```
 
 ### Resource loading
@@ -337,7 +456,7 @@ Default resource location:
 But discovery should follow existing resource resolution rules:
 
 - project `.agents` roots;
-- compatibility `.claude` roots if desired/compatible;
+- compatibility roots only if the workflow format is explicitly supported there;
 - plugin roots;
 - app manifest sources;
 - embedded filesystems;
@@ -348,6 +467,11 @@ But discovery should follow existing resource resolution rules:
 Extend `app.Plugin` with facets such as:
 
 ```go
+type DataSourcesPlugin interface {
+    Plugin
+    DataSources() []workflow.DataSource
+}
+
 type WorkflowsPlugin interface {
     Plugin
     Workflows() []workflow.Definition
@@ -359,7 +483,7 @@ type ActionsPlugin interface {
 }
 ```
 
-Names are illustrative, not final.
+Exact interface names should be decided when the workflow package is implemented; the architectural requirement is that datasource/workflow/action contributions extend the existing plugin facet model.
 
 ### Persistence
 
@@ -386,11 +510,14 @@ Do not create a separate workflow database until thread events prove insufficien
 Workflow belongs to the broader runtime system, but not inside the low-level model/tool loop.
 
 ```text
-runner.RunTurn         = one model/tool loop
+runner.RunTurn         = one model/tool loop; can be used by a prompt/model action
 runtime.Engine         = high-level turn engine over history/thread/context
-workflow.Executor      = DAG/pipeline orchestration using actions and runtime turns
+workflow.Executor      = DAG/pipeline orchestration over workflow.ActionRef -> action.Action
+workflow.Action        = adapter exposing a workflow run as action.Action
 harness.Service        = hosts apps, sessions, workflows, channels, triggers
 ```
+
+A prompt or model turn is also an action when treated as an executable unit: it has input, output, context, policy, and result semantics. The fact that it calls an LLM is an implementation detail of that action kind, not a reason to make workflows depend directly on LLM concepts.
 
 ## Harness architecture
 
@@ -426,7 +553,7 @@ harness.Service
   contains app composition
   owns sessions directly
   creates runtime engines via runtime.OpenThreadEngine
-  hosts workflows/actions
+  hosts datasources/workflows/actions
   supports multiple channels/triggers
 ```
 
@@ -434,7 +561,8 @@ harness.Service
 
 | Current package | Future role |
 | --- | --- |
-| `tool` | Keep as public core tool API; share concepts with actions. |
+| `action` | New top-level package for surface-neutral execution: Action, Ctx, Result, Intent, Middleware. |
+| `tool` | Keep as public LLM-facing tool API; embed/wrap `action.Action` and alias/adapt action concepts for compatibility. |
 | `tools/*` | Keep generic tools; expose some as actions where useful. |
 | `tools/standard` | Keep as compatibility/convenience; evolve toward `bundles/*`. |
 | `toolmw` | Keep; gradually become part of broader safety architecture. |
@@ -447,9 +575,9 @@ harness.Service
 | `agentcontext` | Keep context provider/render model; reuse for workflow steps. |
 | `skill` | Keep instruction/reference resource model. |
 | `command` | Keep slash command model; optionally expose as workflow actions. |
-| `resource` | Extend contribution bundle with workflows/actions. |
-| `agentdir` | Extend loader for `.agents/workflows`. |
-| `app` | Keep composition root; add workflows/actions; later hosted by harness. |
+| `resource` | Extend contribution bundle with datasources/workflows/actions. |
+| `agentdir` | Extend loader for `.agents/datasources` and `.agents/workflows`. |
+| `app` | Keep composition root; add datasource/workflow/action registries; later hosted by harness. |
 | `plugins/*` | Extend plugin facets; keep first-party bundles. |
 | `agent` | Keep spec and compatibility façade; migrate host/session duties outward. |
 | `terminal/*` | Evolve into first channel over harness. |
@@ -510,10 +638,12 @@ Recommendation: harness hosts `app.App` first. Later, if `app.App` becomes too s
 
 A standalone workflow system would be faster to prototype but would duplicate discovery, plugin, persistence, and observability concepts.
 
-Recommendation: workflow/action should extend `resource.ContributionBundle`, `app.Plugin`, app manifests/resource roots, thread events, and existing runtime/context/tool concepts.
+Recommendation: datasource/workflow/action should extend `resource.ContributionBundle`, `app.Plugin`, app manifests/resource roots, thread events, and existing runtime/context/tool concepts. Workflow should own graph definitions and `workflow.ActionRef`; action should own execution.
 
 ### Actions vs tools
 
-Tools are model-callable; actions are workflow-callable. Combining them too early may leak model-turn assumptions into workflows. Separating them too hard may duplicate schema, result, intent, and middleware machinery.
+The current code puts action-like responsibilities on `tool.Tool`: name, description, schema, execution, result, intent declaration, context, and middleware. That made sense because the LLM/tool loop was the first execution surface. As workflows, triggers, commands, and datasources become first-class, those responsibilities should move to a surface-neutral top-level `action` package.
 
-Recommendation: introduce actions as a workflow concept but reuse tool schema/result/intent/middleware patterns aggressively.
+The trade-off: moving too aggressively risks breaking the clean existing tool API; moving too timidly will duplicate schema, result, intent, middleware, and safety machinery in a separate workflow stack.
+
+Recommendation: introduce `action.Action`, `action.Ctx`, `action.Result`, action intent, and action middleware as the central executable layer. Then make `tool.Tool` embed or wrap `action.Action` and add only LLM-facing concerns such as guidance, activation, provider projection, and transcript rendering. Preserve existing `tool.Tool` APIs through aliases and compatibility wrappers while new workflow/action code depends on the action abstraction.

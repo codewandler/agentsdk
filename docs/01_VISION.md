@@ -14,9 +14,22 @@ agentsdk should support three related product roles:
 
 The long-term product promise:
 
-> A user describes an agentic use case — for example, ticket triage in Jira/Zendesk — and agentsdk helps turn that use case into a working, safe, observable, deployable agentic application.
+> A user describes an agentic use case — for example, ticket triage across a helpdesk or issue tracker — and agentsdk helps turn that use case into a working, safe, observable, deployable agentic application.
 
-agentsdk should provide the runtime, safety model, workflow/action model, app packaging, resource discovery, and builder experience so each application does not reinvent the same infrastructure.
+agentsdk should provide the runtime, safety model, datasource/workflow/action model, app packaging, resource discovery, and builder experience so each application does not reinvent the same infrastructure.
+
+## Evolution thesis
+
+The product direction is not "build a new runtime next to the old one." It is:
+
+```text
+existing turn runtime + existing app/resource/plugin system + existing thread log
+  -> clearer harness/session/channel boundaries
+  -> datasource/workflow/action orchestration on top
+  -> builder that generates resources, code, and deployment assets using those same primitives
+```
+
+This matters because current users can already build agents in Go and run resource bundles with `agentsdk run`. Future work should preserve that path while making the underlying host reusable for daemons, web/TUI channels, scheduled triggers, and generated apps.
 
 ## Product north star
 
@@ -26,7 +39,7 @@ A good agentsdk application should have:
 
 - declarative agent/app configuration where useful;
 - Go-code construction paths for embedded applications;
-- typed tools, actions, inputs, and outputs;
+- typed actions as the central executable primitive, with tools and commands as invocation surfaces;
 - explicit side-effect policy and approval gates;
 - durable thread/session state;
 - reproducible context rendering;
@@ -44,14 +57,14 @@ The current repository already provides the foundation for the vision:
 - `conversation` models branchable history, projected items, compaction, and provider continuations.
 - `thread` provides append-only thread events, branches, stores, memory store, and JSONL persistence.
 - `runtime.ThreadRuntime` binds live threads to capability state and context render replay.
-- `tool` defines model-callable tools, JSON schemas, results, intent declaration, middleware hooks, and unified conversion.
+- `tool` defines the current model-callable tool abstraction, including JSON schemas, results, intent declaration, middleware hooks, and unified conversion; these are the concepts most likely to migrate toward a central `action.Action` core.
 - `tools/*` provides filesystem, shell, git, web, vision, phone, JSON query, todo, turn, skill, and tool management tools.
 - `toolmw` and `cmdrisk` integration provide an early risk/safety layer.
 - `capability` and `capabilities/planner` provide attachable, event-sourced capability state.
 - `agentcontext` and `agentcontext/contextproviders` provide context managers, render records, diffs, and built-in context providers.
 - `skill` supports Agent Skills-compatible skill directories, references, repositories, and activation events.
 - `command` supports slash commands and a `command_run` tool bridge for agent-callable commands.
-- `agentdir` and `resource` load `.agents`, `.claude`, app manifests, local/global resources, declarative git sources, and normalized contribution bundles.
+- `agentdir` and `resource` load `.agents`, compatibility roots, app manifests, local/global resources, declarative git sources, and normalized contribution bundles.
 - `app` composes resource bundles, commands, plugins, tools, skills, context providers, middleware, and agent specs into running app instances.
 - `plugins/*` already define first-party plugin bundles for git, skills, tool management, vision, and standard plugin sets.
 - `terminal/cli`, `terminal/repl`, and `terminal/ui` provide the current terminal channel and `agentsdk run` experience.
@@ -75,7 +88,7 @@ As a **builder**, it should eventually generate full agentic apps from requireme
 
 agentsdk should not become a monolithic SaaS product or a pile of product-specific integrations inside the core runtime.
 
-The core should stay reusable. Jira, Zendesk, Slack, email, browser automation, hosted web UIs, deployment targets, and cloud-specific integrations should be modeled as adapters, plugins, bundled apps, or generated application code unless they are genuinely universal primitives.
+The core should stay reusable. Helpdesk systems, issue trackers, chat systems, email, browser automation, hosted web UIs, deployment targets, and cloud-specific integrations should be modeled as adapters, plugins, bundled apps, or generated application code unless they are genuinely universal primitives.
 
 ## Product surfaces
 
@@ -89,7 +102,7 @@ This exists today through `cmd/agentsdk`, `terminal/cli`, `app`, `agentdir`, `re
 
 Inspects discovered resources without running an agent.
 
-This already exists and should remain a key debugging/product surface for app manifests, resource roots, external sources, skills, commands, agents, and future workflow/action resources.
+This already exists and should remain a key debugging/product surface for app manifests, resource roots, external sources, skills, commands, agents, and future datasource/workflow/action resources.
 
 ### `agentsdk build`
 
@@ -126,6 +139,66 @@ The harness should initialize configured agents, channels, stores, datasources, 
 
 The harness may run embedded in a CLI process or as a daemon/service. The public concept should be **harness**. **Daemon** is one deployment mode.
 
+## Concept hierarchy
+
+Several agentsdk concepts intentionally overlap because they are different views of the same underlying work. The goal is not to eliminate overlap, but to define the direction of composition:
+
+```text
+Adapter / connector
+  -> implements actions and/or datasources against an external system
+
+Datasource
+  -> configured data boundary: collection, stream, API, corpus, database, or index
+  -> owns schema, provenance, credentials/config references, and sync/checkpoint semantics
+  -> is accessed by actions; it is not itself the execution primitive
+  -> may provide standard actions such as fetch, list, search, sync, transform
+
+Action
+  -> smallest typed unit of execution in package `action`
+  -> completely independent of LLMs, agents, and tools
+  -> owns stable execution metadata: name, description, kind, intent, input schema, output schema, `action.Ctx`, `action.Result`, and middleware chain
+  -> can be called by workflows/pipelines, triggers, commands, tools, datasources, or app code
+
+Tool
+  -> LLM-facing exposure of executable power
+  -> embeds or wraps `action.Action`
+  -> adds only model-facing concerns such as guidance, provider/tool-call projection, activation/visibility, and transcript rendering
+
+Workflow / pipeline
+  -> reliable, inspectable composition of `workflow.ActionRef`s
+  -> orchestrates action execution, dataflow, control flow, retries, and durable progress
+  -> pipeline is the linear case; workflow is the general DAG/control-flow case
+  -> may itself be wrapped as an action for commands, triggers, tools, or parent workflows
+
+Command
+  -> human/app-facing invocation surface
+  -> can call an action, start a workflow, or execute a prompt/model-turn action
+
+Capability
+  -> attachable agent/session feature with tools, context, and event-sourced state
+  -> not a workflow; capabilities extend what an agent is, workflows define what happens
+
+Bundle / plugin
+  -> packaging and contribution mechanisms
+  -> bundle is declarative/discovered; plugin is Go-code contribution
+
+Channel
+  -> user/system ingress and event egress for the harness
+
+Event
+  -> observable and/or durable fact emitted by runtime, workflow, datasource, tool/action, channel, or trigger
+  -> thread events are the durable event log; runner events are live execution/UI events
+
+Trigger
+  -> event/time source that starts or resumes work through the harness
+```
+
+The preferred mental model is:
+
+```text
+External system -> adapter/connector -> datasource -> actions -> workflows/commands/tools/triggers -> harness
+```
+
 ## Core product concepts
 
 ### Agent
@@ -142,7 +215,7 @@ Today this is `app.App`. It is already a user-facing composition root. The futur
 
 ### Resource bundle
 
-A resource bundle is a normalized set of discovered contributions: agent specs, commands, skill sources, tool contributions, hooks, permissions, diagnostics, and future workflow/action contributions.
+A resource bundle is a normalized set of discovered contributions: agent specs, commands, skill sources, tool contributions, hooks, permissions, diagnostics, and future datasource/workflow/action contributions.
 
 Today this is `resource.ContributionBundle`, produced by `agentdir` and consumed by `app.App`. Workflow/action resources should extend this existing discovery model.
 
@@ -150,33 +223,50 @@ Today this is `resource.ContributionBundle`, produced by `agentdir` and consumed
 
 A plugin is a Go-code contribution bundle.
 
-Today `app.Plugin` and its facets contribute commands, agent specs, tools, skill sources, context providers, agent-scoped context providers, global tool middleware, and targeted tool middleware. Future workflow/action contributions should become additional plugin facets rather than a parallel plugin system.
-
-### Tool
-
-A tool is a model-callable function. Tools are how the model performs side effects or queries external state during a turn.
-
-Tools should declare intent before execution so safety policy can assess, approve, constrain, or reject the call.
+Today `app.Plugin` and its facets contribute commands, agent specs, tools, skill sources, context providers, agent-scoped context providers, global tool middleware, and targeted tool middleware. Future datasource/workflow/action contributions should become additional plugin facets rather than a parallel plugin system.
 
 ### Action
 
-An action is a named atomic operation with typed input and output. Actions are workflow primitives.
+An action is the core executable primitive in a top-level `action` package: a named atomic operation with typed input, typed output, declared intent, result semantics, execution context, and middleware chain.
 
-Actions are implemented in Go, have a kind/type, and can be referenced by workflows and pipelines. Examples of action kinds may include command execution, HTTP request, model step, tool call, transform, approval, or domain-specific operations.
+Actions are independent of LLMs, agents, and tools. A system can run commands, workflows, datasource syncs, scheduled jobs, or service integrations entirely through actions without any model involved.
+
+Action metadata should live on the action, not on every surface that can invoke it. That includes name, description, kind/type, intent declaration, input schema, output schema, `action.Ctx`, `action.Result`, middleware, observability labels, and safety policy hooks. Examples of action kinds may include command execution, HTTP request, transform, approval, datasource read/write/sync, workflow dispatch, model/agent turn, or domain-specific operations.
+
+Actions can be implemented in Go and referenced by workflows, pipelines, tools, commands, triggers, datasources, and app code. This makes action the central reusable unit: workflow steps, datasource operations, model-callable tools, and slash commands should not each reinvent schema, result, intent, and middleware concepts.
+
+### Tool
+
+A tool is not the core execution primitive. A tool is the LLM-facing way to give an agent executable power over actions, workflows, commands, datasources, or other app capabilities.
+
+Technically, the target shape is that `tool.Tool` embeds or wraps `action.Action` and adds only what an LLM/provider needs: guidance, provider/tool-call projection, activation/visibility, and transcript-oriented rendering. Middleware, intent declaration, context, and base results belong in `action.*`.
+
+In the current code, `tool.Tool` owns metadata, schema, execution, intent, result, and middleware. The target direction is to factor those reusable parts into `action.Action`, then keep `tool.Tool` as the LLM-facing adapter over actions. Compatibility wrappers and aliases can preserve existing `tool.Tool`, `tool.Ctx`, `tool.Result`, `tool.Intent`, and middleware APIs while the internals migrate.
 
 Tools and actions are related but not identical:
 
-- a **tool** is exposed to the model as a callable function during a turn;
-- an **action** is invoked by workflow orchestration as a typed step;
-- one implementation may be exposed as both a tool and an action when appropriate.
+- an **action** is the reusable executable unit with schemas, intent, `action.Ctx`, `action.Result`, and middleware;
+- a **tool** is the model-callable exposure of executable power during a turn;
+- one action may be exposed as zero, one, or many tools depending on model/channel needs;
+- a tool may also expose higher-level executable surfaces such as workflows, commands, or datasource operations when that is the desired agent interface.
+
+### Datasource
+
+A datasource is a configured data boundary: collection, stream, API, document corpus, database, search index, or event source that agentsdk can ingest from, query, or synchronize.
+
+A datasource is not an execution primitive and is not automatically a tool. It owns data-facing concerns: config, schema, provenance, credential references, paging/cursor/checkpoint semantics, sync state, and consistency expectations. Actions access datasources to do work such as `fetch`, `list`, `search`, `sync`, `map`, or `transform`. Those actions can then be used by workflows, commands, triggers/background jobs, app code, or wrapped as tools for agents.
+
+A hypothetical support assistant is a concrete example: a documentation API plus parsing, vision extraction, condensation, and indexed search form a datasource pipeline. The agent-facing search tool is only one surface over that datasource.
 
 ### Workflow
 
-A workflow is a reliable, typed, inspectable execution graph for agentic applications.
+A workflow is a reliable, typed, inspectable execution graph for agentic applications and non-agentic automation.
 
-It exists for cases where a free-form prompt, command, or skill is too ambiguous. Workflows compose actions into simple pipelines or more complex DAGs.
+It exists for cases where an ad hoc command, free-form prompt, or one-off action is too ambiguous. Workflows compose `workflow.ActionRef`s into simple pipelines or more complex DAGs. `workflow.ActionRef` belongs to the workflow package because it is graph/reference/dataflow metadata; the executable target remains `action.Action`.
 
-A pipeline is just a sequenced DAG.
+A workflow is not the core execution primitive. Actions are. A workflow orchestrates actions and owns dataflow, control flow, retries, step policy, context selection, and durable progress. A workflow can also be exposed as an action when commands, triggers, tools, or parent workflows need to start it through the same action execution layer.
+
+A pipeline is the linear workflow case: a sequenced DAG with one primary path.
 
 Workflow definitions may live wherever resource discovery can find them. The default filesystem convention for YAML specs should be:
 
@@ -200,9 +290,11 @@ Today skills and exact `references/` paths can be activated at runtime and persi
 
 ### Command
 
-A command is a user/app slash-command action. Commands may optionally be exposed to agents through a tool bridge, but their primary role is user/app interaction.
+A command is a human/app-facing trigger surface around an action, workflow, datasource operation, or prompt-rendering behavior.
 
-Today command files are resources and `command.Tool` exposes explicitly agent-callable commands as `command_run`.
+Commands should wrap actions where they perform typed work, adding command-specific metadata such as aliases, argument hints, caller policy, slash-command wiring, and channel/user visibility. They may also start a workflow, call datasource actions, or render/execute an LLM prompt action when that is the appropriate command result.
+
+Today `command.Command` has its own `Spec`, `Params`, and `Result`, and `command.Tool` exposes explicitly agent-callable commands as `command_run`. The target direction is not to delete commands, but to make their executable core action-backed where possible while preserving command-specific policy and UX semantics.
 
 ### Channel
 
@@ -237,10 +329,19 @@ Examples:
 - file watchers;
 - queue events;
 - email events;
-- Slack events;
+- chat events;
 - system monitor ticks.
 
 A trigger is not a channel. A channel is an interaction surface; a trigger is an event source.
+
+### Event
+
+An event is a fact emitted by the system. agentsdk already has two important event families:
+
+- **runner events** — live execution events for UI/observability, such as text deltas, tool calls, usage, warnings, and errors;
+- **thread events** — durable append-only events for conversation nodes, capability state, context render records, branch/session lifecycle, and future datasource/workflow/action state.
+
+Triggers consume external events or time signals and turn them into harness work. Channels expose live events to users or systems. Workflows and datasources should emit events for observability and replay where needed.
 
 ### Adapter
 
@@ -248,7 +349,7 @@ An adapter connects agentsdk to a third-party service or environment-specific sy
 
 Examples:
 
-- Jira/Zendesk/Slack/email connectors;
+- helpdesk/issue-tracker/chat/email connectors;
 - Tavily search;
 - SIP/phone;
 - Bubblewrap sandboxing;
@@ -311,7 +412,7 @@ Existing thread/conversation packages persist state.
 Existing app/resource/plugin packages compose applications.
 Existing terminal code is the first channel.
 Existing tool/intent/middleware code is the safety seed.
-Workflow adds reliable action orchestration.
+Workflow adds reliable orchestration of action references and durable progress.
 Harness consolidates host/session/channel/trigger lifecycle.
 Builder creates apps from these pieces.
 ```
