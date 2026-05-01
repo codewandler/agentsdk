@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions below are backfilled from the repository's implementation milestones. Tags
 match these entries as the project starts publishing releases.
 
+## [Unreleased]
+
+### Added
+
+- Promoted the engineer dogfood agent to `apps/engineer` and reserved
+  `apps/builder` for the planned `agentsdk build` app.
+
+### Changed
+
+- Updated app/example documentation to distinguish first-party dogfood apps from
+  small instructional examples.
+
 ## [0.32.0] - 2026-04-30
 
 ### Added

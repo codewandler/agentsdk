@@ -68,7 +68,7 @@ The current repository already provides the foundation for the vision:
 - `app` composes resource bundles, commands, plugins, tools, skills, context providers, middleware, and agent specs into running app instances.
 - `plugins/*` already define first-party plugin bundles for git, skills, tool management, vision, and standard plugin sets.
 - `terminal/cli`, `terminal/repl`, and `terminal/ui` provide the current terminal channel and `agentsdk run` experience.
-- `examples/engineer` is a practical dogfood resource bundle used as a coding/architecture/devops agent.
+- `apps/engineer` is a practical dogfood resource bundle used as a coding/architecture/devops agent; `examples/engineer` remains as a compatibility copy during the transition.
 
 The product vision is therefore evolutionary: clarify boundaries, reuse these foundations, and add missing concepts only where the current model cannot express the future product.
 
@@ -405,7 +405,7 @@ tool/action request
 
 The engineer agent is too important to remain only a tiny example. It is a dogfood app: the agent used to build agentsdk itself.
 
-Recommended direction:
+Current direction:
 
 ```text
 apps/engineer/   first-party dogfood coding/architecture/devops agent

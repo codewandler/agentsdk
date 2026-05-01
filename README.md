@@ -340,9 +340,26 @@ Environment variables:
 - `WEBSEARCH_PROVIDER=tavily` — explicitly select Tavily.
 - `WEBSEARCH_PROVIDER=none` — disable web search while keeping `web_fetch` available.
 
+## First-party Apps
+
+The `apps/` directory contains larger first-party dogfood applications. These
+apps are used to validate agentsdk product architecture and may be more complete
+than the small instructional examples.
+
+| App | Description |
+|-----|-------------|
+| [`engineer`](apps/engineer/) | Resource-only coding, architecture, code-review, and DevOps dogfood agent |
+| [`builder`](apps/builder/) | Planned builder app for the future `agentsdk build` experience |
+
+Run the engineer app from the repository root:
+
+```bash
+go run ./cmd/agentsdk run apps/engineer
+```
+
 ## Examples
 
-The `examples/` directory contains runnable agent applications:
+The `examples/` directory contains small instructional agent applications:
 
 | Example | Description |
 |---------|-------------|

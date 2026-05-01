@@ -28,17 +28,22 @@ go test ./tool/...
 
 See `.agents/reviews/` for detailed review notes and follow-up recommendations.
 
-## Examples
+## Apps and examples
 
-The `examples/` directory contains runnable agent applications:
+The `apps/` directory contains first-party dogfood apps:
+
+- `apps/engineer/` — Resource-only coding/architecture/code-review/DevOps agent used to build agentsdk itself.
+- `apps/builder/` — Reserved for the planned `agentsdk build` builder app.
+
+The `examples/` directory contains small instructional agent applications:
 
 - `examples/devops-cli/` — CLI agent with custom tool wiring.
 - `examples/research-desk/` — Multi-source research agent with resource bundles.
 - `examples/release-notes-agent/` — Planned: release notes generation agent.
 - `examples/repo-maintainer/` — Planned: repository maintenance agent.
 
-When adding or changing SDK APIs, check whether an existing example should be
-updated to reflect the change.
+When adding or changing SDK APIs, check whether an existing app or example should
+be updated to reflect the change.
 
 ## Branding: flai → agentsdk
 

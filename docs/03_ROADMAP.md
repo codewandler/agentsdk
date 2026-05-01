@@ -37,7 +37,7 @@ Before adding anything, recognize the reusable pieces already present:
 
 ## Milestone 0 — Documentation and alignment
 
-Status: in progress.
+Status: complete.
 
 Deliverables:
 
@@ -77,32 +77,34 @@ This order is deliberate. Workflow resources and app/plugin registration should 
 
 ## Milestone 1 — Promote and preserve dogfood apps
 
+Status: complete.
+
 Goal: distinguish real first-party agentic apps from small examples without breaking current workflows.
 
 Current state:
 
-- `examples/engineer` is already a useful resource-only app.
+- `apps/engineer` is the first-party dogfood coding/architecture/devops app.
+- `examples/engineer` remains available as a compatibility copy during the transition.
 - It uses current agentdir/app manifest/resource behavior.
-- It is effectively a dogfood coding/architecture/devops agent.
 
 Tasks:
 
-1. Create an `apps/` directory for first-party dogfood apps.
-2. Move or copy `examples/engineer` to:
+1. Create an `apps/` directory for first-party dogfood apps. ✅
+2. Move or copy `examples/engineer` to: ✅
 
    ```text
    apps/engineer/
    ```
 
-3. Keep compatibility documentation for the old example path.
-4. Add or reserve:
+3. Keep compatibility documentation for the old example path. ✅
+4. Add or reserve: ✅
 
    ```text
    apps/builder/
    ```
 
-5. Keep `examples/` for small instructional examples.
-6. Update README, AGENTS notes, and example references.
+5. Keep `examples/` for small instructional examples. ✅
+6. Update README, AGENTS notes, and example references. ✅
 
 Acceptance criteria:
 
@@ -656,15 +658,13 @@ go test ./...
 
 The next practical sequence should be:
 
-1. finalize these docs;
-2. promote/preserve engineer as dogfood app;
-3. extend resource discovery for datasources and workflows;
-4. add datasource/workflow/action core model;
-5. extend app/plugin composition;
-6. add minimal workflow executor;
-7. introduce harness as wrapper over existing app/agent flow;
-8. migrate terminal onto harness;
-9. validate with an anonymized support-assistant case study;
-10. only then perform larger dependency cleanup.
+1. extend resource discovery for datasources and workflows;
+2. finish the datasource/workflow/action core model;
+3. extend app/plugin composition;
+4. add minimal workflow executor integrations;
+5. introduce harness as wrapper over existing app/agent flow;
+6. migrate terminal onto harness;
+7. validate with an anonymized support-assistant case study;
+8. only then perform larger dependency cleanup.
 
 This keeps the architecture grounded in working code while moving toward the product vision.
