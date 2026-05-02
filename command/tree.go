@@ -18,6 +18,11 @@ type nodeOptionFunc func(*treeNode)
 
 func (fn nodeOptionFunc) applyNodeOption(n *treeNode) { fn(n) }
 
+type inputBindingKey struct {
+	source InputSource
+	name   string
+}
+
 // Description sets command node description metadata.
 func Description(description string) NodeOption {
 	return nodeOptionFunc(func(n *treeNode) { n.spec.Description = strings.TrimSpace(description) })
@@ -301,13 +306,15 @@ func descriptorNames(descs []Descriptor) []string {
 }
 
 type treeNode struct {
-	spec     Spec
-	handler  TreeHandler
-	args     []ArgSpec
-	flags    []FlagSpec
-	children []*treeNode
-	index    map[string]*treeNode
-	parent   *treeNode
+	spec         Spec
+	handler      TreeHandler
+	args         []ArgSpec
+	flags        []FlagSpec
+	inputHints   []InputFieldDescriptor
+	inputHintErr error
+	children     []*treeNode
+	index        map[string]*treeNode
+	parent       *treeNode
 }
 
 // Tree is a declarative command tree that implements Command.
@@ -516,6 +523,9 @@ func validateNodeSpec(node *treeNode) error {
 			return ValidationError{Path: node.path(), Code: ValidationInvalidSpec, Field: arg.Name, Message: fmt.Sprintf("command: variadic argument %q must be last", arg.Name)}
 		}
 	}
+	if node.inputHintErr != nil {
+		return node.inputHintErr
+	}
 	seenFlags := map[string]bool{}
 	for _, flag := range node.flags {
 		if flag.Name == "" {
@@ -715,23 +725,44 @@ func (n *treeNode) commandInputFromMap(path []string, input map[string]any) (Com
 
 func (n *treeNode) descriptor() Descriptor {
 	desc := Descriptor{Name: n.spec.Name, Path: n.path(), Description: n.spec.Description, ArgumentHint: n.spec.ArgumentHint}
+	hints := n.inputHintTypes()
 	for _, arg := range n.args {
 		desc.Args = append(desc.Args, ArgDescriptor{Name: arg.Name, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
 		fieldType := InputTypeString
 		if arg.IsVariadic {
 			fieldType = InputTypeArray
+		} else if hinted, ok := hints[inputBindingKey{source: InputSourceArg, name: arg.Name}]; ok {
+			fieldType = hinted
 		}
 		desc.Input.Fields = append(desc.Input.Fields, InputFieldDescriptor{Name: arg.Name, Source: InputSourceArg, Type: fieldType, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
 	}
 	for _, flag := range n.flags {
 		enumValues := append([]string(nil), flag.EnumValues...)
 		desc.Flags = append(desc.Flags, FlagDescriptor{Name: flag.Name, Description: flag.Description, Required: flag.IsRequired, EnumValues: enumValues})
-		desc.Input.Fields = append(desc.Input.Fields, InputFieldDescriptor{Name: flag.Name, Source: InputSourceFlag, Type: InputTypeString, Description: flag.Description, Required: flag.IsRequired, EnumValues: append([]string(nil), enumValues...)})
+		fieldType := InputTypeString
+		if hinted, ok := hints[inputBindingKey{source: InputSourceFlag, name: flag.Name}]; ok {
+			fieldType = hinted
+		}
+		desc.Input.Fields = append(desc.Input.Fields, InputFieldDescriptor{Name: flag.Name, Source: InputSourceFlag, Type: fieldType, Description: flag.Description, Required: flag.IsRequired, EnumValues: append([]string(nil), enumValues...)})
 	}
 	for _, child := range n.children {
 		desc.Subcommands = append(desc.Subcommands, child.descriptor())
 	}
 	return desc
+}
+
+func (n *treeNode) inputHintTypes() map[inputBindingKey]InputType {
+	out := map[inputBindingKey]InputType{}
+	if n == nil {
+		return out
+	}
+	for _, hint := range n.inputHints {
+		if hint.Name == "" || hint.Source == "" || hint.Type == "" {
+			continue
+		}
+		out[inputBindingKey{source: hint.Source, name: hint.Name}] = hint.Type
+	}
+	return out
 }
 
 func (n *treeNode) path() []string {

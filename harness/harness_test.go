@@ -95,6 +95,10 @@ func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
 	require.Equal(t, []string{"workflow", "list"}, descriptors[0].Subcommands[0].Path)
 	require.Equal(t, "session", descriptors[1].Name)
 	require.Equal(t, []string{"session", "info"}, descriptors[1].Subcommands[0].Path)
+	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[2].Input.Fields[0].Type)
+	require.Equal(t, command.InputTypeArray, descriptors[0].Subcommands[2].Input.Fields[1].Type)
+	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[3].Input.Fields[0].Type)
+	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[3].Input.Fields[1].Type)
 
 	result, err := session.ExecuteCommand(context.Background(), []string{"/workflow", "list"}, nil)
 	require.NoError(t, err)

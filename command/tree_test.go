@@ -218,6 +218,29 @@ func TestTreeDescriptorRendersAsJSON(t *testing.T) {
 	}`, text)
 }
 
+func TestTreeDescriptorUsesTypedInputHintsForFieldTypes(t *testing.T) {
+	tree, err := NewTree("workflow").
+		Sub("runs", nil,
+			TypedInput[typedCommandHintInput](),
+			Arg("name").Required().Describe("Workflow name"),
+			Arg("values").Variadic().Describe("Values"),
+			Flag("limit").Describe("Result limit"),
+			Flag("verbose").Describe("Verbose output"),
+			Flag("status").Enum("running", "succeeded", "failed"),
+		).
+		Build()
+	require.NoError(t, err)
+
+	desc := tree.Descriptor().Subcommands[0]
+	require.Equal(t, []InputFieldDescriptor{
+		{Name: "name", Source: InputSourceArg, Type: InputTypeString, Description: "Workflow name", Required: true},
+		{Name: "values", Source: InputSourceArg, Type: InputTypeArray, Description: "Values", Variadic: true},
+		{Name: "limit", Source: InputSourceFlag, Type: InputTypeInteger, Description: "Result limit"},
+		{Name: "verbose", Source: InputSourceFlag, Type: InputTypeBool, Description: "Verbose output"},
+		{Name: "status", Source: InputSourceFlag, Type: InputTypeString, EnumValues: []string{"running", "succeeded", "failed"}},
+	}, desc.Input.Fields)
+}
+
 func TestTreeRejectsDuplicateAndInvalidSpecs(t *testing.T) {
 	_, err := NewTree("workflow").
 		Sub("show", nil).

@@ -22,6 +22,100 @@ func Typed[I any](fn func(context.Context, I) (Result, error)) TreeHandler {
 	}
 }
 
+// TypedInput extracts descriptor type hints from I and applies them to a command tree node.
+func TypedInput[I any]() NodeOption {
+	hints, err := InputHints[I]()
+	return nodeOptionFunc(func(n *treeNode) {
+		if err != nil {
+			n.inputHintErr = err
+			return
+		}
+		n.inputHints = append(n.inputHints, hints...)
+	})
+}
+
+// InputHints returns command input descriptor hints derived from I's command tags.
+func InputHints[I any]() ([]InputFieldDescriptor, error) {
+	typ := reflect.TypeOf((*I)(nil)).Elem()
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return nil, ValidationError{Code: ValidationInvalidSpec, Message: fmt.Sprintf("command: typed input %s must be a struct", reflect.TypeOf((*I)(nil)).Elem())}
+	}
+	return inputHintsForStruct(typ)
+}
+
+func inputHintsForStruct(typ reflect.Type) ([]InputFieldDescriptor, error) {
+	var hints []InputFieldDescriptor
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		source, name, ok, err := parseCommandTag(field.Tag.Get("command"))
+		if err != nil {
+			return nil, ValidationError{Code: ValidationInvalidSpec, Field: field.Name, Message: err.Error()}
+		}
+		if !ok {
+			continue
+		}
+		inputSource, err := inputSourceFromTag(source)
+		if err != nil {
+			return nil, ValidationError{Code: ValidationInvalidSpec, Field: field.Name, Message: err.Error()}
+		}
+		inputType, err := inputTypeForReflectType(field.Type)
+		if err != nil {
+			return nil, ValidationError{Code: ValidationInvalidSpec, Field: field.Name, Message: err.Error()}
+		}
+		hints = append(hints, InputFieldDescriptor{Name: name, Source: inputSource, Type: inputType})
+	}
+	return hints, nil
+}
+
+func inputSourceFromTag(source string) (InputSource, error) {
+	switch source {
+	case "arg":
+		return InputSourceArg, nil
+	case "flag":
+		return InputSourceFlag, nil
+	default:
+		return "", fmt.Errorf("command: unsupported binding source %q", source)
+	}
+}
+
+func inputTypeForReflectType(typ reflect.Type) (InputType, error) {
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+	if typ.Kind() == reflect.Slice {
+		if _, err := inputScalarTypeForReflectType(typ.Elem()); err != nil {
+			return "", err
+		}
+		return InputTypeArray, nil
+	}
+	return inputScalarTypeForReflectType(typ)
+}
+
+func inputScalarTypeForReflectType(typ reflect.Type) (InputType, error) {
+	if reflect.PointerTo(typ).Implements(reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()) {
+		return InputTypeString, nil
+	}
+	switch typ.Kind() {
+	case reflect.String:
+		return InputTypeString, nil
+	case reflect.Bool:
+		return InputTypeBool, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return InputTypeInteger, nil
+	case reflect.Float32, reflect.Float64:
+		return InputTypeNumber, nil
+	default:
+		return "", fmt.Errorf("command: unsupported typed field %s", typ)
+	}
+}
+
 // Bind binds a validated invocation into I using command struct tags.
 func Bind[I any](inv Invocation) (I, error) {
 	var zero I

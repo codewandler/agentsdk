@@ -102,16 +102,21 @@ type WorkflowRunsInput struct {
 }
 ```
 
-Supported scalar targets currently include strings, named string types, bools, ints, uints, floats, pointers to supported scalar types, slices of supported scalar types, and `encoding.TextUnmarshaler` fields. Optional values remain zero-valued when omitted. Enum constraints still belong in the command tree declaration, not in struct tags:
+Supported scalar targets currently include strings, named string types, bools, ints, uints, floats, pointers to supported scalar types, slices of supported scalar types, and `encoding.TextUnmarshaler` fields. Optional values remain zero-valued when omitted.
+
+Typed inputs can also enrich command input descriptors with primitive type hints:
 
 ```go
 command.NewTree("workflow").
     Sub("runs", command.Typed(workflowRunsHandler),
+        command.TypedInput[WorkflowRunsInput](),
         command.Flag("workflow"),
         command.Flag("status").Enum("running", "succeeded", "failed"),
     ).
     Build()
 ```
+
+`command.TypedInput[T]()` infers descriptor field types from `T`'s tagged fields: strings and `encoding.TextUnmarshaler` become `string`, bools become `bool`, ints/uints become `integer`, floats become `number`, and slices become `array`. Enum constraints, required flags, descriptions, and variadic behavior still belong in the command tree declaration, not in struct tags.
 
 Commands are not a replacement for actions. The intended relationship is:
 
@@ -184,7 +189,7 @@ Example descriptor input for `/workflow runs`:
 }
 ```
 
-Input descriptors are populated from declared `command.Arg(...)` and `command.Flag(...)` specs. That keeps the command tree declaration canonical for validation, help, typed binding, and non-terminal execution surfaces. Variadic args are exposed as `array`; scalar args and flags are exposed as `string` until explicit richer type metadata is added.
+Input descriptors are populated from declared `command.Arg(...)` and `command.Flag(...)` specs. That keeps the command tree declaration canonical for validation, help, typed binding, and non-terminal execution surfaces. Variadic args are exposed as `array`; scalar args and flags default to `string`, and `command.TypedInput[T]()` can enrich those defaults with typed-handler field metadata.
 
 ## JSON rendering
 
@@ -214,6 +219,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 3. Command descriptors/introspection exposed through harness sessions: ✅
 4. Typed command input binding: ✅
 5. JSON rendering for structured command payloads/descriptors: ✅
+6. Typed input descriptor type hints: ✅
 
 Recommended commit sequence:
 
@@ -223,6 +229,7 @@ Use command trees for harness commands
 Expose command tree descriptors
 Add typed command input binding
 Add JSON command payload rendering
+Infer command input descriptor types
 ```
 
 During migration, keep terminal behavior stable where behavior is intentional, but do not preserve dirty parsing patterns. The current `command.Parse` tokenizer remains the terminal slash syntax parser; command validation and command metadata now live in the declarative tree.

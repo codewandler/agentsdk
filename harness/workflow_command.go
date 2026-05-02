@@ -41,20 +41,24 @@ func NewWorkflowCommand(session *Session) (*command.Tree, error) {
 		).
 		Sub("show", command.Typed(h.workflowShowCommand),
 			command.Description("Show workflow"),
+			command.TypedInput[workflowShowCommandInput](),
 			command.Arg("name").Required(),
 		).
 		Sub("start", command.Typed(h.workflowStartCommand),
 			command.Description("Start workflow"),
+			command.TypedInput[workflowStartCommandInput](),
 			command.Arg("name").Required(),
 			command.Arg("input").Variadic(),
 		).
 		Sub("runs", command.Typed(h.workflowRunsCommand),
 			command.Description("List workflow runs"),
+			command.TypedInput[workflowRunsCommandInput](),
 			command.Flag("workflow"),
 			command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
 		).
 		Sub("run", command.Typed(h.workflowRunCommand),
 			command.Description("Show workflow run"),
+			command.TypedInput[workflowRunCommandInput](),
 			command.Arg("run-id").Required(),
 		).
 		Build()

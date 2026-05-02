@@ -137,3 +137,48 @@ func TestTypedRejectsNonStructInput(t *testing.T) {
 	require.ErrorAs(t, err, &validation)
 	require.Equal(t, ValidationInvalidSpec, validation.Code)
 }
+
+type typedCommandHintInput struct {
+	Name    string             `command:"arg=name"`
+	Status  typedCommandStatus `command:"flag=status"`
+	Limit   int                `command:"flag=limit"`
+	Verbose bool               `command:"flag=verbose"`
+	Ratio   float64            `command:"flag=ratio"`
+	Values  []string           `command:"arg=values"`
+}
+
+func TestTypedInputHintsInferDescriptorTypes(t *testing.T) {
+	hints, err := InputHints[typedCommandHintInput]()
+
+	require.NoError(t, err)
+	require.Equal(t, []InputFieldDescriptor{
+		{Name: "name", Source: InputSourceArg, Type: InputTypeString},
+		{Name: "status", Source: InputSourceFlag, Type: InputTypeString},
+		{Name: "limit", Source: InputSourceFlag, Type: InputTypeInteger},
+		{Name: "verbose", Source: InputSourceFlag, Type: InputTypeBool},
+		{Name: "ratio", Source: InputSourceFlag, Type: InputTypeNumber},
+		{Name: "values", Source: InputSourceArg, Type: InputTypeArray},
+	}, hints)
+}
+
+func TestTypedInputHintsRejectInvalidInput(t *testing.T) {
+	t.Run("non struct", func(t *testing.T) {
+		_, err := InputHints[string]()
+		var validation ValidationError
+		require.ErrorAs(t, err, &validation)
+		require.Equal(t, ValidationInvalidSpec, validation.Code)
+	})
+
+	t.Run("unsupported field", func(t *testing.T) {
+		type bad struct {
+			Value map[string]string `command:"flag=value"`
+		}
+
+		_, err := NewTree("bad", TypedInput[bad]()).Build()
+
+		var validation ValidationError
+		require.ErrorAs(t, err, &validation)
+		require.Equal(t, ValidationInvalidSpec, validation.Code)
+		require.Equal(t, "Value", validation.Field)
+	})
+}
