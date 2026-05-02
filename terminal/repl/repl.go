@@ -147,9 +147,14 @@ func applyResult(out io.Writer, result command.Result, cfg Options) bool {
 	switch result.Kind {
 	case command.ResultHandled:
 		return false
-	case command.ResultText:
-		if result.Text != "" {
-			fmt.Fprintln(out, result.Text)
+	case command.ResultDisplay:
+		text, err := command.Render(result, command.DisplayTerminal)
+		if err != nil {
+			ui.PrintError(out, err)
+			return false
+		}
+		if text != "" {
+			fmt.Fprintln(out, text)
 		}
 		return false
 	case command.ResultAgentTurn:

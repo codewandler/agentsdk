@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/codewandler/agentsdk/action"
@@ -115,7 +114,7 @@ func (s *Session) handleWorkflowCommand(ctx context.Context, input string) (comm
 		if len(params.Args) != 1 {
 			return command.Text("usage: /workflow list"), nil
 		}
-		return command.Text(s.renderWorkflowList()), nil
+		return s.workflowList(), nil
 	case "show":
 		if len(params.Args) != 2 {
 			return command.Text("usage: /workflow show <name>"), nil
@@ -145,23 +144,11 @@ func workflowCommandUsage() string {
 	return "usage: /workflow <list|show|start|runs|run>\n  /workflow list\n  /workflow show <name>\n  /workflow start <name> [input]\n  /workflow runs\n  /workflow run <run-id>"
 }
 
-func (s *Session) renderWorkflowList() string {
+func (s *Session) workflowList() command.Result {
 	if s == nil || s.App == nil {
-		return "No workflows registered."
+		return command.Display(WorkflowListPayload{})
 	}
-	defs := s.App.Workflows()
-	if len(defs) == 0 {
-		return "No workflows registered."
-	}
-	var b strings.Builder
-	b.WriteString("Workflows:")
-	for _, def := range defs {
-		fmt.Fprintf(&b, "\n- %s", def.Name)
-		if def.Description != "" {
-			fmt.Fprintf(&b, ": %s", def.Description)
-		}
-	}
-	return b.String()
+	return command.Display(WorkflowListPayload{Definitions: s.App.Workflows()})
 }
 
 func (s *Session) workflowShow(name string) command.Result {
@@ -172,7 +159,7 @@ func (s *Session) workflowShow(name string) command.Result {
 	if !ok {
 		return command.Text(fmt.Sprintf("workflow %q not found", name))
 	}
-	return command.Text(renderWorkflowDefinition(def))
+	return command.Display(WorkflowDefinitionPayload{Definition: def})
 }
 
 func (s *Session) workflowStart(ctx context.Context, workflowName string, input string) (command.Result, error) {
@@ -185,23 +172,13 @@ func (s *Session) workflowStart(ctx context.Context, workflowName string, input 
 	runID := workflow.NewRunID()
 	result := s.ExecuteWorkflow(ctx, workflowName, input, app.WithWorkflowRunID(runID))
 	if result.Error != nil {
-		return command.Text(fmt.Sprintf("workflow failed: %s\nrun: %s\nstatus: failed\nerror: %v", workflowName, runID, result.Error)), nil
+		return command.Display(WorkflowStartPayload{WorkflowName: workflowName, RunID: runID, Status: workflow.RunFailed, Error: result.Error.Error()}), nil
 	}
-	return command.Text(renderWorkflowStartResult(workflowName, runID, result.Data)), nil
-}
-
-func renderWorkflowStartResult(workflowName string, runID workflow.RunID, data any) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "workflow completed: %s\n", workflowName)
-	fmt.Fprintf(&b, "run: %s\n", runID)
-	b.WriteString("status: succeeded")
+	data := result.Data
 	if wfResult, ok := data.(workflow.Result); ok {
 		data = wfResult.Data
 	}
-	if data != nil {
-		fmt.Fprintf(&b, "\noutput: %v", data)
-	}
-	return b.String()
+	return command.Display(WorkflowStartPayload{WorkflowName: workflowName, RunID: runID, Status: workflow.RunSucceeded, Output: data}), nil
 }
 
 func (s *Session) workflowRun(ctx context.Context, runID workflow.RunID) (command.Result, error) {
@@ -215,7 +192,7 @@ func (s *Session) workflowRun(ctx context.Context, runID workflow.RunID) (comman
 		}
 		return command.Text(fmt.Sprintf("workflow run %q not found", runID)), nil
 	}
-	return command.Text(renderWorkflowRunState(state)), nil
+	return command.Display(WorkflowRunPayload{State: state}), nil
 }
 
 func (s *Session) workflowRuns(ctx context.Context) (command.Result, error) {
@@ -226,105 +203,7 @@ func (s *Session) workflowRuns(ctx context.Context) (command.Result, error) {
 	if !ok {
 		return command.Text("workflow runs require a thread-backed session"), nil
 	}
-	if len(summaries) == 0 {
-		return command.Text("No workflow runs recorded."), nil
-	}
-	return command.Text(renderWorkflowRunSummaries(summaries)), nil
-}
-
-func renderWorkflowRunSummaries(summaries []workflow.RunSummary) string {
-	var b strings.Builder
-	b.WriteString("Workflow runs:\n")
-	fmt.Fprintf(&b, "%-18s  %-20s  %s", "RUN ID", "WORKFLOW", "STATUS")
-	for _, summary := range summaries {
-		fmt.Fprintf(&b, "\n%-18s  %-20s  %s", summary.ID, summary.WorkflowName, summary.Status)
-		if summary.Error != "" {
-			fmt.Fprintf(&b, "  error=%s", summary.Error)
-		}
-	}
-	return b.String()
-}
-
-func renderWorkflowDefinition(def workflow.Definition) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "workflow: %s", def.Name)
-	if def.Description != "" {
-		fmt.Fprintf(&b, "\ndescription: %s", def.Description)
-	}
-	if len(def.Steps) == 0 {
-		return b.String()
-	}
-	b.WriteString("\n\nsteps:")
-	for _, step := range def.Steps {
-		fmt.Fprintf(&b, "\n- %s: %s", step.ID, step.Action.Name)
-		if len(step.DependsOn) > 0 {
-			fmt.Fprintf(&b, " depends_on=%s", strings.Join(step.DependsOn, ","))
-		}
-	}
-	return b.String()
-}
-
-func renderWorkflowRunState(state workflow.RunState) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "workflow run: %s\n", state.ID)
-	fmt.Fprintf(&b, "workflow: %s\n", state.WorkflowName)
-	fmt.Fprintf(&b, "status: %s", state.Status)
-	if state.Error != "" {
-		fmt.Fprintf(&b, "\nerror: %s", state.Error)
-	}
-	if !emptyWorkflowValue(state.Output) {
-		fmt.Fprintf(&b, "\noutput: %s", renderWorkflowValue(state.Output))
-	}
-	if len(state.Steps) == 0 {
-		return b.String()
-	}
-	b.WriteString("\n\nsteps:")
-	ids := make([]string, 0, len(state.Steps))
-	for id := range state.Steps {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		step := state.Steps[id]
-		fmt.Fprintf(&b, "\n- %s", step.ID)
-		if step.ActionName != "" && step.ActionName != step.ID {
-			fmt.Fprintf(&b, "\n  action: %s", step.ActionName)
-		}
-		fmt.Fprintf(&b, "\n  status: %s", step.Status)
-		if step.Attempt > 0 {
-			fmt.Fprintf(&b, "\n  attempt: %d", step.Attempt)
-		}
-		if !emptyWorkflowValue(step.Output) {
-			fmt.Fprintf(&b, "\n  output: %s", renderWorkflowValue(step.Output))
-		}
-		if step.Error != "" {
-			fmt.Fprintf(&b, "\n  error: %s", step.Error)
-		}
-	}
-	return b.String()
-}
-
-func emptyWorkflowValue(value workflow.ValueRef) bool {
-	return value.ID == "" && value.MediaType == "" && value.ExternalURI == "" && value.Inline == nil && !value.Redacted
-}
-
-func renderWorkflowValue(value workflow.ValueRef) string {
-	switch {
-	case value.Redacted:
-		if value.ID != "" {
-			return fmt.Sprintf("redacted:%s", value.ID)
-		}
-		return "redacted"
-	case value.ExternalURI != "":
-		if value.MediaType != "" {
-			return fmt.Sprintf("%s (%s)", value.ExternalURI, value.MediaType)
-		}
-		return value.ExternalURI
-	case value.ID != "":
-		return value.ID
-	default:
-		return fmt.Sprint(value.Inline)
-	}
+	return command.Display(WorkflowRunsPayload{Summaries: summaries}), nil
 }
 
 func (s *Session) ParamsSummary() string {

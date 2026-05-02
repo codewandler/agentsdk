@@ -1050,13 +1050,14 @@ func (a *App) Apply(ctx context.Context, result command.Result, turnID int) (com
 		if !ok {
 			return command.Result{}, fmt.Errorf("app: no default agent configured")
 		}
-		if strings.TrimSpace(result.Input) == "" {
+		input, ok := command.AgentTurnInput(result)
+		if !ok || strings.TrimSpace(input) == "" {
 			return command.Handled(), nil
 		}
 		if turnID <= 0 {
 			turnID = a.nextTurnID()
 		}
-		return command.Handled(), inst.RunTurn(ctx, turnID, result.Input)
+		return command.Handled(), inst.RunTurn(ctx, turnID, input)
 	case command.ResultReset:
 		if inst, ok := a.DefaultAgent(); ok {
 			inst.Reset()

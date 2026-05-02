@@ -77,27 +77,27 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 
 	cmdResult, err := session.Send(ctx, "/workflow run run_harness")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, cmdResult.Kind)
-	require.Contains(t, cmdResult.Text, "workflow run: run_harness")
-	require.Contains(t, cmdResult.Text, "workflow: ask_flow")
-	require.Contains(t, cmdResult.Text, "status: succeeded")
-	require.Contains(t, cmdResult.Text, "output: workflow answer")
-	require.Contains(t, cmdResult.Text, "- ask")
-	require.Contains(t, cmdResult.Text, "action: ask_agent")
-	require.Contains(t, cmdResult.Text, "status: succeeded")
-	require.Contains(t, cmdResult.Text, "attempt: 1")
-	require.Contains(t, cmdResult.Text, "output: workflow answer")
+	require.Equal(t, command.ResultDisplay, cmdResult.Kind)
+	require.Contains(t, renderCommandResult(t, cmdResult), "workflow run: run_harness")
+	require.Contains(t, renderCommandResult(t, cmdResult), "workflow: ask_flow")
+	require.Contains(t, renderCommandResult(t, cmdResult), "status: succeeded")
+	require.Contains(t, renderCommandResult(t, cmdResult), "output: workflow answer")
+	require.Contains(t, renderCommandResult(t, cmdResult), "- ask")
+	require.Contains(t, renderCommandResult(t, cmdResult), "action: ask_agent")
+	require.Contains(t, renderCommandResult(t, cmdResult), "status: succeeded")
+	require.Contains(t, renderCommandResult(t, cmdResult), "attempt: 1")
+	require.Contains(t, renderCommandResult(t, cmdResult), "output: workflow answer")
 
 	runsResult, err := session.Send(ctx, "/workflow runs")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, runsResult.Kind)
-	require.Contains(t, runsResult.Text, "Workflow runs:")
-	require.Contains(t, runsResult.Text, "RUN ID")
-	require.Contains(t, runsResult.Text, "WORKFLOW")
-	require.Contains(t, runsResult.Text, "STATUS")
-	require.Contains(t, runsResult.Text, "run_harness")
-	require.Contains(t, runsResult.Text, "ask_flow")
-	require.Contains(t, runsResult.Text, "succeeded")
+	require.Equal(t, command.ResultDisplay, runsResult.Kind)
+	require.Contains(t, renderCommandResult(t, runsResult), "Workflow runs:")
+	require.Contains(t, renderCommandResult(t, runsResult), "RUN ID")
+	require.Contains(t, renderCommandResult(t, runsResult), "WORKFLOW")
+	require.Contains(t, renderCommandResult(t, runsResult), "STATUS")
+	require.Contains(t, renderCommandResult(t, runsResult), "run_harness")
+	require.Contains(t, renderCommandResult(t, runsResult), "ask_flow")
+	require.Contains(t, renderCommandResult(t, runsResult), "succeeded")
 }
 
 func TestSessionWorkflowRunStateMissingLiveThread(t *testing.T) {
@@ -127,11 +127,11 @@ func TestSessionWorkflowRunStateMissingLiveThread(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow run missing")
 	require.NoError(t, err)
-	require.Equal(t, "workflow runs require a thread-backed session", result.Text)
+	require.Equal(t, "workflow runs require a thread-backed session", renderCommandResult(t, result))
 
 	result, err = session.Send(context.Background(), "/workflow runs")
 	require.NoError(t, err)
-	require.Equal(t, "workflow runs require a thread-backed session", result.Text)
+	require.Equal(t, "workflow runs require a thread-backed session", renderCommandResult(t, result))
 }
 
 func TestSessionWorkflowRunStateNilSessionAndAgent(t *testing.T) {
@@ -173,11 +173,11 @@ func TestSessionWorkflowCommandUsageAndNotFound(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "usage: /workflow <list|show|start|runs|run>")
+	require.Contains(t, renderCommandResult(t, result), "usage: /workflow <list|show|start|runs|run>")
 
 	result, err = session.Send(context.Background(), "/workflow run missing")
 	require.NoError(t, err)
-	require.Equal(t, "workflow run \"missing\" not found", result.Text)
+	require.Equal(t, "workflow run \"missing\" not found", renderCommandResult(t, result))
 }
 
 func TestSessionWorkflowListAndShowCommands(t *testing.T) {
@@ -204,22 +204,22 @@ func TestSessionWorkflowListAndShowCommands(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow list")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "Workflows:")
-	require.Contains(t, result.Text, "- ask_flow: Ask the default agent")
-	require.Contains(t, result.Text, "- release_notes")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "Workflows:")
+	require.Contains(t, renderCommandResult(t, result), "- ask_flow: Ask the default agent")
+	require.Contains(t, renderCommandResult(t, result), "- release_notes")
 
 	result, err = session.Send(context.Background(), "/workflow show ask_flow")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "workflow: ask_flow")
-	require.Contains(t, result.Text, "description: Ask the default agent")
-	require.Contains(t, result.Text, "- ask: ask_agent")
-	require.Contains(t, result.Text, "- summarize: summarize depends_on=ask")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "workflow: ask_flow")
+	require.Contains(t, renderCommandResult(t, result), "description: Ask the default agent")
+	require.Contains(t, renderCommandResult(t, result), "- ask: ask_agent")
+	require.Contains(t, renderCommandResult(t, result), "- summarize: summarize depends_on=ask")
 
 	result, err = session.Send(context.Background(), "/workflow show missing")
 	require.NoError(t, err)
-	require.Equal(t, "workflow \"missing\" not found", result.Text)
+	require.Equal(t, "workflow \"missing\" not found", renderCommandResult(t, result))
 }
 
 func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
@@ -241,11 +241,11 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 
 	result, err := session.Send(ctx, "/workflow start ask_flow hello from start")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "workflow completed: ask_flow")
-	require.Contains(t, result.Text, "run: run_")
-	require.Contains(t, result.Text, "status: succeeded")
-	require.Contains(t, result.Text, "output: started answer")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "workflow completed: ask_flow")
+	require.Contains(t, renderCommandResult(t, result), "run: run_")
+	require.Contains(t, renderCommandResult(t, result), "status: succeeded")
+	require.Contains(t, renderCommandResult(t, result), "output: started answer")
 	requireHarnessRequestContainsText(t, client.RequestAt(0), "hello from start")
 
 	summaries, ok, err := session.WorkflowRuns(ctx)
@@ -257,17 +257,17 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 
 	runsResult, err := session.Send(ctx, "/workflow runs")
 	require.NoError(t, err)
-	require.Contains(t, runsResult.Text, "RUN ID")
-	require.Contains(t, runsResult.Text, string(summaries[0].ID))
-	require.Contains(t, runsResult.Text, "ask_flow")
-	require.Contains(t, runsResult.Text, "succeeded")
+	require.Contains(t, renderCommandResult(t, runsResult), "RUN ID")
+	require.Contains(t, renderCommandResult(t, runsResult), string(summaries[0].ID))
+	require.Contains(t, renderCommandResult(t, runsResult), "ask_flow")
+	require.Contains(t, renderCommandResult(t, runsResult), "succeeded")
 
 	runResult, err := session.Send(ctx, "/workflow run "+string(summaries[0].ID))
 	require.NoError(t, err)
-	require.Contains(t, runResult.Text, "workflow run: "+string(summaries[0].ID))
-	require.Contains(t, runResult.Text, "workflow: ask_flow")
-	require.Contains(t, runResult.Text, "status: succeeded")
-	require.Contains(t, runResult.Text, "output: started answer")
+	require.Contains(t, renderCommandResult(t, runResult), "workflow run: "+string(summaries[0].ID))
+	require.Contains(t, renderCommandResult(t, runResult), "workflow: ask_flow")
+	require.Contains(t, renderCommandResult(t, runResult), "status: succeeded")
+	require.Contains(t, renderCommandResult(t, runResult), "output: started answer")
 }
 
 func TestSessionWorkflowStartCommandUsageAndMissingWorkflow(t *testing.T) {
@@ -283,11 +283,11 @@ func TestSessionWorkflowStartCommandUsageAndMissingWorkflow(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow start")
 	require.NoError(t, err)
-	require.Equal(t, "usage: /workflow start <name> [input]", result.Text)
+	require.Equal(t, "usage: /workflow start <name> [input]", renderCommandResult(t, result))
 
 	result, err = session.Send(context.Background(), "/workflow start missing")
 	require.NoError(t, err)
-	require.Equal(t, "workflow \"missing\" not found", result.Text)
+	require.Equal(t, "workflow \"missing\" not found", renderCommandResult(t, result))
 }
 
 func TestSessionWorkflowStartCommandFailureIncludesRunStatusAndIsQueryable(t *testing.T) {
@@ -309,11 +309,11 @@ func TestSessionWorkflowStartCommandFailureIncludesRunStatusAndIsQueryable(t *te
 
 	result, err := session.Send(ctx, "/workflow start failflow")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "workflow failed: failflow")
-	require.Contains(t, result.Text, "run: run_")
-	require.Contains(t, result.Text, "status: failed")
-	require.Contains(t, result.Text, "error: workflow \"failflow\" step \"fail\" failed: boom")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "workflow failed: failflow")
+	require.Contains(t, renderCommandResult(t, result), "run: run_")
+	require.Contains(t, renderCommandResult(t, result), "status: failed")
+	require.Contains(t, renderCommandResult(t, result), "error: workflow \"failflow\" step \"fail\" failed: boom")
 
 	summaries, ok, err := session.WorkflowRuns(ctx)
 	require.NoError(t, err)
@@ -325,19 +325,19 @@ func TestSessionWorkflowStartCommandFailureIncludesRunStatusAndIsQueryable(t *te
 
 	runsResult, err := session.Send(ctx, "/workflow runs")
 	require.NoError(t, err)
-	require.Contains(t, runsResult.Text, string(summaries[0].ID))
-	require.Contains(t, runsResult.Text, "failflow")
-	require.Contains(t, runsResult.Text, "failed")
-	require.Contains(t, runsResult.Text, "error=workflow \"failflow\" step \"fail\" failed: boom")
+	require.Contains(t, renderCommandResult(t, runsResult), string(summaries[0].ID))
+	require.Contains(t, renderCommandResult(t, runsResult), "failflow")
+	require.Contains(t, renderCommandResult(t, runsResult), "failed")
+	require.Contains(t, renderCommandResult(t, runsResult), "error=workflow \"failflow\" step \"fail\" failed: boom")
 
 	runResult, err := session.Send(ctx, "/workflow run "+string(summaries[0].ID))
 	require.NoError(t, err)
-	require.Contains(t, runResult.Text, "workflow run: "+string(summaries[0].ID))
-	require.Contains(t, runResult.Text, "workflow: failflow")
-	require.Contains(t, runResult.Text, "status: failed")
-	require.Contains(t, runResult.Text, "error: workflow \"failflow\" step \"fail\" failed: boom")
-	require.Contains(t, runResult.Text, "- fail")
-	require.Contains(t, runResult.Text, "status: failed")
+	require.Contains(t, renderCommandResult(t, runResult), "workflow run: "+string(summaries[0].ID))
+	require.Contains(t, renderCommandResult(t, runResult), "workflow: failflow")
+	require.Contains(t, renderCommandResult(t, runResult), "status: failed")
+	require.Contains(t, renderCommandResult(t, runResult), "error: workflow \"failflow\" step \"fail\" failed: boom")
+	require.Contains(t, renderCommandResult(t, runResult), "- fail")
+	require.Contains(t, renderCommandResult(t, runResult), "status: failed")
 }
 
 func TestSessionWorkflowListNoWorkflows(t *testing.T) {
@@ -353,7 +353,7 @@ func TestSessionWorkflowListNoWorkflows(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow list")
 	require.NoError(t, err)
-	require.Equal(t, "No workflows registered.", result.Text)
+	require.Equal(t, "No workflows registered.", renderCommandResult(t, result))
 }
 
 func TestSessionWorkflowRunsNoRecordedRuns(t *testing.T) {
@@ -374,7 +374,7 @@ func TestSessionWorkflowRunsNoRecordedRuns(t *testing.T) {
 
 	result, err := session.Send(context.Background(), "/workflow runs")
 	require.NoError(t, err)
-	require.Equal(t, "No workflow runs recorded.", result.Text)
+	require.Equal(t, "No workflow runs recorded.", renderCommandResult(t, result))
 }
 
 func TestDefaultSessionReportsMissingAppAndAgent(t *testing.T) {
@@ -416,4 +416,11 @@ func requireHarnessRequestContainsText(t *testing.T, req unified.Request, want s
 		}
 	}
 	t.Fatalf("request does not contain %q", want)
+}
+
+func renderCommandResult(t *testing.T, result command.Result) string {
+	t.Helper()
+	text, err := command.Render(result, command.DisplayTerminal)
+	require.NoError(t, err)
+	return text
 }

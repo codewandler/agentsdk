@@ -65,33 +65,112 @@ type ResultKind int
 
 const (
 	ResultHandled ResultKind = iota
-	ResultText
+	ResultDisplay
 	ResultAgentTurn
 	ResultReset
 	ResultExit
 )
 
-// Result is the typed outcome of a command execution.
-type Result struct {
-	Kind  ResultKind
-	Text  string
+// DisplayMode selects the target presentation for structured command payloads.
+type DisplayMode string
+
+const (
+	DisplayTerminal DisplayMode = "terminal"
+	DisplayLLM      DisplayMode = "llm"
+	DisplayJSON     DisplayMode = "json"
+)
+
+// Displayable is implemented by structured command payloads that know how to
+// present themselves for a requested display target.
+type Displayable interface {
+	Display(DisplayMode) (string, error)
+}
+
+// TextPayload is a simple display payload for commands that only need to return
+// text. It is still structured so command.Result does not need text-specific
+// fields.
+type TextPayload struct {
+	Text string
+}
+
+// AgentTurnPayload asks the caller to run Input as an agent turn.
+type AgentTurnPayload struct {
 	Input string
+}
+
+// Result is the typed outcome of a command execution. Payload carries the
+// structured data for the result kind; renderers turn payloads into terminal,
+// LLM, or machine-readable output at the boundary.
+type Result struct {
+	Kind    ResultKind
+	Payload any
 }
 
 // Handled indicates the command handled itself and no further action is needed.
 func Handled() Result { return Result{Kind: ResultHandled} }
 
-// Text asks the caller to render text to the user.
-func Text(text string) Result { return Result{Kind: ResultText, Text: text} }
+// Text returns a structured display result containing plain text.
+func Text(text string) Result { return Display(TextPayload{Text: text}) }
 
-// AgentTurn asks the caller to run the rendered input as an agent turn.
-func AgentTurn(input string) Result { return Result{Kind: ResultAgentTurn, Input: input} }
+// Display asks the caller to render payload to the user.
+func Display(payload any) Result { return Result{Kind: ResultDisplay, Payload: payload} }
+
+// AgentTurn asks the caller to run input as an agent turn.
+func AgentTurn(input string) Result {
+	return Result{Kind: ResultAgentTurn, Payload: AgentTurnPayload{Input: input}}
+}
 
 // Reset asks the caller to reset the active agent/session.
 func Reset() Result { return Result{Kind: ResultReset} }
 
 // Exit asks the caller to exit the current interactive loop.
 func Exit() Result { return Result{Kind: ResultExit} }
+
+// Render renders a display result payload for mode. Non-display results render
+// to an empty string.
+func Render(result Result, mode DisplayMode) (string, error) {
+	if result.Kind != ResultDisplay {
+		return "", nil
+	}
+	return RenderPayload(result.Payload, mode)
+}
+
+// RenderPayload renders one structured command payload for mode.
+func RenderPayload(payload any, mode DisplayMode) (string, error) {
+	switch p := payload.(type) {
+	case nil:
+		return "", nil
+	case TextPayload:
+		return p.Text, nil
+	case *TextPayload:
+		if p == nil {
+			return "", nil
+		}
+		return p.Text, nil
+	case Displayable:
+		return p.Display(mode)
+	default:
+		return "", fmt.Errorf("command: no renderer for payload %T", payload)
+	}
+}
+
+// AgentTurnInput returns the prompt carried by an agent-turn result.
+func AgentTurnInput(result Result) (string, bool) {
+	if result.Kind != ResultAgentTurn {
+		return "", false
+	}
+	switch p := result.Payload.(type) {
+	case AgentTurnPayload:
+		return p.Input, true
+	case *AgentTurnPayload:
+		if p == nil {
+			return "", false
+		}
+		return p.Input, true
+	default:
+		return "", false
+	}
+}
 
 // Registry stores commands and resolves names and aliases.
 type Registry struct {

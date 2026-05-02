@@ -43,7 +43,10 @@ func (a *fakeAgent) Send(ctx context.Context, input string) (command.Result, err
 		}
 		switch result.Kind {
 		case command.ResultAgentTurn:
-			a.turns = append(a.turns, result.Input)
+			input, ok := command.AgentTurnInput(result)
+			if ok {
+				a.turns = append(a.turns, input)
+			}
 			return command.Handled(), nil
 		case command.ResultReset:
 			a.Reset()

@@ -66,7 +66,7 @@ func TestRegistryExecuteUserOnlyRunsUserCallableCommands(t *testing.T) {
 
 	result, err := reg.ExecuteUser(context.Background(), "/visible")
 	require.NoError(t, err)
-	require.Equal(t, "ok", result.Text)
+	require.Equal(t, "ok", renderCommandResult(t, result))
 
 	_, err = reg.ExecuteUser(context.Background(), "/agent_only")
 	var notCallable ErrNotCallable
@@ -95,4 +95,11 @@ func TestCommandRunToolOnlyRunsAgentCallableCommands(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, blocked.IsError())
 	require.Contains(t, blocked.String(), "not callable")
+}
+
+func renderCommandResult(t *testing.T, result Result) string {
+	t.Helper()
+	text, err := Render(result, DisplayTerminal)
+	require.NoError(t, err)
+	return text
 }

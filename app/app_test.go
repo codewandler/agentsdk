@@ -193,7 +193,7 @@ func TestAppWorkflowCommandAcceptsExecutionOptions(t *testing.T) {
 
 	result, err := app.Commands().Execute(ctx, "/shout hello")
 	require.NoError(t, err)
-	require.Equal(t, "HELLO", result.Text)
+	require.Equal(t, "HELLO", renderCommandResult(t, result))
 	require.NoError(t, recorder.Err())
 
 	runs := workflow.ThreadRunStore{Store: store, ThreadID: live.ID()}
@@ -369,8 +369,8 @@ func TestAppWorkflowCommandExecutesWorkflow(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/shout hello")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Equal(t, "HELLO", result.Text)
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Equal(t, "HELLO", renderCommandResult(t, result))
 }
 
 func TestAppWorkflowCommandValidatesWorkflow(t *testing.T) {
@@ -411,7 +411,7 @@ func TestWorkflowCommandRendersNonStringOutput(t *testing.T) {
 
 	result, err := cmd.Execute(context.Background(), command.Params{})
 	require.NoError(t, err)
-	require.Equal(t, "42", result.Text)
+	require.Equal(t, "42", renderCommandResult(t, result))
 }
 func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {
 	app, err := New(
@@ -441,7 +441,7 @@ func TestPluginDuplicateCommandFirstWinsWithDiagnostic(t *testing.T) {
 	require.NoError(t, err)
 	result, err := app.Commands().Execute(context.Background(), "/review")
 	require.NoError(t, err)
-	require.Equal(t, "first", result.Text)
+	require.Equal(t, "first", renderCommandResult(t, result))
 	require.Len(t, app.Diagnostics(), 1)
 }
 
@@ -457,7 +457,7 @@ func TestAppOwnsMarkdownCommandDispatch(t *testing.T) {
 	result, err := app.Commands().Execute(context.Background(), "/review security")
 	require.NoError(t, err)
 	require.Equal(t, command.ResultAgentTurn, result.Kind)
-	require.Equal(t, "Review security", result.Input)
+	require.Equal(t, "Review security", agentTurnInput(t, result))
 }
 
 func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
@@ -481,8 +481,8 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 
 	contextResult, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Contains(t, contextResult.Text, "provider: environment")
-	require.Contains(t, contextResult.Text, "provider: time")
+	require.Contains(t, renderCommandResult(t, contextResult), "provider: environment")
+	require.Contains(t, renderCommandResult(t, contextResult), "provider: time")
 }
 
 func TestAppExplicitSpecCanSelectOptionalStandardTools(t *testing.T) {
@@ -570,10 +570,10 @@ func TestAppHelpListsAgentsCommand(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/help")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "/agents")
-	require.Contains(t, result.Text, "Show available agents")
-	require.Contains(t, result.Text, "/context")
-	require.Contains(t, result.Text, "Show last context render state")
+	require.Contains(t, renderCommandResult(t, result), "/agents")
+	require.Contains(t, renderCommandResult(t, result), "Show available agents")
+	require.Contains(t, renderCommandResult(t, result), "/context")
+	require.Contains(t, renderCommandResult(t, result), "Show last context render state")
 }
 
 func TestAppContextBuiltinHandlesNoDefaultAgent(t *testing.T) {
@@ -582,8 +582,8 @@ func TestAppContextBuiltinHandlesNoDefaultAgent(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Equal(t, "context: no default agent", result.Text)
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Equal(t, "context: no default agent", renderCommandResult(t, result))
 }
 
 func TestAppContextBuiltinExplainsWhenDefaultAgentHasNoRenderState(t *testing.T) {
@@ -603,9 +603,9 @@ func TestAppContextBuiltinExplainsWhenDefaultAgentHasNoRenderState(t *testing.T)
 
 	result, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "context: no render state yet for agent \"main\"")
-	require.Contains(t, result.Text, "run a turn first to capture provider context")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "context: no render state yet for agent \"main\"")
+	require.Contains(t, renderCommandResult(t, result), "run a turn first to capture provider context")
 }
 
 func TestAppAgentsBuiltinListsRegisteredAgents(t *testing.T) {
@@ -619,10 +619,10 @@ func TestAppAgentsBuiltinListsRegisteredAgents(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/agents")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "Agents:")
-	require.Contains(t, result.Text, "* main - Default assistant")
-	require.Contains(t, result.Text, "  reviewer - Reviews changes")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "Agents:")
+	require.Contains(t, renderCommandResult(t, result), "* main - Default assistant")
+	require.Contains(t, renderCommandResult(t, result), "  reviewer - Reviews changes")
 }
 
 func TestAppAgentsBuiltinHandlesNoAgents(t *testing.T) {
@@ -631,7 +631,7 @@ func TestAppAgentsBuiltinHandlesNoAgents(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/agents")
 	require.NoError(t, err)
-	require.Equal(t, "No agents registered.", result.Text)
+	require.Equal(t, "No agents registered.", renderCommandResult(t, result))
 }
 
 func TestAppResourceBundleCannotOverrideProtectedBuiltins(t *testing.T) {
@@ -802,7 +802,7 @@ func TestAppSkillBuiltinReportsAlreadyActiveDynamicSkill(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/skill architecture")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "already active (dynamic)")
+	require.Contains(t, renderCommandResult(t, result), "already active (dynamic)")
 }
 
 // ── ContextProvidersPlugin tests ─────────────────────────────────────────────
@@ -892,7 +892,7 @@ func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
 	// The context state should mention the plugin provider key.
 	result, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "plugin_git")
+	require.Contains(t, renderCommandResult(t, result), "plugin_git")
 }
 
 func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
@@ -1023,7 +1023,7 @@ func TestAgentContextPluginForwardedToAgent(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "test_skills")
+	require.Contains(t, renderCommandResult(t, result), "test_skills")
 }
 
 func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
@@ -1054,7 +1054,7 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 
 	result, err := app.Commands().Execute(context.Background(), "/context")
 	require.NoError(t, err)
-	require.Contains(t, result.Text, "test_skills")
+	require.Contains(t, renderCommandResult(t, result), "test_skills")
 }
 
 func TestAppCompactCommandReturnsResult(t *testing.T) {
@@ -1086,9 +1086,9 @@ func TestAppCompactCommandReturnsResult(t *testing.T) {
 
 	result, err := app.Send(ctx, "/compact")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "Compacted")
-	require.Contains(t, result.Text, "replaced")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "Compacted")
+	require.Contains(t, renderCommandResult(t, result), "replaced")
 }
 
 func TestAppCompactCommandTooShort(t *testing.T) {
@@ -1111,8 +1111,8 @@ func TestAppCompactCommandTooShort(t *testing.T) {
 
 	result, err := app.Send(ctx, "/compact")
 	require.NoError(t, err)
-	require.Equal(t, command.ResultText, result.Kind)
-	require.Contains(t, result.Text, "too short")
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "too short")
 }
 
 func requireAppRequestContainsText(t *testing.T, req unified.Request, want string) {
@@ -1132,4 +1132,18 @@ func requireAppRequestContainsText(t *testing.T, req unified.Request, want strin
 		}
 	}
 	t.Fatalf("request does not contain %q", want)
+}
+
+func renderCommandResult(t *testing.T, result command.Result) string {
+	t.Helper()
+	text, err := command.Render(result, command.DisplayTerminal)
+	require.NoError(t, err)
+	return text
+}
+
+func agentTurnInput(t *testing.T, result command.Result) string {
+	t.Helper()
+	input, ok := command.AgentTurnInput(result)
+	require.True(t, ok)
+	return input
 }

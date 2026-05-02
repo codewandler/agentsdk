@@ -27,10 +27,18 @@ func Tool(reg *Registry) tool.Tool {
 		switch result.Kind {
 		case ResultHandled:
 			return tool.Text("command handled"), nil
-		case ResultText:
-			return tool.Text(result.Text), nil
+		case ResultDisplay:
+			text, err := Render(result, DisplayLLM)
+			if err != nil {
+				return tool.Errorf("%v", err), nil
+			}
+			return tool.Text(text), nil
 		case ResultAgentTurn:
-			return tool.Text(result.Input), nil
+			input, ok := AgentTurnInput(result)
+			if !ok {
+				return tool.Error("command result missing agent turn input"), nil
+			}
+			return tool.Text(input), nil
 		default:
 			return tool.Error("command result cannot be applied from agent context"), nil
 		}

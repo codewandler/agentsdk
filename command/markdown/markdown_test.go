@@ -32,8 +32,10 @@ Raw: {{.Raw}}
 	})
 	require.NoError(t, err)
 	require.Equal(t, command.ResultAgentTurn, result.Kind)
-	require.Contains(t, result.Input, "Focus: security")
-	require.Contains(t, result.Input, "Raw: security")
+	input, ok := command.AgentTurnInput(result)
+	require.True(t, ok)
+	require.Contains(t, input, "Focus: security")
+	require.Contains(t, input, "Raw: security")
 }
 
 func TestLoadFSLoadsMarkdownCommands(t *testing.T) {
