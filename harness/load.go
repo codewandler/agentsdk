@@ -30,6 +30,20 @@ type SessionLoadConfig struct {
 	AgentOptions []agent.Option
 }
 
+type FallbackAgent struct {
+	Enabled bool
+	Spec    agent.Spec
+}
+
+func EnsureFallbackAgent(resolved *agentdir.Resolution, requestedName string, fallback FallbackAgent) bool {
+	if resolved == nil || !fallback.Enabled || strings.TrimSpace(requestedName) != "" || fallback.Spec.Name == "" || len(resolved.Bundle.AgentSpecs) > 0 {
+		return false
+	}
+	resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, fallback.Spec)
+	resolved.DefaultAgent = fallback.Spec.Name
+	return true
+}
+
 type AgentSpecOverrides struct {
 	Inference      agent.InferenceOptions
 	ApplyInference bool

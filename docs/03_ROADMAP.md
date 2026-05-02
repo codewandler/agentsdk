@@ -374,7 +374,7 @@ Tasks:
      emits runner events
    ```
 
-3. Move the reusable parts of `terminal/cli.Load` toward harness loading functions. In progress: `harness.LoadSession` owns app/default-agent/service/session construction and `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
+3. Move the reusable parts of `terminal/cli.Load` toward harness loading functions. In progress: `harness.LoadSession` owns app/default-agent/service/session construction, `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics, and `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
 4. Keep `terminal/cli.Load` as compatibility wrapper initially. ✅
 5. Add session IDs and thread/session store handling through harness APIs where possible. ✅ `Session.Info`, `Session.AgentName`, `Session.ThreadID`, `/session info`, and workflow read APIs exist
 

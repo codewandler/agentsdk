@@ -200,11 +200,10 @@ func resolveConfiguredResources(cfg Config, env loadEnvironment) (agentdir.Resol
 	if err != nil {
 		return agentdir.Resolution{}, err
 	}
-	if len(resolved.Bundle.AgentSpecs) == 0 && strings.TrimSpace(cfg.AgentName) == "" && !cfg.NoDefaultPlugins {
-		spec := localcli.DefaultAgent()
-		resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, spec)
-		resolved.DefaultAgent = spec.Name
-	}
+	harness.EnsureFallbackAgent(&resolved, cfg.AgentName, harness.FallbackAgent{
+		Enabled: !cfg.NoDefaultPlugins,
+		Spec:    localcli.DefaultAgent(),
+	})
 	return resolved, nil
 }
 

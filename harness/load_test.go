@@ -69,3 +69,54 @@ func TestPrepareResolvedAgentReturnsSelectionError(t *testing.T) {
 func testResolution(specs ...agent.Spec) agentdir.Resolution {
 	return agentdir.Resolution{Bundle: resource.ContributionBundle{AgentSpecs: specs}}
 }
+
+func TestEnsureFallbackAgentAddsFallbackWhenNoAgents(t *testing.T) {
+	resolved := agentdir.Resolution{}
+
+	changed := EnsureFallbackAgent(&resolved, "", FallbackAgent{
+		Enabled: true,
+		Spec:    agent.Spec{Name: "default", System: "fallback"},
+	})
+
+	require.True(t, changed)
+	require.Equal(t, "default", resolved.DefaultAgent)
+	require.Equal(t, []agent.Spec{{Name: "default", System: "fallback"}}, resolved.Bundle.AgentSpecs)
+}
+
+func TestEnsureFallbackAgentSkipsWhenExplicitAgentRequested(t *testing.T) {
+	resolved := agentdir.Resolution{}
+
+	changed := EnsureFallbackAgent(&resolved, "coder", FallbackAgent{
+		Enabled: true,
+		Spec:    agent.Spec{Name: "default"},
+	})
+
+	require.False(t, changed)
+	require.Empty(t, resolved.DefaultAgent)
+	require.Empty(t, resolved.Bundle.AgentSpecs)
+}
+
+func TestEnsureFallbackAgentSkipsWhenAgentsExist(t *testing.T) {
+	resolved := testResolution(agent.Spec{Name: "coder"})
+
+	changed := EnsureFallbackAgent(&resolved, "", FallbackAgent{
+		Enabled: true,
+		Spec:    agent.Spec{Name: "default"},
+	})
+
+	require.False(t, changed)
+	require.Empty(t, resolved.DefaultAgent)
+	require.Equal(t, []agent.Spec{{Name: "coder"}}, resolved.Bundle.AgentSpecs)
+}
+
+func TestEnsureFallbackAgentSkipsWhenDisabled(t *testing.T) {
+	resolved := agentdir.Resolution{}
+
+	changed := EnsureFallbackAgent(&resolved, "", FallbackAgent{
+		Enabled: false,
+		Spec:    agent.Spec{Name: "default"},
+	})
+
+	require.False(t, changed)
+	require.Empty(t, resolved.Bundle.AgentSpecs)
+}
