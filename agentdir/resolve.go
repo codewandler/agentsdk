@@ -19,7 +19,34 @@ type AppManifest struct {
 	Discovery    ManifestDiscovery   `json:"discovery"`
 	ModelPolicy  ManifestModelPolicy `json:"model_policy"`
 	Sources      []string            `json:"sources"`
-	Plugins      json.RawMessage     `json:"plugins,omitempty"`
+	Plugins      []PluginRef         `json:"plugins,omitempty"`
+}
+
+type PluginRef struct {
+	Name   string         `json:"name"`
+	Config map[string]any `json:"config,omitempty"`
+}
+
+func (r *PluginRef) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		r.Name = name
+		return nil
+	}
+	var shaped struct {
+		Name   string         `json:"name"`
+		Config map[string]any `json:"config,omitempty"`
+		Path   string         `json:"path,omitempty"`
+	}
+	if err := json.Unmarshal(data, &shaped); err != nil {
+		return err
+	}
+	if shaped.Path != "" {
+		return fmt.Errorf("plugin path references are no longer supported; use plugin name references")
+	}
+	r.Name = shaped.Name
+	r.Config = shaped.Config
+	return nil
 }
 
 type ManifestDiscovery struct {
@@ -186,6 +213,13 @@ func (r Resolution) ResolveDefaultAgent(explicit string) (string, error) {
 	return ResolveDefaultAgent(r.AgentNames(), explicit, r.DefaultAgent)
 }
 
+func (r Resolution) ManifestPluginRefs() []PluginRef {
+	if r.Manifest == nil || len(r.Manifest.Plugins) == 0 {
+		return nil
+	}
+	return append([]PluginRef(nil), r.Manifest.Plugins...)
+}
+
 func (r *Resolution) UpdateAgentSpec(name string, update func(*agent.Spec)) error {
 	if r == nil {
 		return fmt.Errorf("agentdir: resolution is nil")
@@ -292,9 +326,6 @@ func readManifest(dir string) (string, AppManifest, bool, error) {
 		var manifest AppManifest
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			return "", AppManifest{}, false, fmt.Errorf("parse %s: %w", path, err)
-		}
-		if len(manifest.Plugins) > 0 && string(manifest.Plugins) != "null" {
-			return "", AppManifest{}, false, fmt.Errorf("parse %s: manifest key %q is no longer supported; use %q", path, "plugins", "sources")
 		}
 		return path, manifest, true, nil
 	}

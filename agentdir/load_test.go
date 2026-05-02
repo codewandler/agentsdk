@@ -246,14 +246,27 @@ func TestResolveDirRootFallbackRunsBeforeGlobalResources(t *testing.T) {
 	require.Equal(t, []string{dir, filepath.Join(home, ".agents")}, resolved.Sources)
 }
 
-func TestResolveDirRejectsLegacyPluginsManifestKey(t *testing.T) {
+func TestResolveDirRejectsLegacyPluginPathRefs(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "app.manifest.json"), `{"plugins":[{"path":"plugin"}]}`)
 
 	_, err := ResolveDir(dir)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `"plugins"`)
-	require.Contains(t, err.Error(), `"sources"`)
+	require.Contains(t, err.Error(), "plugin path references")
+	require.Contains(t, err.Error(), "plugin name references")
+}
+
+func TestResolveDirParsesPluginRefs(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "app.manifest.json"), `{"sources":[".agents"],"plugins":["local_cli",{"name":"planner","config":{"mode":"test"}}]}`)
+	writeFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "---\nname: main\n---\nmain")
+
+	resolved, err := ResolveDir(dir)
+	require.NoError(t, err)
+	require.Equal(t, []PluginRef{
+		{Name: "local_cli"},
+		{Name: "planner", Config: map[string]any{"mode": "test"}},
+	}, resolved.ManifestPluginRefs())
 }
 
 func TestManifestDiscoveryCanDisableGlobalResources(t *testing.T) {

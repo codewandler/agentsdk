@@ -706,10 +706,50 @@ Tasks:
 
 1. Remove concrete tool imports from `runtime`. ✅
 2. Move terminal-specific event rendering out of `agent` into the terminal boundary. ✅
-3. Shrink `agent.Instance` toward a compatibility façade over harness/session/runtime pieces. In progress: terminal rendering and default standard tools moved out.
-4. Move default-heavy app wiring out of `app.New` where appropriate. ✅ standard tools are now host-supplied.
-5. Keep `tools/standard` as bundle construction only; split broad standard bundles into `bundles/` later only if it deletes complexity.
-6. Move product/environment integrations into `adapters/` as they are added.
+3. Shrink `agent.Instance` toward a compatibility façade over harness/session/runtime pieces. In progress: terminal rendering, hidden standard tools, and hidden planner factory construction moved out.
+4. Move default-heavy app wiring out of `app.New` where appropriate. ✅ standard tools are now host-supplied; capability factories now flow through plugin facets.
+5. Remove generic “standard” default composition. There is no context-free standard tool/plugin set; replace `tools/standard`, `plugins/standard`, and `agent.DefaultSpec` with named use-case/environment app profiles and plugins.
+6. Move product/environment integrations into named plugins, app profiles, or adapters as they are added.
+
+### Milestone 13a — Replace hardcoded default composition with profiles
+
+Goal: stop hardcoding product/use-case composition in generic packages or the terminal channel.
+
+Current issue:
+
+- ✅ `agent/default.go` has been removed; the fallback terminal agent now lives in the named `local_cli` profile.
+- ✅ `terminal/cli` no longer imports `tools/standard` or concrete planner plugin wiring for defaults; it activates plugin/profile refs.
+- `tools/standard` and `plugins/standard` still exist and should be deleted once named profiles/plugins cover remaining callers.
+
+Target:
+
+- Default composition is declared by app/resource config, an embedded local CLI profile, or explicit CLI flags.
+- Generic packages (`agent`, `runtime`, `app`) do not define default agents, default tools, or default capabilities.
+- `terminal/cli` loads a profile and applies CLI overrides; it does not directly activate planner or standard tools in Go.
+- First-party bundles are named by purpose, e.g. `local_cli`, `development`, `research`, or `apps/engineer`.
+
+Tasks:
+
+1. Define a minimal plugin/profile declaration shape in app/resource config. ✅ JSON app manifests support plugin refs.
+2. Add a host plugin factory registry so config can reference plugins by name without hardcoding active plugins in `terminal/cli`. ✅ initial local CLI registry exists behind the named `local_cli` profile package.
+3. Move the fallback terminal agent out of `agent.DefaultSpec` into an embedded local CLI app/profile resource. ✅ moved into `profiles/localcli` as the named local CLI profile spec.
+4. Replace terminal hardcoded `standard.DefaultTools`, `standard.CatalogTools`, and planner plugin activation with profile-driven declarations plus optional CLI flags such as `--plugin` and `--no-default-profile`. ✅
+5. Introduce named first-party profile/plugin packages only where they describe a real use case or environment. In progress: `profiles/localcli` exists.
+6. Stop using `tools/standard`/`plugins/standard`; delete them once callers are migrated.
+
+Acceptance criteria:
+
+- `agent` has no product/use-case default spec and no concrete planner factory default. ✅
+- `terminal/cli` does not import `tools/standard`, `plugins/standard`, or concrete capability plugins only to activate defaults. ✅
+- Running without resources still works via an explicitly named local CLI fallback profile. ✅
+- Running with resources uses plugin/profile declarations from config unless overridden by CLI flags. ✅ initial manifest/CLI refs exist
+
+Verification:
+
+```bash
+go test ./agent/... ./app/... ./agentdir/... ./resource/... ./terminal/cli/... ./harness/...
+go test ./...
+```
 
 Acceptance criteria:
 
@@ -743,12 +783,9 @@ go test ./...
 
 The next practical sequence should be:
 
-1. finish the datasource/workflow/action core model;
-2. extend app/plugin composition;
-3. add minimal workflow executor integrations;
-4. introduce harness as wrapper over existing app/agent flow;
-5. migrate terminal onto harness;
-6. validate with an anonymized support-assistant case study;
-7. only then perform larger dependency cleanup.
+1. migrate remaining direct `tools/standard` / `plugins/standard` callers to named profiles or concrete plugins;
+2. split `profiles/localcli` into smaller named profiles/plugins only when that deletes use-case ambiguity rather than adding indirection;
+3. delete `tools/standard` and `plugins/standard` once no callers remain;
+4. continue harness/channel cleanup after default composition is no longer hidden in generic packages.
 
-This keeps the architecture grounded in working code while moving toward the product vision.
+This keeps the architecture grounded in working code while paying down the current default-composition smell before adding more feature surface.

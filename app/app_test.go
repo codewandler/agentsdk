@@ -15,8 +15,11 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentdir"
+	"github.com/codewandler/agentsdk/capabilities/planner"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/datasource"
+	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
@@ -551,6 +554,37 @@ func TestAppDefaultSpecUsesConfiguredDefaultTools(t *testing.T) {
 	require.True(t, slices.Contains(names, "web_fetch"))
 }
 
+func TestAppPluginCapabilityFactoriesConfigureAgentCapabilities(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	app, err := New(
+		WithAgentSpec(agent.Spec{
+			Name:      "planner_agent",
+			System:    "Use the plan tool.",
+			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+			Capabilities: []capability.AttachSpec{{
+				CapabilityName: planner.CapabilityName,
+				InstanceID:     "default",
+			}},
+		}),
+		WithPlugin(plannerplugin.New()),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+
+	_, err = app.InstantiateAgent("planner_agent",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+	)
+	require.NoError(t, err)
+	_, err = app.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	var names []string
+	for _, tool := range client.RequestAt(0).Tools {
+		names = append(names, tool.Name)
+	}
+	require.Contains(t, names, "plan")
+}
 func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 	client := runnertest.NewClient(
 		[]unified.Event{

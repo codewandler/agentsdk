@@ -28,7 +28,7 @@ The future architecture should mainly clarify ownership:
 - `runtime`/`runner` should stay focused on model/tool turns.
 - `conversation`/`thread` should remain the durable state foundation.
 - `app`/`agentdir`/`resource`/`plugins` should remain the app composition and discovery foundation.
-- `terminal` should evolve into one channel over a general harness/session API.
+- `terminal` should evolve into one channel over a general harness/session API and should not hardcode product/use-case composition such as planner or “standard” tool bundles.
 - `agent.Instance` should shrink or become a compatibility façade around clearer session/runtime/harness concepts.
 - datasources/workflows/actions should extend resource/plugin/app composition instead of introducing a separate parallel ecosystem.
 
@@ -87,7 +87,7 @@ Current strengths:
 - Middleware can wrap tools for logging, risk gates, timeouts, and approval.
 - Some concepts are not inherently model-only; execution, intent, result, events, context, and middleware should move into a top-level `action` package centered on `action.Action`, `action.Ctx`, `action.Result`, action intent, and action middleware. JSON schema/provider projection remains a tool-surface specialization unless an action explicitly provides optional `*jsonschema.Schema` metadata.
 - `toolactivation.Manager` already models active/inactive tool visibility.
-- `tools/standard` provides useful batteries-included assembly without owning mutable runtime activation state.
+- `tools/standard` still exists as transitional batteries-included assembly, but it is not a clean architecture concept: there is no context-free standard tool set.
 
 Evolution:
 
@@ -97,7 +97,7 @@ Evolution:
 - Treat `tool.Tool` as embedding or wrapping `action.Action`, adding only LLM-facing concerns such as guidance, provider/tool-call projection, activation/visibility, and transcript rendering.
 - Keep `tool` as public compatibility API during migration, with aliases for `tool.Ctx`, `tool.Result`, `tool.Intent`, and middleware where practical.
 - Keep generic local tools under `tools/` while adding action-backed constructors over time.
-- Treat `tools/standard` as an app/bundle construction package only; mutable activation belongs in `toolactivation.Manager` owned by the agent/session host.
+- Replace `tools/standard` and `plugins/standard` with named use-case/environment plugins or app profiles (`development`, `local_cli`, `research`, first-party apps). Until deleted, any standard package must remain construction-only and must not own mutable activation or lifecycle.
 - Move product/service/environment-specific integrations toward adapters or integration packages as they appear.
 
 ### Turn runtime
@@ -236,14 +236,14 @@ Current strengths:
 - `agentdir` resolves `.agents`, compatibility roots, app manifests, global/user resources, local roots, embedded/FS roots, and declarative git sources.
 - `resource.ContributionBundle` normalizes discovered contributions.
 - `app.App` composes bundles, plugins, commands, tools, skill sources, context providers, middleware, agent specs, actions, datasource definitions, and workflow definitions.
-- `app.Plugin` has facets for commands, agent specs, tools, skill sources, context providers, agent-context providers, tool middleware, actions, datasources, and workflows.
+- `app.Plugin` has facets for commands, agent specs, tools, capability factories, skill sources, context providers, agent-context providers, tool middleware, actions, datasources, and workflows.
 - App manifests already declare default agent, discovery policy, model policy, and sources.
 
 Evolution:
 
 - `agentdir` discovers `.agents/datasources/*.yaml` and `.agents/workflows/*.yaml`.
 - `resource.ContributionBundle` includes datasource and workflow contributions.
-- `app.Plugin` includes datasource/workflow/action facets.
+- `app.Plugin` includes datasource/workflow/action facets and capability-factory facets so concrete capabilities such as planner are contributed by named plugins instead of hidden defaults in `agent`.
 - `app.App` registers datasources/workflows/actions the same way it registers commands/tools/skills today.
 - `app.App` currently exposes workflow execution and workflow-command helpers as pragmatic integration seams; when a default agent has a live session thread, `App.ExecuteWorkflow` records workflow events to that thread. Long-term harness/session code should own process, channel, and execution lifecycle while reusing app composition instead of bypassing it.
 
@@ -275,6 +275,11 @@ type AgentProjection struct {
 ```
 
 Default harness sessions attach the command projection automatically, which makes `session_command` and the agent command catalog context available to the next agent turn while still enforcing per-command `AgentCallable` policy. This lets `harness.Session` attach session-owned agent projections without prematurely naming a second plugin system. Once harness owns more lifecycle, that projection can become a session-level facet of the unified plugin/contribution model.
+
+
+### Default composition invariant
+
+Generic packages must not define product defaults. `agent` should not define the default terminal/development/research agent, `runtime` should not install default tools or capabilities, and `app.New` should not silently install bundles. Terminal may provide a local CLI fallback for convenience, but that fallback should be a declared app/profile/resource bundle plus plugin references. Concrete plugins are registered by the host; active plugins are selected by app/resource configuration or explicit CLI flags.
 
 ### Terminal as current channel
 
@@ -663,7 +668,7 @@ The first harness implementation already wraps `app.App` and the default `agent.
 | `action` | New top-level package for surface-neutral execution: Action, Ctx, Result, Intent, Middleware. |
 | `tool` | Keep as public LLM-facing tool API; embed/wrap `action.Action` and alias/adapt action concepts for compatibility. |
 | `tools/*` | Keep generic tools; expose some as actions where useful. |
-| `tools/standard` | Keep as bundle construction helpers only; mutable activation belongs to `toolactivation.Manager`. |
+| `tools/standard` / `plugins/standard` | Transitional smell; replace with named use-case/environment plugins or app profiles, then delete when no longer used. |
 | `toolmw` | Keep; gradually become part of broader safety architecture. |
 | `runtime` | Keep turn runtime; remove concrete tool dependencies over time. |
 | `runner` | Keep low-level model/tool loop. |
@@ -677,7 +682,7 @@ The first harness implementation already wraps `app.App` and the default `agent.
 | `resource` | Extend contribution bundle with datasources/workflows/actions. |
 | `agentdir` | Extend loader for `.agents/datasources` and `.agents/workflows`. |
 | `app` | Keep composition root; add datasource/workflow/action registries; later hosted by harness. |
-| `plugins/*` | Extend plugin facets; keep first-party bundles. |
+| `plugins/*` | Extend plugin facets; first-party bundles should be named by concrete capability/use case/environment, not generic “standard”. |
 | `agent` | Keep spec and compatibility façade; migrate host/session duties outward. |
 | `terminal/*` | First channel over harness; render command results at terminal boundaries. |
 | `usage` | Keep runtime usage aggregation; integrate workflow attribution later. |
@@ -687,7 +692,7 @@ The first harness implementation already wraps `app.App` and the default `agent.
 Current cleanup work is enforcing these boundaries:
 
 - `toolactivation.Manager` owns mutable tool registry and active/inactive state.
-- `tools/standard` only assembles tool bundles; it must not own runtime lifecycle or mutable registration.
+- There is no generic “standard tools” concept. Tool/capability defaults must be named by use case or environment and activated by app/resource config or explicit CLI flags, not hidden in `agent`, `app`, or `terminal/cli`.
 - Session projections are not plugins; do not introduce `harness.Plugin` beside `app.Plugin`.
 - New commands belong in declarative `command.Tree` definitions, not handwritten switch namespaces.
 - Channel boundaries must render returned `command.Result` values instead of discarding them or formatting inside harness handlers.
@@ -698,10 +703,10 @@ Current cleanup work is enforcing these boundaries:
 
 Observed top-level dependency issues:
 
-1. `agent` still imports many high-level and low-level packages: runtime, runner, thread/jsonlstore, planner, usage, skill, context providers, and llmadapter routing. It no longer imports terminal UI or the standard tool bundle; terminal rendering is attached through event handler factories and hosts pass explicit tools.
+1. `agent` still imports many high-level and low-level packages: runtime, runner, thread/jsonlstore, usage, skill, context providers, and llmadapter routing. It no longer imports terminal UI, concrete planner construction, or the standard tool bundle; terminal rendering is attached through event handler factories and hosts pass explicit tools/capability registries.
 2. `runtime` no longer imports concrete model-callable tool packages such as `tools/skills` or `tools/toolmgmt`; tool and skill activation state is injected through neutral state-owner packages.
-3. `terminal` imports `agent`, `agentdir`, `app`, `runner`, `tool`, `tools/standard`, and `usage`; it remains both channel and CLI composition root for now and explicitly chooses the standard tool bundle.
-4. `app` no longer imports `tools/standard`; app hosts provide default and catalog tools explicitly.
+3. `terminal` no longer imports `tools/standard` or concrete planner plugin wiring for defaults. It activates a named `local_cli` profile by default, accepts manifest/CLI plugin refs, and can disable the default profile with `--no-default-profile`.
+4. `app` no longer imports `tools/standard`; app hosts/plugins provide default and catalog tools explicitly, and capability factories now flow through plugin facets.
 
 Migration strategy:
 

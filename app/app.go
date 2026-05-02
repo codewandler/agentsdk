@@ -13,6 +13,7 @@ import (
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/datasource"
 	"github.com/codewandler/agentsdk/resource"
@@ -39,6 +40,7 @@ type App struct {
 	toolMwApplied         bool
 	contextProviders      []agentcontext.Provider
 	agentContextPlugins   []AgentContextPlugin
+	capabilityFactories   []capability.Factory
 	skillSources          []skill.Source
 	agentOptions          []agent.Option
 	actions               *action.Registry
@@ -655,6 +657,13 @@ func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instan
 	if len(a.contextProviders) > 0 {
 		base = append(base, agent.WithContextProviders(a.contextProviders...))
 	}
+	if len(a.capabilityFactories) > 0 {
+		registry, err := capability.NewRegistry(a.capabilityFactories...)
+		if err != nil {
+			return nil, fmt.Errorf("app: create capability registry: %w", err)
+		}
+		base = append(base, agent.WithCapabilityRegistry(registry))
+	}
 	if len(a.agentContextPlugins) > 0 {
 		factories := make([]agent.ContextProviderFactory, len(a.agentContextPlugins))
 		for i, acp := range a.agentContextPlugins {
@@ -799,6 +808,14 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 	if sp, ok := plugin.(SkillsPlugin); ok {
 		a.skillSources = append(a.skillSources, sp.SkillSources()...)
 	}
+	if dtp, ok := plugin.(DefaultToolsPlugin); ok {
+		a.defaultTools = append(a.defaultTools, dtp.DefaultTools()...)
+	}
+	if ctp, ok := plugin.(CatalogToolsPlugin); ok {
+		if err := a.tools.Register(ctp.CatalogTools()...); err != nil {
+			return fmt.Errorf("app: register plugin %q catalog tools: %w", plugin.Name(), err)
+		}
+	}
 	if tp, ok := plugin.(ToolsPlugin); ok {
 		if err := a.tools.Register(tp.Tools()...); err != nil {
 			return fmt.Errorf("app: register plugin %q tools: %w", plugin.Name(), err)
@@ -806,6 +823,9 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 	}
 	if cp, ok := plugin.(ContextProvidersPlugin); ok {
 		a.contextProviders = append(a.contextProviders, cp.ContextProviders()...)
+	}
+	if cp, ok := plugin.(CapabilityFactoriesPlugin); ok {
+		a.capabilityFactories = append(a.capabilityFactories, cp.CapabilityFactories()...)
 	}
 	if acp, ok := plugin.(AgentContextPlugin); ok {
 		a.agentContextPlugins = append(a.agentContextPlugins, acp)

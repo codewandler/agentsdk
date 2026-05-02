@@ -15,7 +15,6 @@ import (
 
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
-	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
@@ -937,13 +936,13 @@ func (a *Instance) historyOptions(includeSessionID bool) []agentruntime.HistoryO
 	return agentruntime.HistoryOptions(a.baseRuntimeOptions(includeSessionID)...)
 }
 
-// ensureCapabilityRegistry returns the configured registry or creates a default
-// one that includes the built-in planner factory.
+// ensureCapabilityRegistry returns the configured registry. Capability factories
+// are host/plugin-owned; agent construction does not install hidden defaults.
 func (a *Instance) ensureCapabilityRegistry() (capability.Registry, error) {
 	if a.capabilityRegistry != nil {
 		return a.capabilityRegistry, nil
 	}
-	return capability.NewRegistry(planner.Factory{})
+	return nil, fmt.Errorf("agent: capability registry is required when capabilities are configured")
 }
 
 func (a *Instance) replaySkillEvents(events []thread.Event) error {

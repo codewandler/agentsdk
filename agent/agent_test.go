@@ -11,11 +11,10 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agentcontext"
-	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runnertest"
+	"github.com/codewandler/agentsdk/profiles/localcli"
 	"github.com/codewandler/agentsdk/skill"
-	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
 )
@@ -259,7 +258,7 @@ func TestAgentSpecToolPatternsLimitActiveTools(t *testing.T) {
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
-		WithTools(standard.DefaultTools()),
+		WithTools(localcli.New().DefaultTools()),
 		WithSpec(Spec{
 			Name:      "coder",
 			Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000},
@@ -332,35 +331,6 @@ func requireRequestNotContainsText(t *testing.T, req unified.Request, want strin
 			}
 		}
 	}
-}
-
-func TestDefaultSpecIncludesPlannerCapability(t *testing.T) {
-	spec := DefaultSpec()
-	require.Len(t, spec.Capabilities, 1)
-	require.Equal(t, planner.CapabilityName, spec.Capabilities[0].CapabilityName)
-	require.Equal(t, "default", spec.Capabilities[0].InstanceID)
-	require.Contains(t, spec.System, "plan tool")
-}
-
-func TestDefaultSpecPlannerAttachesAndExposesPlanTool(t *testing.T) {
-	client := runnertest.NewClient(runnertest.TextStream("ok"))
-	a, err := New(
-		WithClient(client),
-		WithWorkspace(t.TempDir()),
-		WithSpec(DefaultSpec()),
-	)
-	require.NoError(t, err)
-	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
-
-	// The plan tool should be present in the request tools.
-	var found bool
-	for _, tool := range client.RequestAt(0).Tools {
-		if tool.Name == "plan" {
-			found = true
-			break
-		}
-	}
-	require.True(t, found, "plan tool not found in request tools: %v", client.RequestAt(0).Tools)
 }
 
 func TestAgentActivateSkillRefreshesMaterializedSystem(t *testing.T) {

@@ -192,17 +192,16 @@ func WithToolContextFactory(factory func(context.Context) tool.Ctx) Option {
 
 // WithCapabilities configures capability instances that are attached to the
 // agent's thread runtime on each turn. Each spec must have a CapabilityName
-// and InstanceID. The default capability registry includes the built-in
-// planner factory; use WithCapabilityRegistry to override.
+// and InstanceID. Hosts must also provide a capability registry with
+// WithCapabilityRegistry.
 func WithCapabilities(specs ...capability.AttachSpec) Option {
 	return func(a *Instance) {
 		a.capabilitySpecs = append(a.capabilitySpecs, specs...)
 	}
 }
 
-// WithCapabilityRegistry overrides the default capability registry used to
-// create capability instances. When nil, a registry containing the built-in
-// planner factory is created automatically.
+// WithCapabilityRegistry configures the registry used to create capability
+// instances. It is required when capabilities are configured.
 func WithCapabilityRegistry(registry capability.Registry) Option {
 	return func(a *Instance) { a.capabilityRegistry = registry }
 }

@@ -66,24 +66,26 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		toolTimeout = 30 * time.Second
 	}
 	var (
-		agentName      = cfg.DefaultAgent
-		workspace      string
-		systemPrompt   string
-		totalTimeout   time.Duration
-		thinkingFlag   = string(inference.Thinking)
-		effortFlag     = string(inference.Effort)
-		session        string
-		continueLast   bool
-		sessionsDir    string
-		verbose        bool
-		debugMessage   bool
-		includeGlobal  bool
-		sourceAPIFlag  = cfg.Profile.Defaults.SourceAPI
-		useCaseFlag    string
-		approvedOnly   = cfg.Profile.Defaults.ModelPolicy.ApprovedOnly
-		allowDegraded  = cfg.Profile.Defaults.ModelPolicy.AllowDegraded
-		allowUntested  = cfg.Profile.Defaults.ModelPolicy.AllowUntested
-		compatEvidence = cfg.Profile.Defaults.ModelPolicy.EvidencePath
+		agentName        = cfg.DefaultAgent
+		workspace        string
+		systemPrompt     string
+		totalTimeout     time.Duration
+		thinkingFlag     = string(inference.Thinking)
+		effortFlag       = string(inference.Effort)
+		session          string
+		continueLast     bool
+		sessionsDir      string
+		verbose          bool
+		debugMessage     bool
+		includeGlobal    bool
+		pluginNames      []string
+		noDefaultProfile bool
+		sourceAPIFlag    = cfg.Profile.Defaults.SourceAPI
+		useCaseFlag      string
+		approvedOnly     = cfg.Profile.Defaults.ModelPolicy.ApprovedOnly
+		allowDegraded    = cfg.Profile.Defaults.ModelPolicy.AllowDegraded
+		allowUntested    = cfg.Profile.Defaults.ModelPolicy.AllowUntested
+		compatEvidence   = cfg.Profile.Defaults.ModelPolicy.EvidencePath
 	)
 	if cfg.Profile.Defaults.ModelPolicy.UseCase != "" {
 		useCaseFlag = string(cfg.Profile.Defaults.ModelPolicy.UseCase)
@@ -180,6 +182,8 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				Prompt:             cfg.Prompt,
 				AgentOptions:       append([]agent.Option(nil), cfg.AgentOptions...),
 				AppOptions:         append([]app.Option(nil), cfg.AppOptions...),
+				PluginNames:        append([]string(nil), pluginNames...),
+				NoDefaultProfile:   noDefaultProfile,
 				DiscoveryPolicy:    cfg.DiscoveryPolicy,
 				In:                 firstReader(cfg.In, os.Stdin),
 				Out:                firstWriter(cfg.Out, cmd.OutOrStdout()),
@@ -190,7 +194,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		},
 	}
 	addCoreFlags(cmd, cfg, &agentName, &workspace, &systemPrompt)
-	addResourceFlags(cmd, cfg, &includeGlobal)
+	addResourceFlags(cmd, cfg, &includeGlobal, &pluginNames, &noDefaultProfile)
 	addInferenceFlags(cmd, cfg, &inference, &thinkingFlag, &effortFlag, &sourceAPIFlag)
 	addRuntimeFlags(cmd, cfg, &maxSteps, &totalTimeout, &toolTimeout)
 	addSessionFlags(cmd, cfg, &session, &continueLast, &sessionsDir)
@@ -261,7 +265,7 @@ func addCoreFlags(cmd *cobra.Command, cfg CommandConfig, agentName *string, work
 	annotateFlags(cmd, GroupCore, names...)
 }
 
-func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool) {
+func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool, pluginNames *[]string, noDefaultProfile *bool) {
 	if !cfg.Profile.groupEnabled(GroupResources) {
 		return
 	}
@@ -270,6 +274,14 @@ func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool
 	if !cfg.Profile.flagDisabled("include-global") {
 		f.BoolVar(includeGlobal, "include-global", false, "Load ~/.agents and ~/.claude resources")
 		names = append(names, "include-global")
+	}
+	if !cfg.Profile.flagDisabled("plugin") {
+		f.StringSliceVar(pluginNames, "plugin", nil, "Activate named app plugin/profile (repeatable)")
+		names = append(names, "plugin")
+	}
+	if !cfg.Profile.flagDisabled("no-default-profile") {
+		f.BoolVar(noDefaultProfile, "no-default-profile", false, "Disable the built-in local_cli fallback profile")
+		names = append(names, "no-default-profile")
 	}
 	annotateFlags(cmd, GroupResources, names...)
 }

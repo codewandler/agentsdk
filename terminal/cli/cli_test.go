@@ -86,7 +86,7 @@ func TestRunStartsREPLWithoutTask(t *testing.T) {
 	require.Contains(t, out.String(), "session")
 }
 
-func TestRunUsesBuiltInDefaultAgentWhenNoSpecsFound(t *testing.T) {
+func TestRunUsesLocalCLIProfileAgentWhenNoSpecsFound(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	var out bytes.Buffer
 
@@ -103,7 +103,7 @@ func TestRunUsesBuiltInDefaultAgentWhenNoSpecsFound(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 }
 
-func TestRunUsesBuiltInDefaultAgentEvenWhenEmptyManifestNamesDefault(t *testing.T) {
+func TestRunUsesLocalCLIProfileAgentEvenWhenEmptyManifestNamesDefault(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 
 	err := Run(t.Context(), Config{
@@ -119,6 +119,20 @@ func TestRunUsesBuiltInDefaultAgentEvenWhenEmptyManifestNamesDefault(t *testing.
 
 	require.NoError(t, err)
 	require.Len(t, client.Requests(), 1)
+}
+
+func TestRunCanDisableDefaultProfile(t *testing.T) {
+	err := Run(t.Context(), Config{
+		Resources:        ResolvedResources(agentdir.Resolution{}),
+		Task:             "hello",
+		Workspace:        t.TempDir(),
+		NoDefaultProfile: true,
+		AgentOptions:     []agent.Option{agent.WithClient(runnertest.NewClient())},
+		Out:              &bytes.Buffer{},
+		Err:              &bytes.Buffer{},
+	})
+
+	require.ErrorContains(t, err, "no agents found")
 }
 
 func TestRunAppliesSelectedAgentSpecOverride(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/profiles/localcli"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
-	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/spf13/cobra"
 )
 
@@ -115,8 +115,7 @@ func newResearchApp() (*app.App, error) {
 		app.WithResourceBundle(resolved.Bundle),
 		app.WithDefaultAgent(name),
 		app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: "."}),
-		app.WithDefaultTools(standard.DefaultTools()...),
-		app.WithCatalogTools(standard.CatalogTools()...),
+		app.WithPlugin(localcli.New()),
 		app.WithAgentWorkspace("."),
 		app.WithAgentOutput(os.Stdout),
 		app.WithAgentOptions(

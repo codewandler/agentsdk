@@ -5,6 +5,7 @@ import (
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentcontext"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/datasource"
 	"github.com/codewandler/agentsdk/skill"
@@ -31,6 +32,21 @@ type AgentSpecsPlugin interface {
 type ToolsPlugin interface {
 	Plugin
 	Tools() []tool.Tool
+}
+
+type CapabilityFactoriesPlugin interface {
+	Plugin
+	CapabilityFactories() []capability.Factory
+}
+
+type DefaultToolsPlugin interface {
+	Plugin
+	DefaultTools() []tool.Tool
+}
+
+type CatalogToolsPlugin interface {
+	Plugin
+	CatalogTools() []tool.Tool
 }
 
 type ActionsPlugin interface {

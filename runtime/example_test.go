@@ -12,8 +12,8 @@ import (
 	"github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/profiles/localcli"
 	"github.com/codewandler/agentsdk/toolactivation"
-	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -28,7 +28,7 @@ func (exampleClient) Request(_ context.Context, _ unified.Request) (<-chan unifi
 }
 
 func ExampleNew() {
-	tools := toolactivation.New(standard.DefaultTools()...)
+	tools := toolactivation.New(localcli.New().DefaultTools()...)
 	var text string
 	agent, err := runtime.New(exampleClient{},
 		runtime.WithModel("default"),
@@ -61,7 +61,7 @@ func ExampleNew() {
 }
 
 func ExampleHistoryOptions() {
-	tools := toolactivation.New(standard.DefaultTools()...)
+	tools := toolactivation.New(localcli.New().DefaultTools()...)
 	opts := runtime.HistoryOptions(
 		runtime.WithHistoryOptions(runtime.WithHistorySessionID("example-session")),
 		runtime.WithModel("default"),
@@ -76,7 +76,7 @@ func ExampleHistoryOptions() {
 
 func ExampleOpenThreadEngine() {
 	ctx := context.Background()
-	tools := toolactivation.New(standard.DefaultTools()...)
+	tools := toolactivation.New(localcli.New().DefaultTools()...)
 	store := thread.NewMemoryStore()
 	registry, err := capability.NewRegistry(planner.Factory{})
 	if err != nil {

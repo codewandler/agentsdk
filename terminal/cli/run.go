@@ -13,15 +13,16 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/harness"
+	"github.com/codewandler/agentsdk/profiles/localcli"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
 	"github.com/codewandler/agentsdk/tool"
-	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/llmadapter/unified"
 	"gopkg.in/yaml.v3"
 )
@@ -52,6 +53,9 @@ type Config struct {
 	Verbose          bool
 	DebugMessage     bool
 	Prompt           string
+
+	PluginNames      []string
+	NoDefaultProfile bool
 
 	AgentOptions    []agent.Option
 	AppOptions      []app.Option
@@ -125,8 +129,8 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(resolved.Bundle.AgentSpecs) == 0 && strings.TrimSpace(cfg.AgentName) == "" {
-		spec := agent.DefaultSpec()
+	if len(resolved.Bundle.AgentSpecs) == 0 && strings.TrimSpace(cfg.AgentName) == "" && !cfg.NoDefaultProfile {
+		spec := localcli.DefaultAgent()
 		resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, spec)
 		resolved.DefaultAgent = spec.Name
 	}
@@ -170,13 +174,16 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		app.WithResourceBundle(resolved.Bundle),
 		app.WithDefaultAgent(name),
 		app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: workspace, IncludeGlobalUserResources: policy.IncludeGlobalUserResources}),
-		app.WithDefaultTools(standard.DefaultTools()...),
-		app.WithCatalogTools(standard.CatalogTools()...),
 		app.WithAgentWorkspace(workspace),
 		app.WithAgentOutput(out),
 		app.WithAgentVerbose(cfg.Verbose),
 		app.WithAgentOptions(agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(out))),
 	}
+	pluginOpts, err := pluginOptions(resolved, cfg)
+	if err != nil {
+		return nil, err
+	}
+	appOpts = append(appOpts, pluginOpts...)
 	if cfg.ToolTimeout > 0 {
 		appOpts = append(appOpts, app.WithAgentToolTimeout(cfg.ToolTimeout))
 	}
@@ -233,6 +240,30 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	}, nil
 }
 
+func pluginOptions(resolved agentdir.Resolution, cfg Config) ([]app.Option, error) {
+	refs := append([]agentdir.PluginRef(nil), resolved.ManifestPluginRefs()...)
+	for _, name := range cfg.PluginNames {
+		refs = append(refs, agentdir.PluginRef{Name: name})
+	}
+	if !cfg.NoDefaultProfile {
+		refs = append([]agentdir.PluginRef{{Name: localcli.PluginName}}, refs...)
+	}
+	seen := map[string]bool{}
+	var opts []app.Option
+	for _, ref := range refs {
+		name := strings.TrimSpace(ref.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		plugin, err := localcli.PluginForName(name, ref.Config)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, app.WithPlugin(plugin))
+	}
+	return opts, nil
+}
 func Run(ctx context.Context, cfg Config) error {
 	if ctx == nil {
 		ctx = context.Background()

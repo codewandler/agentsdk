@@ -4,7 +4,7 @@
 
 agentsdk is a Go framework, runtime, and builder for secure, reliable agentic applications.
 
-It is already more than a tool library: the repository contains a turn runtime, durable thread/session state, resource discovery, app manifests, plugins, skills, commands, terminal execution, standard tools, safety primitives, context providers, and a dogfood engineer agent. The future design should evolve these existing pieces into a clearer product architecture rather than replace them with unrelated new abstractions.
+It is already more than a tool library: the repository contains a turn runtime, durable thread/session state, resource discovery, app manifests, plugins, skills, commands, terminal execution, tool packages, safety primitives, context providers, and a dogfood engineer agent. The future design should evolve these existing pieces into a clearer product architecture rather than replace them with unrelated new abstractions.
 
 agentsdk should support three related product roles:
 
@@ -66,7 +66,7 @@ The current repository already provides the foundation for the vision:
 - `command` supports slash commands and a `command_run` tool bridge for agent-callable commands.
 - `agentdir` and `resource` load `.agents`, compatibility roots, app manifests, local/global resources, declarative git sources, and normalized contribution bundles.
 - `app` composes resource bundles, commands, plugins, tools, skills, context providers, middleware, and agent specs into running app instances.
-- `plugins/*` already define first-party plugin bundles for git, skills, tool management, vision, and standard plugin sets.
+- `plugins/*` already define first-party plugin bundles for git, skills, tool management, vision, planner, and other concrete contribution sets. Generic “standard” plugin/tool bundles are a transitional smell: useful while bootstrapping, but not a long-term product concept.
 - `terminal/cli`, `terminal/repl`, and `terminal/ui` provide the current terminal channel and `agentsdk run` experience.
 - `apps/engineer` is a practical dogfood resource bundle used as a coding/architecture/devops agent; `examples/engineer` remains as a compatibility copy during the transition.
 
@@ -87,6 +87,8 @@ As a **builder**, it should eventually generate full agentic apps from requireme
 ## What agentsdk is not
 
 agentsdk should not become a monolithic SaaS product or a pile of product-specific integrations inside the core runtime.
+
+There is no context-free default agent or standard tool set. Defaults should be named by product/use case or execution environment — for example `development`, `local_cli`, `research`, or a first-party app such as `apps/engineer`. The terminal channel may load an embedded local CLI app profile for convenience, but that profile should be expressed as declarative app/resource configuration and plugin references, not as hardcoded imports of concrete tool/capability packages inside `terminal/cli` or `agent`.
 
 The core should stay reusable. Helpdesk systems, issue trackers, chat systems, email, browser automation, hosted web UIs, deployment targets, and cloud-specific integrations should be modeled as adapters, plugins, bundled apps, or generated application code unless they are genuinely universal primitives.
 
