@@ -228,6 +228,46 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 	requireAppRequestContainsText(t, client.RequestAt(0), "say hi")
 }
+func TestWorkflowResourceCanUseDefaultAgentTurnActionAndRecordRun(t *testing.T) {
+	ctx := context.Background()
+	bundle, err := agentdir.LoadDir("../testdata/workflow-app")
+	require.NoError(t, err)
+	client := runnertest.NewClient(runnertest.TextStream("resource workflow response"))
+	app, err := New(
+		WithResourceBundle(bundle),
+		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	inst, err := app.InstantiateAgent("coder",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+		agent.WithSessionStoreDir(t.TempDir()),
+	)
+	require.NoError(t, err)
+	turnAction, err := app.DefaultAgentTurnAction(action.Spec{Name: "ask_agent"})
+	require.NoError(t, err)
+	require.NoError(t, app.RegisterActions(turnAction))
+
+	def, ok := app.Workflow("ask_agent_flow")
+	require.True(t, ok)
+	require.Len(t, def.Steps, 1)
+	require.Equal(t, "ask", def.Steps[0].ID)
+	require.Equal(t, "ask_agent", def.Steps[0].Action.Name)
+
+	result := app.ExecuteWorkflow(ctx, "ask_agent_flow", "answer from resource workflow", WithWorkflowRunID("run_resource_workflow"))
+	require.NoError(t, result.Error)
+	require.Equal(t, "resource workflow response", result.Data.(workflow.Result).Data)
+	require.Len(t, client.Requests(), 1)
+	requireAppRequestContainsText(t, client.RequestAt(0), "answer from resource workflow")
+
+	store := threadjsonlstore.Open(filepath.Dir(inst.SessionStorePath()))
+	state, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(app.SessionID())}).State(ctx, "run_resource_workflow")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, workflow.RunSucceeded, state.Status)
+	require.Equal(t, workflow.InlineValue("resource workflow response"), state.Output)
+}
 
 func TestAppExecuteWorkflowRecordsToDefaultAgentLiveThread(t *testing.T) {
 	ctx := context.Background()

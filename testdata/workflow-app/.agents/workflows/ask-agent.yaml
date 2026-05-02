@@ -1,0 +1,5 @@
+name: ask_agent_flow
+description: Ask the default agent through a workflow-defined action step
+steps:
+  - id: ask
+    action: ask_agent

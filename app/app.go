@@ -848,10 +848,80 @@ func datasourceFromContribution(c resource.DataSourceContribution) datasource.De
 }
 
 func workflowFromContribution(c resource.WorkflowContribution) workflow.Definition {
-	return workflow.Definition{
-		Name:        c.Name,
-		Description: c.Description,
+	def := workflow.Definition{Name: c.Name, Description: c.Description}
+	if rawSteps, ok := c.Definition["steps"]; ok {
+		def.Steps = workflowStepsFromContribution(rawSteps)
 	}
+	return def
+}
+
+func workflowStepsFromContribution(raw any) []workflow.Step {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	steps := make([]workflow.Step, 0, len(items))
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		step := workflow.Step{
+			ID:        stringFromAny(m["id"]),
+			Action:    workflowActionRefFromAny(m["action"]),
+			Input:     m["input"],
+			DependsOn: stringSliceFromAny(firstNonNil(m["depends_on"], m["dependsOn"])),
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
+func workflowActionRefFromAny(raw any) workflow.ActionRef {
+	switch v := raw.(type) {
+	case string:
+		return workflow.ActionRef{Name: strings.TrimSpace(v)}
+	case map[string]any:
+		return workflow.ActionRef{Name: stringFromAny(v["name"])}
+	default:
+		return workflow.ActionRef{}
+	}
+}
+
+func stringFromAny(raw any) string {
+	if s, ok := raw.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func stringSliceFromAny(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		return []string{strings.TrimSpace(v)}
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s := stringFromAny(item); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }
 
 func (a *App) registerCommandFromSource(cmd command.Command, source resource.SourceRef) error {
