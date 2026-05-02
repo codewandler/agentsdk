@@ -235,7 +235,7 @@ Harness sessions expose an LLM-facing tool adapter over the same envelope:
 tool := session.AgentCommandTool() // tool name: session_command
 ```
 
-The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.AgentCommandCatalog()` and can be rendered as model context through:
+Default harness sessions attach this command projection automatically, so `session_command` and the command catalog context provider are available to the next agent turn without manual registration. The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.AgentCommandCatalog()` and can be rendered as model context through:
 
 ```go
 context := harness.FormatAgentCommandCatalog(session.AgentCommandCatalog())
@@ -325,6 +325,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 11. Command envelope action adapter: ✅
 12. Agent command envelope tool adapter: ✅
 13. Agent command catalog context renderer/provider: ✅
+14. Default harness-session command projection attachment: ✅
 
 Recommended commit sequence:
 

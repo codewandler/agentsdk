@@ -383,7 +383,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `app` | App manifest loading, plugin bundles, and skill wiring |
 | `capabilities/planner` | Built-in planner capability for structured task plans |
 | `capability` | Capability interface, registry, manager, and event-sourced state |
-| `command` | Slash command parsing, metadata, and tool conversion |
+| `command` | Declarative command trees, slash parsing, structured results, descriptors, and tool/action adapters |
 | `conversation` | Branchable conversation tree, internal items, request projection, compaction, and provider continuations |
 | `internal/diff` | Internal unified diff helpers |
 | `internal/humanize` | Internal human-readable formatting |
@@ -405,7 +405,7 @@ Use these directly when `runtime.Agent` is too high level:
 | `tools/jsonquery` | JSON file query tool with field, index, and wildcard selectors |
 | `tools/notify` | Desktop notification and TTS tools |
 | `tools/shell` | Bash command execution with streaming and timeout |
-| `tools/standard` | Default tool bundle assembly with activation manager |
+| `tools/standard` | Default tool bundle assembly; mutable activation is owned by `activation.Manager` |
 | `tools/todo` | Todo/task list tools |
 | `tools/toolmgmt` | Tool list, activate, and deactivate management tools |
 | `tools/turn` | Turn-done signaling tool |

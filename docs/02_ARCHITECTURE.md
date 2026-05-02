@@ -46,7 +46,7 @@ cmd/agentsdk
      -> app.InstantiateDefaultAgent(...agent options...)
      -> agent.Instance
         -> model routing / policy
-        -> toolset and activation state
+        -> agent-owned tool activation state
         -> skill repository and activation state
         -> context providers
         -> optional JSONL thread/session store
@@ -87,7 +87,7 @@ Current strengths:
 - Middleware can wrap tools for logging, risk gates, timeouts, and approval.
 - Some concepts are not inherently model-only; execution, intent, result, events, context, and middleware should move into a top-level `action` package centered on `action.Action`, `action.Ctx`, `action.Result`, action intent, and action middleware. JSON schema/provider projection remains a tool-surface specialization unless an action explicitly provides optional `*jsonschema.Schema` metadata.
 - `activation.Manager` already models active/inactive tool visibility.
-- `tools/standard` provides useful batteries-included assembly.
+- `tools/standard` provides useful batteries-included assembly without owning mutable runtime activation state.
 
 Evolution:
 
@@ -97,7 +97,7 @@ Evolution:
 - Treat `tool.Tool` as embedding or wrapping `action.Action`, adding only LLM-facing concerns such as guidance, provider/tool-call projection, activation/visibility, and transcript rendering.
 - Keep `tool` as public compatibility API during migration, with aliases for `tool.Ctx`, `tool.Result`, `tool.Intent`, and middleware where practical.
 - Keep generic local tools under `tools/` while adding action-backed constructors over time.
-- Treat `tools/standard` as an app/bundle convenience, not a low-level runtime dependency.
+- Treat `tools/standard` as an app/bundle construction package only; mutable activation belongs in `activation.Manager` owned by the agent/session host.
 - Move product/service/environment-specific integrations toward adapters or integration packages as they appear.
 
 ### Turn runtime
@@ -274,7 +274,7 @@ type AgentProjection struct {
 }
 ```
 
-This lets `harness.Session` attach session-owned agent projections without prematurely naming a second plugin system. Once harness owns more lifecycle, that projection can become a session-level facet of the unified plugin/contribution model.
+Default harness sessions attach the command projection automatically, which makes `session_command` and the agent command catalog context available to the next agent turn while still enforcing per-command `AgentCallable` policy. This lets `harness.Session` attach session-owned agent projections without prematurely naming a second plugin system. Once harness owns more lifecycle, that projection can become a session-level facet of the unified plugin/contribution model.
 
 ### Terminal as current channel
 
@@ -307,7 +307,7 @@ Current strengths:
 
 - `agent.Spec` is the resource-level blueprint.
 - `agent.Instance` is a useful high-level session-backed agent object.
-- Model policy, inference options, auto mux, compatibility evidence, compaction, session persistence, skill activation, context providers, standard toolset wiring, and runtime creation are already integrated.
+- Model policy, inference options, auto mux, compatibility evidence, compaction, session persistence, skill activation, context providers, agent-owned tool activation, and runtime creation are already integrated.
 
 Current problem:
 
@@ -315,7 +315,7 @@ Current problem:
 
 - declarative spec interpretation;
 - model routing/policy;
-- standard toolset setup;
+- standard tool bundle setup and mutable activation;
 - skill repository/state setup;
 - context provider setup;
 - session/thread store setup;
@@ -654,7 +654,7 @@ harness.Service
   supports multiple channels/triggers
 ```
 
-The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, and session-scoped workflow browsing. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.CommandDescriptors`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths.
+The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, session-scoped workflow browsing, and default session projections. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.CommandDescriptors`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths. Terminal one-shot mode renders returned `command.Result` values at the terminal boundary rather than discarding them.
 
 ## Package evolution map
 
@@ -663,7 +663,7 @@ The first harness implementation already wraps `app.App` and the default `agent.
 | `action` | New top-level package for surface-neutral execution: Action, Ctx, Result, Intent, Middleware. |
 | `tool` | Keep as public LLM-facing tool API; embed/wrap `action.Action` and alias/adapt action concepts for compatibility. |
 | `tools/*` | Keep generic tools; expose some as actions where useful. |
-| `tools/standard` | Keep as compatibility/convenience; evolve toward `bundles/*`. |
+| `tools/standard` | Keep as bundle construction helpers only; mutable activation belongs to `activation.Manager`. |
 | `toolmw` | Keep; gradually become part of broader safety architecture. |
 | `runtime` | Keep turn runtime; remove concrete tool dependencies over time. |
 | `runner` | Keep low-level model/tool loop. |
@@ -679,8 +679,19 @@ The first harness implementation already wraps `app.App` and the default `agent.
 | `app` | Keep composition root; add datasource/workflow/action registries; later hosted by harness. |
 | `plugins/*` | Extend plugin facets; keep first-party bundles. |
 | `agent` | Keep spec and compatibility façade; migrate host/session duties outward. |
-| `terminal/*` | Evolve into first channel over harness. |
+| `terminal/*` | First channel over harness; render command results at terminal boundaries. |
 | `usage` | Keep runtime usage aggregation; integrate workflow attribution later. |
+
+## Cleanup guardrails
+
+Current cleanup work is enforcing these boundaries:
+
+- `activation.Manager` owns mutable tool registry and active/inactive state.
+- `tools/standard` only assembles tool bundles; it must not own runtime lifecycle or mutable registration.
+- Session projections are not plugins; do not introduce `harness.Plugin` beside `app.Plugin`.
+- New commands belong in declarative `command.Tree` definitions, not handwritten switch namespaces.
+- Channel boundaries must render returned `command.Result` values instead of discarding them or formatting inside harness handlers.
+- New seams should delete or collapse old paths; avoid labeling permanent complexity as "transitional" without paying it down.
 
 ## Current coupling issues to reduce
 
@@ -695,7 +706,7 @@ Migration strategy:
 
 - Do not break these immediately.
 - Add harness/channel/workflow boundaries alongside current code.
-- Move setup paths gradually and keep compatibility shims.
+- Move setup paths gradually, deleting old/dirty paths instead of keeping compatibility shims unless a shim is explicitly requested.
 - Use `go list` import checks to verify dependency direction improves.
 
 ## Verification approach

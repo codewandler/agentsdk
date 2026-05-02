@@ -373,7 +373,7 @@ Examples:
 
 Safety should be a first-class product property, not a per-tool afterthought.
 
-agentsdk already has a foundation: tool intent, middleware hooks, cmdrisk assessment, shell intent declaration, and standard toolset risk analyzer configuration. The future safety layer should generalize this across tools, actions, workflows, channels, and harness policies.
+agentsdk already has a foundation: tool intent, middleware hooks, cmdrisk assessment, shell intent declaration, and standard shell/tool-bundle risk analyzer configuration. The future safety layer should generalize this across tools, actions, workflows, channels, and harness policies.
 
 agentsdk should support:
 

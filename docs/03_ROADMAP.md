@@ -14,9 +14,9 @@ The roadmap should therefore be read as an evolution plan, not a greenfield buil
 4. Extend `resource.ContributionBundle`, `app.Plugin`, thread events, and app manifests rather than bypassing them.
 5. Add missing boundaries before moving large amounts of code.
 6. Let real apps validate abstractions before generalizing them; document them publicly as hypothetical or anonymized case studies.
-7. Keep compatibility shims or migration notes for public API moves.
+7. Because the project is pre-1.0, prefer deleting dirty transitional APIs over preserving compatibility shims unless a shim is explicitly requested.
 
-Plugin/contribution invariant: do not introduce a second, unrelated harness plugin system alongside `app.Plugin`. Session-owned features may be projected into agent-facing tools/context providers through explicit session projection seams, but packaging should remain one conceptual plugin/contribution model. If session-scoped contributions need pluginization later, evolve the existing plugin model or move plugin ownership upward into `harness.Service` with app-level and session-level facets under one concept.
+Plugin/contribution invariant: do not introduce a second, unrelated harness plugin system alongside `app.Plugin`. Session-owned features may be projected into agent-facing tools/context providers through session projection seams, but packaging should remain one conceptual plugin/contribution model. If session-scoped contributions need pluginization later, evolve the existing plugin model or move plugin ownership upward into `harness.Service` with app-level and session-level facets under one concept.
 
 ## Current foundation to reuse
 
@@ -27,7 +27,7 @@ Before adding anything, recognize the reusable pieces already present:
 | `runtime.Engine`, `runner.RunTurn` | model/tool turn execution; workflow model-step action implementation. |
 | `conversation`, `thread`, `thread/jsonlstore` | durable session and future datasource/workflow/action event persistence. |
 | `runtime.ThreadRuntime` | thread-bound capability and context replay; future harness sessions. |
-| `tool`, `activation`, `tools/*`, `toolmw` | model-callable schema/projection plus reusable execution, intent, middleware, risk assessment patterns to migrate into action. |
+| `tool`, `activation`, `tools/*`, `toolmw` | model-callable schema/projection plus reusable execution, intent, middleware, risk assessment patterns to migrate into action; `activation.Manager` owns mutable tool activation. |
 | `capability`, `capabilities/planner` | attachable stateful agent/session features; planner remains a capability because it is event-sourced session state plus context plus action/tool projection, not a workflow. |
 | `agentcontext` | selected context for turns and future workflow steps. |
 | `skill` | instruction/reference resources; not a workflow replacement. |
@@ -357,6 +357,8 @@ Current state:
 - Harness exposes session metadata plus session-scoped workflow run lookup/listing over the default agent live thread.
 - Terminal send paths route through `harness.Session`, so harness can own session-aware slash-command namespaces such as `/session` and `/workflow`.
 - Harness commands are backed by declarative `command.Tree` definitions and exposed through `Session.CommandDescriptors` and `Session.ExecuteCommand` for structured, non-stringified command execution.
+- Default harness sessions attach the command projection automatically: the `session_command` tool and agent command catalog context provider are available to agent turns, while `AgentCallable` policy still filters executable commands.
+- Terminal one-shot mode renders returned `command.Result` payloads instead of discarding command output.
 
 Tasks:
 
@@ -375,7 +377,7 @@ Tasks:
 4. Keep `terminal/cli.Load` as compatibility wrapper initially. ✅
 5. Add session IDs and thread/session store handling through harness APIs where possible. ✅ `Session.Info`, `Session.AgentName`, `Session.ThreadID`, `/session info`, and workflow read APIs exist
 
-6. Expose session-owned agent projections without creating a second plugin system. ✅ `harness.AgentProjection`, `Session.AgentCommandProjection`, explicit `Session.AttachAgentProjection`, and agent/runtime late registration APIs exist for command tools and command-catalog context providers. Automatic default attachment remains a follow-up decision.
+6. Expose session-owned agent projections without creating a second plugin system. ✅ `harness.AgentProjection`, `Session.AgentCommandProjection`, explicit `Session.AttachAgentProjection`, default command-projection attachment in `harness.Service.DefaultSession`, and agent registration APIs exist for command tools and command-catalog context providers.
 
 Acceptance criteria:
 
@@ -383,7 +385,7 @@ Acceptance criteria:
 - Harness can instantiate the default agent through existing `app.App` APIs. ✅
 - Harness can run a turn and expose events. ✅ initial send path exists; richer event subscription remains future work
 - Harness can expose thread-backed workflow run state/history for the current session. ✅
-- `agentsdk run` behavior remains unchanged. ✅
+- `agentsdk run` behavior remains unchanged for ordinary tasks, and one-shot command tasks now print structured command results. ✅
 
 Verification:
 
@@ -454,7 +456,7 @@ Near-term workflow UX and read-model follow-ups:
 - Add `/workflow runs --status succeeded|failed|running` filtering. ✅
 - Add chronological ordering for `/workflow runs`; current ordering is deterministic by run ID.
 - Carry started/completed timestamps and duration in `workflow.RunSummary`. ✅ basic projected timing exists; richer trigger/source/input metadata remains future work.
-- Continue reducing presentation-specific command formatting by expanding structured payloads/renderers. Initial structured command result payloads and `Display(mode)` rendering exist; richer output payload descriptors and renderer registry remain future work.
+- Continue reducing presentation-specific command formatting by expanding structured payloads/renderers. Generic notice payloads, structured command result payloads, JSON rendering, and `Display(mode)` rendering exist; richer output payload descriptors and a renderer registry remain future work only if they reduce code.
 - Include richer workflow definition metadata in `/workflow show <name>` when definitions gain input/output schemas, defaults, policy, and step descriptions.
 
 Medium-term workflow lifecycle follow-ups:
@@ -706,7 +708,7 @@ Tasks:
 2. Move terminal-specific behavior out of `agent`.
 3. Shrink `agent.Instance` toward a compatibility façade over harness/session/runtime pieces.
 4. Move default-heavy app wiring out of `app.New` where appropriate.
-5. Split broad standard bundles into `bundles/` while keeping compatibility exports.
+5. Keep `tools/standard` as bundle construction only; split broad standard bundles into `bundles/` later only if it deletes complexity.
 6. Move product/environment integrations into `adapters/` as they are added.
 
 Acceptance criteria:
