@@ -138,6 +138,7 @@ type Descriptor struct {
 	ArgumentHint string
 	Args         []ArgDescriptor
 	Flags        []FlagDescriptor
+	Input        InputDescriptor
 	Subcommands  []Descriptor
 }
 
@@ -156,6 +157,41 @@ type FlagDescriptor struct {
 	Required    bool
 	EnumValues  []string
 }
+
+// InputDescriptor describes a command node's structured input shape.
+type InputDescriptor struct {
+	Fields []InputFieldDescriptor
+}
+
+// InputFieldDescriptor describes one structured command input field.
+type InputFieldDescriptor struct {
+	Name        string
+	Source      InputSource
+	Type        InputType
+	Description string
+	Required    bool
+	Variadic    bool
+	EnumValues  []string
+}
+
+// InputSource identifies where an input field comes from.
+type InputSource string
+
+const (
+	InputSourceArg  InputSource = "arg"
+	InputSourceFlag InputSource = "flag"
+)
+
+// InputType identifies the machine-readable type for an input field.
+type InputType string
+
+const (
+	InputTypeString  InputType = "string"
+	InputTypeBool    InputType = "bool"
+	InputTypeInteger InputType = "integer"
+	InputTypeNumber  InputType = "number"
+	InputTypeArray   InputType = "array"
+)
 
 // ValidationErrorCode identifies a command tree validation failure.
 type ValidationErrorCode string
@@ -681,9 +717,16 @@ func (n *treeNode) descriptor() Descriptor {
 	desc := Descriptor{Name: n.spec.Name, Path: n.path(), Description: n.spec.Description, ArgumentHint: n.spec.ArgumentHint}
 	for _, arg := range n.args {
 		desc.Args = append(desc.Args, ArgDescriptor{Name: arg.Name, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
+		fieldType := InputTypeString
+		if arg.IsVariadic {
+			fieldType = InputTypeArray
+		}
+		desc.Input.Fields = append(desc.Input.Fields, InputFieldDescriptor{Name: arg.Name, Source: InputSourceArg, Type: fieldType, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
 	}
 	for _, flag := range n.flags {
-		desc.Flags = append(desc.Flags, FlagDescriptor{Name: flag.Name, Description: flag.Description, Required: flag.IsRequired, EnumValues: append([]string(nil), flag.EnumValues...)})
+		enumValues := append([]string(nil), flag.EnumValues...)
+		desc.Flags = append(desc.Flags, FlagDescriptor{Name: flag.Name, Description: flag.Description, Required: flag.IsRequired, EnumValues: enumValues})
+		desc.Input.Fields = append(desc.Input.Fields, InputFieldDescriptor{Name: flag.Name, Source: InputSourceFlag, Type: InputTypeString, Description: flag.Description, Required: flag.IsRequired, EnumValues: append([]string(nil), enumValues...)})
 	}
 	for _, child := range n.children {
 		desc.Subcommands = append(desc.Subcommands, child.descriptor())

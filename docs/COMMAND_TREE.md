@@ -136,32 +136,55 @@ type Descriptor struct {
     ArgumentHint string
     Args         []ArgDescriptor
     Flags        []FlagDescriptor
+    Input        InputDescriptor
     Subcommands  []Descriptor
+}
+
+type InputDescriptor struct {
+    Fields []InputFieldDescriptor
+}
+
+type InputFieldDescriptor struct {
+    Name        string
+    Source      InputSource // "arg" or "flag"
+    Type        InputType   // "string", "array", ...
+    Description string
+    Required    bool
+    Variadic    bool
+    EnumValues  []string
 }
 
 func (t *Tree) Descriptor() Descriptor
 func (s *harness.Session) CommandDescriptors() []command.Descriptor
 ```
 
-Example descriptor for `/workflow runs`:
+Example descriptor input for `/workflow runs`:
 
 ```json
 {
-  "name": "workflow.runs",
+  "name": "runs",
   "path": ["workflow", "runs"],
   "description": "List workflow runs",
   "input": {
-    "type": "object",
-    "properties": {
-      "workflow": { "type": "string" },
-      "status": {
+    "fields": [
+      {
+        "name": "workflow",
+        "source": "flag",
         "type": "string",
-        "enum": ["running", "succeeded", "failed"]
+        "description": "Workflow name"
+      },
+      {
+        "name": "status",
+        "source": "flag",
+        "type": "string",
+        "enumValues": ["running", "succeeded", "failed"]
       }
-    }
+    ]
   }
 }
 ```
+
+Input descriptors are populated from declared `command.Arg(...)` and `command.Flag(...)` specs. That keeps the command tree declaration canonical for validation, help, typed binding, and non-terminal execution surfaces. Variadic args are exposed as `array`; scalar args and flags are exposed as `string` until explicit richer type metadata is added.
 
 This enables future surfaces from the same command model:
 

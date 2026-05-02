@@ -157,6 +157,40 @@ func TestTreeDescriptorIncludesSubcommandsArgsFlagsAndEnums(t *testing.T) {
 	require.Equal(t, []ArgDescriptor{{Name: "name", Description: "Workflow name", Required: true}}, desc.Subcommands[1].Args)
 }
 
+func TestTreeDescriptorIncludesStructuredInputFields(t *testing.T) {
+	tree, err := NewTree("workflow", Description("Inspect workflows")).
+		Sub("start", nil,
+			Description("Start workflow"),
+			Arg("name").Required().Describe("Workflow name"),
+			Arg("input").Variadic().Describe("Workflow input"),
+			Flag("status").Required().Describe("Run status").Enum("running", "succeeded", "failed"),
+		).
+		Build()
+	require.NoError(t, err)
+
+	desc := tree.Descriptor().Subcommands[0]
+	require.Equal(t, InputDescriptor{Fields: []InputFieldDescriptor{
+		{Name: "name", Source: InputSourceArg, Type: InputTypeString, Description: "Workflow name", Required: true},
+		{Name: "input", Source: InputSourceArg, Type: InputTypeArray, Description: "Workflow input", Variadic: true},
+		{Name: "status", Source: InputSourceFlag, Type: InputTypeString, Description: "Run status", Required: true, EnumValues: []string{"running", "succeeded", "failed"}},
+	}}, desc.Input)
+}
+
+func TestTreeDescriptorInputEnumValuesAreDefensiveCopies(t *testing.T) {
+	tree, err := NewTree("workflow").
+		Sub("runs", nil, Flag("status").Enum("running", "succeeded", "failed")).
+		Build()
+	require.NoError(t, err)
+
+	desc := tree.Descriptor()
+	desc.Subcommands[0].Input.Fields[0].EnumValues[0] = "mutated"
+	desc.Subcommands[0].Flags[0].EnumValues[0] = "also-mutated"
+
+	desc = tree.Descriptor()
+	require.Equal(t, "running", desc.Subcommands[0].Input.Fields[0].EnumValues[0])
+	require.Equal(t, "running", desc.Subcommands[0].Flags[0].EnumValues[0])
+}
+
 func TestTreeRejectsDuplicateAndInvalidSpecs(t *testing.T) {
 	_, err := NewTree("workflow").
 		Sub("show", nil).
