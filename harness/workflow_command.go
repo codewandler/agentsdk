@@ -13,53 +13,73 @@ type WorkflowCommandHandler struct {
 	Session *Session
 }
 
+type workflowListCommandInput struct{}
+
+type workflowShowCommandInput struct {
+	Name string `command:"arg=name"`
+}
+
+type workflowStartCommandInput struct {
+	Name  string `command:"arg=name"`
+	Input string `command:"arg=input"`
+}
+
+type workflowRunCommandInput struct {
+	RunID workflow.RunID `command:"arg=run-id"`
+}
+
+type workflowRunsCommandInput struct {
+	Workflow string             `command:"flag=workflow"`
+	Status   workflow.RunStatus `command:"flag=status"`
+}
+
 func NewWorkflowCommand(session *Session) (*command.Tree, error) {
 	h := WorkflowCommandHandler{Session: session}
 	return command.NewTree("workflow", command.Description("Inspect and run workflows")).
-		Sub("list", h.workflowListCommand,
+		Sub("list", command.Typed(h.workflowListCommand),
 			command.Description("List workflows"),
 		).
-		Sub("show", h.workflowShowCommand,
+		Sub("show", command.Typed(h.workflowShowCommand),
 			command.Description("Show workflow"),
 			command.Arg("name").Required(),
 		).
-		Sub("start", h.workflowStartCommand,
+		Sub("start", command.Typed(h.workflowStartCommand),
 			command.Description("Start workflow"),
 			command.Arg("name").Required(),
 			command.Arg("input").Variadic(),
 		).
-		Sub("runs", h.workflowRunsCommand,
+		Sub("runs", command.Typed(h.workflowRunsCommand),
 			command.Description("List workflow runs"),
 			command.Flag("workflow"),
 			command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
 		).
-		Sub("run", h.workflowRunCommand,
+		Sub("run", command.Typed(h.workflowRunCommand),
 			command.Description("Show workflow run"),
 			command.Arg("run-id").Required(),
 		).
 		Build()
 }
 
-func (h WorkflowCommandHandler) workflowListCommand(context.Context, command.Invocation) (command.Result, error) {
+func (h WorkflowCommandHandler) workflowListCommand(context.Context, workflowListCommandInput) (command.Result, error) {
 	return h.workflowList(), nil
 }
 
-func (h WorkflowCommandHandler) workflowShowCommand(_ context.Context, inv command.Invocation) (command.Result, error) {
-	return h.workflowShow(inv.Arg("name")), nil
+func (h WorkflowCommandHandler) workflowShowCommand(_ context.Context, input workflowShowCommandInput) (command.Result, error) {
+	return h.workflowShow(input.Name), nil
 }
 
-func (h WorkflowCommandHandler) workflowStartCommand(ctx context.Context, inv command.Invocation) (command.Result, error) {
-	return h.workflowStart(ctx, inv.Arg("name"), inv.Arg("input"))
+func (h WorkflowCommandHandler) workflowStartCommand(ctx context.Context, input workflowStartCommandInput) (command.Result, error) {
+	return h.workflowStart(ctx, input.Name, input.Input)
 }
 
-func (h WorkflowCommandHandler) workflowRunCommand(ctx context.Context, inv command.Invocation) (command.Result, error) {
-	return h.workflowRun(ctx, workflow.RunID(inv.Arg("run-id")))
+func (h WorkflowCommandHandler) workflowRunCommand(ctx context.Context, input workflowRunCommandInput) (command.Result, error) {
+	return h.workflowRun(ctx, input.RunID)
 }
 
-func (h WorkflowCommandHandler) workflowRunsCommand(ctx context.Context, inv command.Invocation) (command.Result, error) {
+func (h WorkflowCommandHandler) workflowRunsCommand(ctx context.Context, input workflowRunsCommandInput) (command.Result, error) {
 	filters := WorkflowRunFilters{
-		WorkflowName: inv.Flag("workflow"),
-		Status:       workflow.RunStatus(inv.Flag("status")),
+		WorkflowName: input.Workflow,
+		Status:       input.Status,
 	}
 	return h.workflowRuns(ctx, filters)
 }

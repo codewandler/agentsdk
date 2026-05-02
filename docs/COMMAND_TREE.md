@@ -56,17 +56,27 @@ workflowTree, err := command.NewTree("workflow",
 
 Construction errors are accumulated while building the tree and returned from `Build()`. There is no parallel legacy `AddSub`/`Spec` tree-construction API.
 
-Handlers receive validated structured invocation data rather than raw slash-parser leftovers:
+Handlers can receive validated typed inputs rather than raw slash-parser leftovers:
 
 ```go
-type TreeHandler func(context.Context, command.Invocation) (command.Result, error)
-
-func workflowRunsHandler(ctx context.Context, inv command.Invocation) (command.Result, error) {
-    workflowName := inv.Flag("workflow")
-    status := inv.Flag("status")
-    // no manual flag parsing
+type WorkflowRunsInput struct {
+    Workflow string             `command:"flag=workflow"`
+    Status   workflow.RunStatus `command:"flag=status"`
 }
+
+func workflowRunsHandler(ctx context.Context, input WorkflowRunsInput) (command.Result, error) {
+    // input.Workflow and input.Status were bound from the validated invocation
+}
+
+workflowTree, err := command.NewTree("workflow").
+    Sub("runs", command.Typed(workflowRunsHandler),
+        command.Flag("workflow"),
+        command.Flag("status").Enum("running", "succeeded", "failed"),
+    ).
+    Build()
 ```
+
+Untyped `TreeHandler` functions that accept `command.Invocation` remain available for commands that need direct access to invocation metadata.
 
 The tree still implements the existing flat command contract:
 
@@ -76,19 +86,31 @@ var _ command.Command = (*command.Tree)(nil)
 
 `command.Parse` remains the terminal slash tokenizer; the tree owns subcommand dispatch, declared args/flags, validation, descriptors, and generated usage.
 
-## Typed input direction
+## Typed input binding
 
-The current tree slice stops at named invocation values. A later slice should add typed command inputs, similar to `action.NewTyped`:
+`command.Typed` adapts typed handlers to tree handlers. The input type must be a struct, or a pointer to a struct, with exported fields tagged as command args or flags:
 
 ```go
-type WorkflowRunsInput struct {
-    Workflow string             `json:"workflow,omitempty" command:"flag=workflow"`
-    Status   workflow.RunStatus `json:"status,omitempty" command:"flag=status,enum=running|succeeded|failed"`
+type WorkflowStartInput struct {
+    Name  string `command:"arg=name"`
+    Input string `command:"arg=input"`
 }
 
-command.Typed("runs", func(ctx context.Context, in WorkflowRunsInput) (WorkflowRunsPayload, error) {
-    // no manual flag parsing
-})
+type WorkflowRunsInput struct {
+    Workflow string             `json:"workflow,omitempty" command:"flag=workflow"`
+    Status   workflow.RunStatus `json:"status,omitempty" command:"flag=status"`
+}
+```
+
+Supported scalar targets currently include strings, named string types, bools, ints, uints, floats, pointers to supported scalar types, slices of supported scalar types, and `encoding.TextUnmarshaler` fields. Optional values remain zero-valued when omitted. Enum constraints still belong in the command tree declaration, not in struct tags:
+
+```go
+command.NewTree("workflow").
+    Sub("runs", command.Typed(workflowRunsHandler),
+        command.Flag("workflow"),
+        command.Flag("status").Enum("running", "succeeded", "failed"),
+    ).
+    Build()
 ```
 
 Commands are not a replacement for actions. The intended relationship is:
@@ -157,7 +179,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 1. Declarative command tree core in `command`: ✅
 2. Existing harness command namespaces (`/workflow`, `/session`) migrated onto it: ✅
 3. Command descriptors/introspection exposed through harness sessions: ✅
-4. Typed command input binding: future work.
+4. Typed command input binding: ✅
 
 Recommended commit sequence:
 

@@ -167,6 +167,7 @@ const (
 	ValidationUnknownFlag       ValidationErrorCode = "unknown_flag"
 	ValidationMissingFlag       ValidationErrorCode = "missing_flag"
 	ValidationInvalidFlagValue  ValidationErrorCode = "invalid_flag_value"
+	ValidationInvalidArgValue   ValidationErrorCode = "invalid_arg_value"
 	ValidationUnknownSubcommand ValidationErrorCode = "unknown_subcommand"
 	ValidationInvalidSpec       ValidationErrorCode = "invalid_spec"
 )
@@ -605,7 +606,7 @@ func (n *treeNode) structuredInvocation(input CommandInput) (Invocation, *Valida
 		}
 		vals, ok := structuredValues(value)
 		if !ok {
-			err := ValidationError{Path: inv.Path, Code: ValidationInvalidFlagValue, Field: name, Message: fmt.Sprintf("invalid value for argument %q", name)}
+			err := ValidationError{Path: inv.Path, Code: ValidationInvalidArgValue, Field: name, Message: fmt.Sprintf("invalid value for argument %q", name)}
 			return Invocation{}, &err
 		}
 		if !arg.IsVariadic && len(vals) > 1 {
