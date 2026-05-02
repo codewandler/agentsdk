@@ -541,7 +541,7 @@ app.App               = current composition root and registry host; exposes tran
 harness.Service        = future host for apps, sessions, workflows, channels, triggers
 ```
 
-A prompt or model turn is also an action when treated as an executable unit: it has input, output, context, policy, and result semantics. The fact that it calls an LLM is an implementation detail of that action implementation, not a reason to make workflows depend directly on LLM concepts.
+A prompt or model turn is also an action when treated as an executable unit: it has input, output, context, policy, and result semantics. The current `agent.TurnAction` adapter exposes an `agent.Instance` turn as an `action.Action` for workflow/app use, returning the latest assistant text after the turn commits. The fact that it calls an LLM is an implementation detail of that action implementation, not a reason to make workflows depend directly on LLM concepts.
 
 ## Harness architecture
 

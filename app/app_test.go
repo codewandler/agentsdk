@@ -203,6 +203,31 @@ func TestAppWorkflowCommandAcceptsExecutionOptions(t *testing.T) {
 	require.Equal(t, workflow.RunSucceeded, state.Status)
 	require.Equal(t, workflow.InlineValue("HELLO"), state.Output)
 }
+func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
+	ctx := context.Background()
+	client := runnertest.NewClient(runnertest.TextStream("model says hi"))
+	app, err := New(
+		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
+		WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
+		WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	_, err = app.InstantiateAgent("coder",
+		agent.WithClient(client),
+		agent.WithWorkspace(t.TempDir()),
+	)
+	require.NoError(t, err)
+	turnAction, err := app.DefaultAgentTurnAction(action.Spec{Name: "ask_agent", Description: "Ask the default agent"})
+	require.NoError(t, err)
+	require.NoError(t, app.RegisterActions(turnAction))
+
+	result := app.ExecuteWorkflow(ctx, "ask_flow", "say hi")
+
+	require.NoError(t, result.Error)
+	require.Equal(t, "model says hi", result.Data.(workflow.Result).Data)
+	require.Len(t, client.Requests(), 1)
+	requireAppRequestContainsText(t, client.RequestAt(0), "say hi")
+}
 
 func TestAppExecuteWorkflowRecordsToDefaultAgentLiveThread(t *testing.T) {
 	ctx := context.Background()
@@ -1048,4 +1073,23 @@ func TestAppCompactCommandTooShort(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, command.ResultText, result.Kind)
 	require.Contains(t, result.Text, "too short")
+}
+
+func requireAppRequestContainsText(t *testing.T, req unified.Request, want string) {
+	t.Helper()
+	for _, msg := range req.Messages {
+		for _, part := range msg.Content {
+			if text, ok := part.(unified.TextPart); ok && strings.Contains(text.Text, want) {
+				return
+			}
+		}
+	}
+	for _, inst := range req.Instructions {
+		for _, part := range inst.Content {
+			if text, ok := part.(unified.TextPart); ok && strings.Contains(text.Text, want) {
+				return
+			}
+		}
+	}
+	t.Fatalf("request does not contain %q", want)
 }

@@ -420,9 +420,32 @@ func (a *App) workflowExecutionOptions(opts []WorkflowExecutionOption) ([]Workfl
 		}
 		recorder.OnEvent(ctx, event)
 	}
+
 	out := append([]WorkflowExecutionOption(nil), opts...)
 	out = append(out, WithWorkflowEventHandler(combined))
 	return out, recorder
+}
+
+func (a *App) AgentTurnAction(agentName string, spec action.Spec) (action.Action, error) {
+	if a == nil {
+		return nil, fmt.Errorf("app: nil app")
+	}
+	agentName = strings.TrimSpace(agentName)
+	if agentName == "" {
+		agentName = a.defaultAgent
+	}
+	if agentName == "" {
+		return nil, fmt.Errorf("app: no default agent configured")
+	}
+	inst, ok := a.Agent(agentName)
+	if !ok || inst == nil {
+		return nil, fmt.Errorf("app: agent %q not found", agentName)
+	}
+	return agent.TurnAction(inst, spec), nil
+}
+
+func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
+	return a.AgentTurnAction("", spec)
 }
 
 func (a *App) WorkflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
