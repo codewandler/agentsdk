@@ -32,6 +32,43 @@ func TestRunExecutesOneShotTask(t *testing.T) {
 	require.Contains(t, out.String(), "session")
 }
 
+func TestRunRendersOneShotSessionCommandResult(t *testing.T) {
+	client := runnertest.NewClient()
+	var out bytes.Buffer
+
+	err := Run(t.Context(), Config{
+		Resources:    EmbeddedResources(testBundle(), ".agents"),
+		Task:         "/session info",
+		Workspace:    t.TempDir(),
+		AgentOptions: []agent.Option{agent.WithClient(client)},
+		Out:          &out,
+		Err:          &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.Empty(t, client.Requests())
+	require.Contains(t, out.String(), "session:")
+	require.Contains(t, out.String(), "agent: coder")
+}
+
+func TestRunRendersOneShotWorkflowCommandResult(t *testing.T) {
+	client := runnertest.NewClient()
+	var out bytes.Buffer
+
+	err := Run(t.Context(), Config{
+		Resources:    EmbeddedResources(testBundle(), ".agents"),
+		Task:         "/workflow list",
+		Workspace:    t.TempDir(),
+		AgentOptions: []agent.Option{agent.WithClient(client)},
+		Out:          &out,
+		Err:          &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.Empty(t, client.Requests())
+	require.Contains(t, out.String(), "No workflows registered.")
+}
+
 func TestRunStartsREPLWithoutTask(t *testing.T) {
 	var out bytes.Buffer
 

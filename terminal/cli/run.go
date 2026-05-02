@@ -14,6 +14,7 @@ import (
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/harness"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runner"
@@ -250,7 +251,10 @@ func Run(ctx context.Context, cfg Config) error {
 			runCtx, cancel = context.WithTimeout(runCtx, cfg.TotalTimeout)
 		}
 		defer cancel()
-		_, err := loaded.Session.Send(runCtx, cfg.Task)
+		result, err := loaded.Session.Send(runCtx, cfg.Task)
+		if renderErr := renderOneShotResult(out, result); renderErr != nil && err == nil {
+			err = renderErr
+		}
 		fmt.Fprintln(out)
 		ui.PrintSessionUsage(out, application.SessionID(), application.Tracker().Aggregate())
 		if errors.Is(err, agent.ErrMaxStepsReached) {
@@ -265,6 +269,18 @@ func Run(ctx context.Context, cfg Config) error {
 		prompt = fmt.Sprintf("agent(%s)> ", loaded.AgentName)
 	}
 	return repl.Run(ctx, loaded.Session, in, repl.WithPrompt(prompt))
+}
+
+func renderOneShotResult(out io.Writer, result command.Result) error {
+	text, err := command.Render(result, command.DisplayTerminal)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	_, err = fmt.Fprintln(out, text)
+	return err
 }
 
 // debugMessageObserver returns a RequestObserver that prints each outgoing
