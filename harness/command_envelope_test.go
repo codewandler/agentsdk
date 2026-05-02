@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCommandToolSchemaUsesGenericEnvelope(t *testing.T) {
-	schema := CommandToolSchema()
+func TestCommandEnvelopeSchemaUsesGenericEnvelope(t *testing.T) {
+	schema := CommandEnvelopeSchema()
 
 	require.Equal(t, "object", schema.Type)
 	require.Equal(t, []string{"path"}, schema.Required)
@@ -29,7 +29,7 @@ func TestCommandToolSchemaUsesGenericEnvelope(t *testing.T) {
 }
 
 func TestSessionAgentCommandCatalogExposesReadOnlyWorkflowCommands(t *testing.T) {
-	session := newCommandToolTestSession(t)
+	session := newCommandEnvelopeTestSession(t)
 
 	catalog := session.AgentCommandCatalog()
 
@@ -39,34 +39,49 @@ func TestSessionAgentCommandCatalogExposesReadOnlyWorkflowCommands(t *testing.T)
 	require.Equal(t, "string", show.InputSchema.Properties["name"].Type)
 }
 
-func TestSessionExecuteCommandToolRunsAgentCallableCommand(t *testing.T) {
-	session := newCommandToolTestSession(t)
+func TestSessionExecuteAgentCommandEnvelopeRunsAgentCallableCommand(t *testing.T) {
+	session := newCommandEnvelopeTestSession(t)
 
-	result, err := session.ExecuteCommandTool(context.Background(), CommandToolInput{Path: []string{"workflow", "show"}, Input: map[string]any{"name": "ask_flow"}})
+	result, err := session.ExecuteAgentCommandEnvelope(context.Background(), CommandEnvelope{Path: []string{"workflow", "show"}, Input: map[string]any{"name": "ask_flow"}})
 
 	require.NoError(t, err)
 	require.Contains(t, renderCommandResult(t, result), "ask_flow")
 }
 
-func TestSessionExecuteCommandToolRejectsMissingPathAndNonAgentCallableCommand(t *testing.T) {
-	session := newCommandToolTestSession(t)
+func TestSessionExecuteAgentCommandEnvelopeRejectsMissingPathAndNonAgentCallableCommand(t *testing.T) {
+	session := newCommandEnvelopeTestSession(t)
 
-	_, err := session.ExecuteCommandTool(context.Background(), CommandToolInput{})
+	_, err := session.ExecuteAgentCommandEnvelope(context.Background(), CommandEnvelope{})
 	var validation command.ValidationError
 	require.ErrorAs(t, err, &validation)
 	require.Equal(t, command.ValidationInvalidSpec, validation.Code)
 
-	_, err = session.ExecuteCommandTool(context.Background(), CommandToolInput{Path: []string{"workflow", "start"}, Input: map[string]any{"name": "ask_flow"}})
+	_, err = session.ExecuteAgentCommandEnvelope(context.Background(), CommandEnvelope{Path: []string{"workflow", "start"}, Input: map[string]any{"name": "ask_flow"}})
 	var notCallable command.ErrNotCallable
 	require.ErrorAs(t, err, &notCallable)
 	require.Equal(t, "agent", notCallable.Caller)
 	require.Equal(t, "workflow start", notCallable.Name)
 }
 
-func TestSessionExecuteCommandToolUsesCommandValidation(t *testing.T) {
-	session := newCommandToolTestSession(t)
+func TestSessionExecuteCommandEnvelopeRunsTrustedNonAgentCallableCommand(t *testing.T) {
+	session := newCommandEnvelopeTestSession(t)
 
-	result, err := session.ExecuteCommandTool(context.Background(), CommandToolInput{Path: []string{"workflow", "show"}})
+	result, err := session.ExecuteCommandEnvelope(context.Background(), CommandEnvelope{Path: []string{"session", "info"}})
+
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, result), "agent: coder")
+
+	_, err = session.ExecuteAgentCommandEnvelope(context.Background(), CommandEnvelope{Path: []string{"session", "info"}})
+	var notCallable command.ErrNotCallable
+	require.ErrorAs(t, err, &notCallable)
+	require.Equal(t, "agent", notCallable.Caller)
+	require.Equal(t, "session info", notCallable.Name)
+}
+
+func TestSessionExecuteAgentCommandEnvelopeUsesCommandValidation(t *testing.T) {
+	session := newCommandEnvelopeTestSession(t)
+
+	result, err := session.ExecuteAgentCommandEnvelope(context.Background(), CommandEnvelope{Path: []string{"workflow", "show"}})
 
 	require.NoError(t, err)
 	payload, ok := result.Payload.(command.HelpPayload)
@@ -76,7 +91,7 @@ func TestSessionExecuteCommandToolUsesCommandValidation(t *testing.T) {
 	require.Equal(t, "name", payload.Error.Field)
 }
 
-func newCommandToolTestSession(t *testing.T) *Session {
+func newCommandEnvelopeTestSession(t *testing.T) *Session {
 	t.Helper()
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),

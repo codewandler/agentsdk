@@ -209,23 +209,25 @@ userCatalog := session.CommandCatalog(harness.CommandCatalogUserCallable())
 
 Namespace-only nodes such as `/workflow` are omitted from the catalog unless they become executable. Leaf commands such as `/workflow start`, `/workflow runs`, and `/session info` are included with `inputSchema` generated from their descriptors. Policy filters can project only agent-callable or user-callable commands from the same catalog model.
 
-The model-facing command tool uses a small generic envelope instead of embedding the full command catalog into the formal tool schema:
+Structured command callers use a small generic command execution envelope instead of embedding the full command catalog into a formal tool schema:
 
 ```go
-type CommandToolInput struct {
+type CommandEnvelope struct {
     Path  []string       `json:"path"`
     Input map[string]any `json:"input,omitempty"`
 }
 
-schema := harness.CommandToolSchema()
+schema := harness.CommandEnvelopeSchema()
 catalog := session.AgentCommandCatalog()
-result, err := session.ExecuteCommandTool(ctx, harness.CommandToolInput{
+result, err := session.ExecuteAgentCommandEnvelope(ctx, harness.CommandEnvelope{
     Path:  []string{"workflow", "show"},
     Input: map[string]any{"name": "ask_flow"},
 })
 ```
 
-Exact per-command schemas are provided through `AgentCommandCatalog()` as context/discovery metadata, while the command tree remains responsible for execution-time validation. This keeps the tool schema small and avoids one tool per command while still exposing the known command input schemas to the model.
+Exact per-command schemas are provided through `AgentCommandCatalog()` as context/discovery metadata, while the command tree remains responsible for execution-time validation. This keeps the future tool schema small and avoids one tool per command while still exposing the known command input schemas to the model.
+
+The envelope is tool/action neutral. Agent-facing adapters should call `ExecuteAgentCommandEnvelope`, which enforces `AgentCallable` policy. Trusted SDK, API, or future workflow-action adapters can call `ExecuteCommandEnvelope` and apply their own policy boundary.
 
 ## JSON rendering
 
@@ -283,7 +285,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 7. JSON Schema projection for command inputs: ✅
 8. Harness command catalog with input schemas: ✅
 9. Policy-aware command catalog filters: ✅
-10. Generic command dispatcher tool envelope: ✅
+10. Generic command execution envelope: ✅
 
 Recommended commit sequence:
 
