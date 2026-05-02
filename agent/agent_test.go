@@ -15,6 +15,7 @@ import (
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
+	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
 )
@@ -258,6 +259,7 @@ func TestAgentSpecToolPatternsLimitActiveTools(t *testing.T) {
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
+		WithTools(standard.DefaultTools()),
 		WithSpec(Spec{
 			Name:      "coder",
 			Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000},

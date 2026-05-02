@@ -25,7 +25,6 @@ import (
 	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/toolactivation"
-	"github.com/codewandler/agentsdk/tools/standard"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/adapterconfig"
@@ -138,7 +137,7 @@ func New(opts ...Option) (*Instance, error) {
 		a.workspace = abs
 	}
 	if a.toolActivation == nil {
-		a.toolActivation = toolactivation.New(standard.DefaultTools()...)
+		a.toolActivation = toolactivation.New()
 	}
 	a.applySpecTools()
 	if a.tracker == nil {
