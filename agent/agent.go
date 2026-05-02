@@ -296,9 +296,6 @@ func (a *Instance) RegisterTools(tools ...tool.Tool) error {
 	if err := a.toolActivation.Register(tools...); err != nil {
 		return err
 	}
-	if a.runtime != nil {
-		return a.runtime.RegisterTools(tools...)
-	}
 	return nil
 }
 
