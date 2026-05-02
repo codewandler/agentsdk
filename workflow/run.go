@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
@@ -45,6 +46,9 @@ type RunState struct {
 	ID           RunID
 	WorkflowName string
 	Status       RunStatus
+	StartedAt    time.Time
+	CompletedAt  time.Time
+	Duration     time.Duration
 	Steps        map[string]StepState
 	Output       ValueRef
 	Error        string
@@ -55,6 +59,9 @@ type RunSummary struct {
 	ID           RunID
 	WorkflowName string
 	Status       RunStatus
+	StartedAt    time.Time
+	CompletedAt  time.Time
+	Duration     time.Duration
 	Error        string
 }
 
@@ -110,6 +117,9 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.ID = e.RunID
 		state.WorkflowName = e.WorkflowName
 		state.Status = RunRunning
+		state.StartedAt = e.At
+		state.CompletedAt = time.Time{}
+		state.Duration = 0
 		states[e.RunID] = state
 	case StepStarted:
 		state := stateFor(states, e.RunID)
@@ -150,6 +160,8 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.ID = e.RunID
 		state.WorkflowName = e.WorkflowName
 		state.Status = RunSucceeded
+		state.CompletedAt = e.At
+		state.Duration = runDuration(state.StartedAt, state.CompletedAt)
 		state.Output = e.Output
 		state.Error = ""
 		states[e.RunID] = state
@@ -158,6 +170,8 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.ID = e.RunID
 		state.WorkflowName = e.WorkflowName
 		state.Status = RunFailed
+		state.CompletedAt = e.At
+		state.Duration = runDuration(state.StartedAt, state.CompletedAt)
 		state.Error = e.Error
 		states[e.RunID] = state
 	case *Started, *StepStarted, *StepCompleted, *StepFailed, *Completed, *Failed:
@@ -166,6 +180,13 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		return nil
 	}
 	return nil
+}
+
+func runDuration(startedAt, completedAt time.Time) time.Duration {
+	if startedAt.IsZero() || completedAt.IsZero() || completedAt.Before(startedAt) {
+		return 0
+	}
+	return completedAt.Sub(startedAt)
 }
 
 func normalizeAttempt(attempt int) int {

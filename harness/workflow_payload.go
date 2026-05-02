@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/workflow"
@@ -88,9 +89,9 @@ func (p WorkflowRunsPayload) Display(command.DisplayMode) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("Workflow runs:\n")
-	fmt.Fprintf(&b, "%-18s  %-20s  %s", "RUN ID", "WORKFLOW", "STATUS")
+	fmt.Fprintf(&b, "%-18s  %-20s  %-10s  %-20s  %s", "RUN ID", "WORKFLOW", "STATUS", "STARTED", "DURATION")
 	for _, summary := range p.Summaries {
-		fmt.Fprintf(&b, "\n%-18s  %-20s  %s", summary.ID, summary.WorkflowName, summary.Status)
+		fmt.Fprintf(&b, "\n%-18s  %-20s  %-10s  %-20s  %s", summary.ID, summary.WorkflowName, summary.Status, formatWorkflowTime(summary.StartedAt), formatWorkflowDuration(summary.Duration))
 		if summary.Error != "" {
 			fmt.Fprintf(&b, "  error=%s", summary.Error)
 		}
@@ -108,6 +109,15 @@ func (p WorkflowRunPayload) Display(command.DisplayMode) (string, error) {
 	fmt.Fprintf(&b, "workflow run: %s\n", state.ID)
 	fmt.Fprintf(&b, "workflow: %s\n", state.WorkflowName)
 	fmt.Fprintf(&b, "status: %s", state.Status)
+	if !state.StartedAt.IsZero() {
+		fmt.Fprintf(&b, "\nstarted: %s", formatWorkflowTime(state.StartedAt))
+	}
+	if !state.CompletedAt.IsZero() {
+		fmt.Fprintf(&b, "\ncompleted: %s", formatWorkflowTime(state.CompletedAt))
+	}
+	if state.Duration > 0 {
+		fmt.Fprintf(&b, "\nduration: %s", formatWorkflowDuration(state.Duration))
+	}
 	if state.Error != "" {
 		fmt.Fprintf(&b, "\nerror: %s", state.Error)
 	}
@@ -141,6 +151,20 @@ func (p WorkflowRunPayload) Display(command.DisplayMode) (string, error) {
 		}
 	}
 	return b.String(), nil
+}
+
+func formatWorkflowTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.Local().Format(time.RFC3339)
+}
+
+func formatWorkflowDuration(d time.Duration) string {
+	if d <= 0 {
+		return "-"
+	}
+	return d.Round(time.Millisecond).String()
 }
 
 func emptyWorkflowValue(value workflow.ValueRef) bool {

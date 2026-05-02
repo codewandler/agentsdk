@@ -147,12 +147,23 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 	)
 	require.NoError(t, result.Error)
 	require.Equal(t, workflow.RunID("run_fixed"), result.Data.(workflow.Result).RunID)
-	require.Equal(t, []action.Event{
-		workflow.Started{RunID: "run_fixed", WorkflowName: "echo_flow"},
-		workflow.StepStarted{RunID: "run_fixed", WorkflowName: "echo_flow", StepID: "echo", ActionName: "echo", Attempt: 1},
-		workflow.StepCompleted{RunID: "run_fixed", WorkflowName: "echo_flow", StepID: "echo", ActionName: "echo", Attempt: 1, Output: workflow.InlineValue("hi")},
-		workflow.Completed{RunID: "run_fixed", WorkflowName: "echo_flow", Output: workflow.InlineValue("hi")},
-	}, events)
+	require.Len(t, events, 4)
+	started := events[0].(workflow.Started)
+	require.Equal(t, workflow.RunID("run_fixed"), started.RunID)
+	require.Equal(t, "echo_flow", started.WorkflowName)
+	require.False(t, started.At.IsZero())
+	stepStarted := events[1].(workflow.StepStarted)
+	require.Equal(t, workflow.RunID("run_fixed"), stepStarted.RunID)
+	require.Equal(t, "echo", stepStarted.StepID)
+	require.False(t, stepStarted.At.IsZero())
+	stepCompleted := events[2].(workflow.StepCompleted)
+	require.Equal(t, workflow.RunID("run_fixed"), stepCompleted.RunID)
+	require.Equal(t, workflow.InlineValue("hi"), stepCompleted.Output)
+	require.False(t, stepCompleted.At.IsZero())
+	completed := events[3].(workflow.Completed)
+	require.Equal(t, workflow.RunID("run_fixed"), completed.RunID)
+	require.Equal(t, workflow.InlineValue("hi"), completed.Output)
+	require.False(t, completed.At.IsZero())
 }
 
 func TestAppWorkflowActionAcceptsExecutionOptions(t *testing.T) {

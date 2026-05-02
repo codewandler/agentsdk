@@ -3,6 +3,7 @@ package workflow
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/thread"
@@ -60,46 +61,52 @@ func EventDefinitions() []thread.EventDefinition {
 }
 
 type Started struct {
-	RunID        RunID  `json:"run_id"`
-	WorkflowName string `json:"workflow_name"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 type StepStarted struct {
-	RunID        RunID  `json:"run_id"`
-	WorkflowName string `json:"workflow_name"`
-	StepID       string `json:"step_id"`
-	ActionName   string `json:"action_name"`
-	Attempt      int    `json:"attempt"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	StepID       string    `json:"step_id"`
+	ActionName   string    `json:"action_name"`
+	Attempt      int       `json:"attempt"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 type StepCompleted struct {
-	RunID        RunID    `json:"run_id"`
-	WorkflowName string   `json:"workflow_name"`
-	StepID       string   `json:"step_id"`
-	ActionName   string   `json:"action_name"`
-	Attempt      int      `json:"attempt"`
-	Output       ValueRef `json:"output,omitempty"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	StepID       string    `json:"step_id"`
+	ActionName   string    `json:"action_name"`
+	Attempt      int       `json:"attempt"`
+	Output       ValueRef  `json:"output,omitempty"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 type StepFailed struct {
-	RunID        RunID  `json:"run_id"`
-	WorkflowName string `json:"workflow_name"`
-	StepID       string `json:"step_id"`
-	ActionName   string `json:"action_name"`
-	Attempt      int    `json:"attempt"`
-	Error        string `json:"error"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	StepID       string    `json:"step_id"`
+	ActionName   string    `json:"action_name"`
+	Attempt      int       `json:"attempt"`
+	Error        string    `json:"error"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 type Completed struct {
-	RunID        RunID    `json:"run_id"`
-	WorkflowName string   `json:"workflow_name"`
-	Output       ValueRef `json:"output,omitempty"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	Output       ValueRef  `json:"output,omitempty"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 type Failed struct {
-	RunID        RunID  `json:"run_id"`
-	WorkflowName string `json:"workflow_name"`
-	Error        string `json:"error"`
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	Error        string    `json:"error"`
+	At           time.Time `json:"at,omitempty"`
 }
 
 // EventHandler receives concrete workflow event payloads as they occur.
@@ -135,6 +142,7 @@ type Executor struct {
 	OnEvent  EventHandler
 	RunID    RunID
 	NewRunID func() RunID
+	Now      func() time.Time
 }
 
 // Execute runs def and returns a workflow result in action.Result.Data. Execution
@@ -149,6 +157,10 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 			runID = NewRunID()
 		}
 	}
+	now := e.Now
+	if now == nil {
+		now = time.Now
+	}
 	var events []action.Event
 	emit := func(event action.Event) {
 		events = append(events, event)
@@ -157,7 +169,7 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 		}
 	}
 	fail := func(err error, data any) action.Result {
-		emit(Failed{RunID: runID, WorkflowName: def.Name, Error: err.Error()})
+		emit(Failed{RunID: runID, WorkflowName: def.Name, Error: err.Error(), At: now()})
 		return action.Result{Data: data, Error: err, Events: events}
 	}
 
@@ -168,7 +180,7 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 	if err != nil {
 		return fail(err, nil)
 	}
-	emit(Started{RunID: runID, WorkflowName: def.Name})
+	emit(Started{RunID: runID, WorkflowName: def.Name, At: now()})
 	results := make(map[string]action.Result, len(ordered))
 	var last any = input
 	for _, step := range ordered {
@@ -178,19 +190,19 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 		}
 		stepInput := stepInput(step, input, results)
 		attempt := 1
-		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt})
+		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, At: now()})
 		res := a.Execute(ctx, stepInput)
 		results[step.ID] = res
 		events = append(events, res.Events...)
 		if res.Error != nil {
 			err := fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, res.Error)
-			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Error: res.Error.Error()})
+			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Error: res.Error.Error(), At: now()})
 			return fail(err, Result{RunID: runID, StepResults: results, Data: last})
 		}
 		last = res.Data
-		emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Output: InlineValue(res.Data)})
+		emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Output: InlineValue(res.Data), At: now()})
 	}
-	emit(Completed{RunID: runID, WorkflowName: def.Name, Output: InlineValue(last)})
+	emit(Completed{RunID: runID, WorkflowName: def.Name, Output: InlineValue(last), At: now()})
 	return action.Result{Data: Result{RunID: runID, StepResults: results, Data: last}, Events: events}
 }
 

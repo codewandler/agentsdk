@@ -127,7 +127,9 @@ func TestExecutorEmitsWorkflowEvents(t *testing.T) {
 	require.Equal(t, "upper", live[1].(StepStarted).StepID)
 	require.Equal(t, InlineValue("HELLO!"), live[5].(Completed).Output)
 	require.Contains(t, result.Events, action.Event("action-event"))
-	require.Contains(t, result.Events, action.Event(Completed{RunID: live[0].(Started).RunID, WorkflowName: "shout", Output: InlineValue("HELLO!")}))
+	completed := live[5].(Completed)
+	require.False(t, completed.At.IsZero())
+	require.Contains(t, result.Events, action.Event(Completed{RunID: live[0].(Started).RunID, WorkflowName: "shout", Output: InlineValue("HELLO!"), At: completed.At}))
 }
 
 func TestExecutorEmitsFailureEvents(t *testing.T) {
@@ -146,7 +148,9 @@ func TestExecutorEmitsFailureEvents(t *testing.T) {
 	require.ErrorIs(t, result.Error, boom)
 	require.Equal(t, []thread.EventKind{EventStarted, EventStepStarted, EventStepFailed, EventFailed}, eventKinds(live))
 	require.Equal(t, boom.Error(), live[2].(StepFailed).Error)
-	require.Contains(t, result.Events, action.Event(StepFailed{RunID: live[0].(Started).RunID, WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, Error: boom.Error()}))
+	failed := live[2].(StepFailed)
+	require.False(t, failed.At.IsZero())
+	require.Contains(t, result.Events, action.Event(StepFailed{RunID: live[0].(Started).RunID, WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, Error: boom.Error(), At: failed.At}))
 }
 
 func eventKinds(events []action.Event) []thread.EventKind {

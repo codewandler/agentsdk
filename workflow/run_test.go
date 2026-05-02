@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/stretchr/testify/require"
@@ -16,12 +17,14 @@ func TestValueRefHelpers(t *testing.T) {
 }
 
 func TestProjectorMaterializesSuccessfulRunState(t *testing.T) {
+	startedAt := time.Date(2026, 5, 2, 13, 0, 0, 0, time.UTC)
+	completedAt := startedAt.Add(1500 * time.Millisecond)
 	events := []any{
-		Started{RunID: "run_1", WorkflowName: "shout"},
-		StepStarted{RunID: "run_1", WorkflowName: "shout", StepID: "upper", ActionName: "upper", Attempt: 1},
+		Started{RunID: "run_1", WorkflowName: "shout", At: startedAt},
+		StepStarted{RunID: "run_1", WorkflowName: "shout", StepID: "upper", ActionName: "upper", Attempt: 1, At: startedAt.Add(100 * time.Millisecond)},
 		"ignored action event",
-		StepCompleted{RunID: "run_1", WorkflowName: "shout", StepID: "upper", ActionName: "upper", Attempt: 1, Output: InlineValue("HELLO")},
-		Completed{RunID: "run_1", WorkflowName: "shout", Output: InlineValue("HELLO")},
+		StepCompleted{RunID: "run_1", WorkflowName: "shout", StepID: "upper", ActionName: "upper", Attempt: 1, Output: InlineValue("HELLO"), At: completedAt.Add(-100 * time.Millisecond)},
+		Completed{RunID: "run_1", WorkflowName: "shout", Output: InlineValue("HELLO"), At: completedAt},
 	}
 
 	state, ok, err := Projector{}.ProjectRun(events, "run_1")
@@ -30,6 +33,9 @@ func TestProjectorMaterializesSuccessfulRunState(t *testing.T) {
 	require.Equal(t, RunID("run_1"), state.ID)
 	require.Equal(t, "shout", state.WorkflowName)
 	require.Equal(t, RunSucceeded, state.Status)
+	require.Equal(t, startedAt, state.StartedAt)
+	require.Equal(t, completedAt, state.CompletedAt)
+	require.Equal(t, 1500*time.Millisecond, state.Duration)
 	require.Equal(t, InlineValue("HELLO"), state.Output)
 	require.Equal(t, StepSucceeded, state.Steps["upper"].Status)
 	require.Equal(t, 1, state.Steps["upper"].Attempt)
@@ -38,17 +44,22 @@ func TestProjectorMaterializesSuccessfulRunState(t *testing.T) {
 }
 
 func TestProjectorMaterializesFailedRunState(t *testing.T) {
+	startedAt := time.Date(2026, 5, 2, 13, 0, 0, 0, time.UTC)
+	failedAt := startedAt.Add(2 * time.Second)
 	events := []any{
-		Started{RunID: "run_1", WorkflowName: "failflow"},
-		StepStarted{RunID: "run_1", WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1},
-		StepFailed{RunID: "run_1", WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, Error: "boom"},
-		Failed{RunID: "run_1", WorkflowName: "failflow", Error: "workflow failed: boom"},
+		Started{RunID: "run_1", WorkflowName: "failflow", At: startedAt},
+		StepStarted{RunID: "run_1", WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, At: startedAt.Add(100 * time.Millisecond)},
+		StepFailed{RunID: "run_1", WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, Error: "boom", At: failedAt.Add(-100 * time.Millisecond)},
+		Failed{RunID: "run_1", WorkflowName: "failflow", Error: "workflow failed: boom", At: failedAt},
 	}
 
 	state, ok, err := Projector{}.ProjectRun(events, "run_1")
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, RunFailed, state.Status)
+	require.Equal(t, startedAt, state.StartedAt)
+	require.Equal(t, failedAt, state.CompletedAt)
+	require.Equal(t, 2*time.Second, state.Duration)
 	require.Equal(t, "workflow failed: boom", state.Error)
 	require.Equal(t, StepFailedStatus, state.Steps["fail"].Status)
 	require.Equal(t, 1, state.Steps["fail"].Attempt)

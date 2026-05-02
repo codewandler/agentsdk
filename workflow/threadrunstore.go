@@ -108,6 +108,9 @@ func (s ThreadRunStore) Runs(ctx context.Context) ([]RunSummary, error) {
 			ID:           state.ID,
 			WorkflowName: state.WorkflowName,
 			Status:       state.Status,
+			StartedAt:    state.StartedAt,
+			CompletedAt:  state.CompletedAt,
+			Duration:     state.Duration,
 			Error:        state.Error,
 		})
 	}
