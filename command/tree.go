@@ -9,9 +9,40 @@ import (
 // TreeHandler handles a validated command tree invocation.
 type TreeHandler func(context.Context, Invocation) (Result, error)
 
-// ParamSpec declares one command input parameter.
-type ParamSpec interface {
-	applyParamSpec(*treeNode)
+// NodeOption configures a command tree node.
+type NodeOption interface {
+	applyNodeOption(*treeNode)
+}
+
+type nodeOptionFunc func(*treeNode)
+
+func (fn nodeOptionFunc) applyNodeOption(n *treeNode) { fn(n) }
+
+// Description sets command node description metadata.
+func Description(description string) NodeOption {
+	return nodeOptionFunc(func(n *treeNode) { n.spec.Description = strings.TrimSpace(description) })
+}
+
+// ArgumentHint sets compact usage hint metadata for a command node.
+func ArgumentHint(hint string) NodeOption {
+	return nodeOptionFunc(func(n *treeNode) { n.spec.ArgumentHint = strings.TrimSpace(hint) })
+}
+
+// Alias adds aliases for a command node.
+func Alias(aliases ...string) NodeOption {
+	return nodeOptionFunc(func(n *treeNode) {
+		for _, alias := range aliases {
+			alias = strings.TrimPrefix(strings.TrimSpace(alias), "/")
+			if alias != "" {
+				n.spec.Aliases = append(n.spec.Aliases, alias)
+			}
+		}
+	})
+}
+
+// WithPolicy sets caller policy metadata for a command node.
+func WithPolicy(policy Policy) NodeOption {
+	return nodeOptionFunc(func(n *treeNode) { n.spec.Policy = policy })
 }
 
 // ArgSpec declares a positional argument accepted by a tree node.
@@ -37,7 +68,7 @@ func (a ArgSpec) Required() ArgSpec { a.IsRequired = true; return a }
 // Variadic marks the argument as consuming all remaining positional values.
 func (a ArgSpec) Variadic() ArgSpec { a.IsVariadic = true; return a }
 
-func (a ArgSpec) applyParamSpec(n *treeNode) { n.args = append(n.args, a) }
+func (a ArgSpec) applyNodeOption(n *treeNode) { n.args = append(n.args, a) }
 
 // FlagSpec declares a named flag accepted by a tree node.
 type FlagSpec struct {
@@ -65,7 +96,7 @@ func (f FlagSpec) Enum(values ...string) FlagSpec {
 	return f
 }
 
-func (f FlagSpec) applyParamSpec(n *treeNode) { n.flags = append(n.flags, f) }
+func (f FlagSpec) applyNodeOption(n *treeNode) { n.flags = append(n.flags, f) }
 
 // Invocation carries a validated command tree invocation to a handler.
 type Invocation struct {
@@ -248,10 +279,11 @@ type Tree struct {
 	err  error
 }
 
-// NewTree creates a command tree rooted at spec.
-func NewTree(spec Spec) *Tree {
-	spec = normalizeSpec(spec)
-	return &Tree{root: &treeNode{spec: spec, index: map[string]*treeNode{}}}
+// NewTree creates a command tree rooted at name.
+func NewTree(name string, opts ...NodeOption) *Tree {
+	node := &treeNode{spec: Spec{Name: strings.TrimPrefix(strings.TrimSpace(name), "/")}, index: map[string]*treeNode{}}
+	applyNodeOptions(node, opts...)
+	return &Tree{root: node}
 }
 
 var _ Command = (*Tree)(nil)
@@ -265,40 +297,41 @@ func (t *Tree) Spec() Spec {
 }
 
 // Handle sets the root handler.
-func (t *Tree) Handle(handler TreeHandler, params ...ParamSpec) *Tree {
+func (t *Tree) Handle(handler TreeHandler, opts ...NodeOption) *Tree {
 	if t == nil || t.root == nil {
 		return t
 	}
 	t.root.handler = handler
-	for _, param := range params {
-		if param != nil {
-			param.applyParamSpec(t.root)
-		}
-	}
+	applyNodeOptions(t.root, opts...)
 	if err := validateNodeSpec(t.root); err != nil && t.err == nil {
 		t.err = err
 	}
 	return t
 }
 
-// AddSub adds a subcommand and returns it. Duplicate names and invalid specs are explicit errors.
-func (t *Tree) AddSub(spec Spec, handler TreeHandler, params ...ParamSpec) (*Tree, error) {
-	if t == nil || t.root == nil {
-		return nil, ValidationError{Code: ValidationInvalidSpec, Message: "command: tree is nil"}
-	}
-	node, err := addSubNode(t.root, spec, handler, params...)
-	if err != nil {
-		return nil, err
-	}
-	return &Tree{root: node}, nil
-}
-
 // Sub adds a subcommand to the root and records any construction error on the tree.
-func (t *Tree) Sub(spec Spec, handler TreeHandler, params ...ParamSpec) *Tree {
-	if _, err := t.AddSub(spec, handler, params...); err != nil && t.err == nil {
+func (t *Tree) Sub(name string, handler TreeHandler, opts ...NodeOption) *Tree {
+	if t == nil || t.root == nil {
+		return t
+	}
+	if _, err := addSubNode(t.root, name, handler, opts...); err != nil && t.err == nil {
 		t.err = err
 	}
 	return t
+}
+
+// Build validates and returns the tree.
+func (t *Tree) Build() (*Tree, error) {
+	if t == nil || t.root == nil {
+		return nil, ValidationError{Code: ValidationInvalidSpec, Message: "command: tree is nil"}
+	}
+	if t.err != nil {
+		return nil, t.err
+	}
+	if err := validateTree(t.root); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
 // Execute validates params and dispatches to the matching tree node.
@@ -374,18 +407,20 @@ func (t *Tree) Descriptor() Descriptor {
 	return t.root.descriptor()
 }
 
-func addSubNode(parent *treeNode, spec Spec, handler TreeHandler, params ...ParamSpec) (*treeNode, error) {
-	spec = normalizeSpec(spec)
-	if spec.Name == "" {
+func addSubNode(parent *treeNode, name string, handler TreeHandler, opts ...NodeOption) (*treeNode, error) {
+	name = strings.TrimPrefix(strings.TrimSpace(name), "/")
+	if name == "" {
 		return nil, ValidationError{Path: parent.path(), Code: ValidationInvalidSpec, Message: "command: subcommand name is required"}
 	}
 	if parent.index == nil {
 		parent.index = map[string]*treeNode{}
 	}
-	if _, exists := parent.index[spec.Name]; exists {
-		return nil, ErrDuplicate{Name: spec.Name}
+	if _, exists := parent.index[name]; exists {
+		return nil, ErrDuplicate{Name: name}
 	}
-	for _, alias := range spec.Aliases {
+	node := &treeNode{spec: Spec{Name: name}, handler: handler, parent: parent, index: map[string]*treeNode{}}
+	applyNodeOptions(node, opts...)
+	for _, alias := range node.spec.Aliases {
 		if alias == "" {
 			continue
 		}
@@ -393,23 +428,41 @@ func addSubNode(parent *treeNode, spec Spec, handler TreeHandler, params ...Para
 			return nil, ErrDuplicate{Name: alias}
 		}
 	}
-	node := &treeNode{spec: spec, handler: handler, parent: parent, index: map[string]*treeNode{}}
-	for _, param := range params {
-		if param != nil {
-			param.applyParamSpec(node)
-		}
-	}
 	if err := validateNodeSpec(node); err != nil {
 		return nil, err
 	}
 	parent.children = append(parent.children, node)
-	parent.index[spec.Name] = node
-	for _, alias := range spec.Aliases {
+	parent.index[node.spec.Name] = node
+	for _, alias := range node.spec.Aliases {
 		if alias != "" {
 			parent.index[alias] = node
 		}
 	}
 	return node, nil
+}
+
+func applyNodeOptions(node *treeNode, opts ...NodeOption) {
+	for _, opt := range opts {
+		if opt != nil {
+			opt.applyNodeOption(node)
+		}
+	}
+	node.spec = normalizeSpec(node.spec)
+}
+
+func validateTree(node *treeNode) error {
+	if node == nil {
+		return ValidationError{Code: ValidationInvalidSpec, Message: "command: tree is nil"}
+	}
+	if err := validateNodeSpec(node); err != nil {
+		return err
+	}
+	for _, child := range node.children {
+		if err := validateTree(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateNodeSpec(node *treeNode) error {

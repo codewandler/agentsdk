@@ -15,26 +15,29 @@ type WorkflowCommandHandler struct {
 
 func NewWorkflowCommand(session *Session) (*command.Tree, error) {
 	h := WorkflowCommandHandler{Session: session}
-	tree := command.NewTree(command.Spec{Name: "workflow", Description: "Inspect and run workflows"})
-	if _, err := tree.AddSub(command.Spec{Name: "list", Description: "List workflows"}, h.workflowListCommand); err != nil {
-		return nil, err
-	}
-	if _, err := tree.AddSub(command.Spec{Name: "show", Description: "Show workflow"}, h.workflowShowCommand, command.Arg("name").Required()); err != nil {
-		return nil, err
-	}
-	if _, err := tree.AddSub(command.Spec{Name: "start", Description: "Start workflow"}, h.workflowStartCommand, command.Arg("name").Required(), command.Arg("input").Variadic()); err != nil {
-		return nil, err
-	}
-	if _, err := tree.AddSub(command.Spec{Name: "runs", Description: "List workflow runs"}, h.workflowRunsCommand,
-		command.Flag("workflow"),
-		command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
-	); err != nil {
-		return nil, err
-	}
-	if _, err := tree.AddSub(command.Spec{Name: "run", Description: "Show workflow run"}, h.workflowRunCommand, command.Arg("run-id").Required()); err != nil {
-		return nil, err
-	}
-	return tree, nil
+	return command.NewTree("workflow", command.Description("Inspect and run workflows")).
+		Sub("list", h.workflowListCommand,
+			command.Description("List workflows"),
+		).
+		Sub("show", h.workflowShowCommand,
+			command.Description("Show workflow"),
+			command.Arg("name").Required(),
+		).
+		Sub("start", h.workflowStartCommand,
+			command.Description("Start workflow"),
+			command.Arg("name").Required(),
+			command.Arg("input").Variadic(),
+		).
+		Sub("runs", h.workflowRunsCommand,
+			command.Description("List workflow runs"),
+			command.Flag("workflow"),
+			command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
+		).
+		Sub("run", h.workflowRunCommand,
+			command.Description("Show workflow run"),
+			command.Arg("run-id").Required(),
+		).
+		Build()
 }
 
 func (h WorkflowCommandHandler) workflowListCommand(context.Context, command.Invocation) (command.Result, error) {

@@ -28,21 +28,33 @@ Terminal slash syntax should be one input projection over this tree, not the can
 
 ## Target shape
 
-The current API reuses existing `command.Spec` and keeps `Tree` compatible with the existing `command.Command` interface:
+The current API uses a fluent builder and keeps `Tree` compatible with the existing `command.Command` interface:
 
 ```go
-workflowTree := command.NewTree(command.Spec{
-    Name:        "workflow",
-    Description: "Inspect and run workflows",
-})
-
-_, err := workflowTree.AddSub(
-    command.Spec{Name: "runs", Description: "List workflow runs"},
-    workflowRunsHandler,
-    command.Flag("workflow").Describe("Workflow name"),
-    command.Flag("status").Enum("running", "succeeded", "failed"),
-)
+workflowTree, err := command.NewTree("workflow",
+    command.Description("Inspect and run workflows"),
+).
+    Sub("list", workflowListHandler,
+        command.Description("List workflows"),
+    ).
+    Sub("show", workflowShowHandler,
+        command.Description("Show workflow"),
+        command.Arg("name").Required(),
+    ).
+    Sub("start", workflowStartHandler,
+        command.Description("Start workflow"),
+        command.Arg("name").Required(),
+        command.Arg("input").Variadic(),
+    ).
+    Sub("runs", workflowRunsHandler,
+        command.Description("List workflow runs"),
+        command.Flag("workflow").Describe("Workflow name"),
+        command.Flag("status").Enum("running", "succeeded", "failed"),
+    ).
+    Build()
 ```
+
+Construction errors are accumulated while building the tree and returned from `Build()`. There is no parallel legacy `AddSub`/`Spec` tree-construction API.
 
 Handlers receive validated structured invocation data rather than raw slash-parser leftovers:
 

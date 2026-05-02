@@ -8,13 +8,14 @@ import (
 )
 
 func TestTreeImplementsCommandAndDispatchesSubcommands(t *testing.T) {
-	var _ Command = NewTree(Spec{Name: "workflow"})
+	var _ Command = NewTree("workflow")
 	var got Invocation
-	tree := NewTree(Spec{Name: "workflow", Description: "Inspect workflows"})
-	_, err := tree.AddSub(Spec{Name: "show", Description: "Show workflow"}, func(_ context.Context, inv Invocation) (Result, error) {
-		got = inv
-		return Text("shown " + inv.Arg("name")), nil
-	}, Arg("name").Required())
+	tree, err := NewTree("workflow", Description("Inspect workflows")).
+		Sub("show", func(_ context.Context, inv Invocation) (Result, error) {
+			got = inv
+			return Text("shown " + inv.Arg("name")), nil
+		}, Description("Show workflow"), Arg("name").Required()).
+		Build()
 	require.NoError(t, err)
 
 	name, params, err := Parse("/workflow show ask_flow")
@@ -30,11 +31,12 @@ func TestTreeImplementsCommandAndDispatchesSubcommands(t *testing.T) {
 
 func TestTreePassesVariadicArgsAndFlags(t *testing.T) {
 	var got Invocation
-	tree := NewTree(Spec{Name: "workflow"})
-	_, err := tree.AddSub(Spec{Name: "start"}, func(_ context.Context, inv Invocation) (Result, error) {
-		got = inv
-		return Text(inv.Arg("input")), nil
-	}, Arg("name").Required(), Arg("input").Variadic(), Flag("status").Enum("running", "succeeded", "failed"))
+	tree, err := NewTree("workflow").
+		Sub("start", func(_ context.Context, inv Invocation) (Result, error) {
+			got = inv
+			return Text(inv.Arg("input")), nil
+		}, Arg("name").Required(), Arg("input").Variadic(), Flag("status").Enum("running", "succeeded", "failed")).
+		Build()
 	require.NoError(t, err)
 
 	_, params, err := Parse("/workflow start ask_flow hello from tree --status succeeded")
@@ -49,10 +51,11 @@ func TestTreePassesVariadicArgsAndFlags(t *testing.T) {
 }
 
 func TestTreeValidationReturnsStructuredHelpPayload(t *testing.T) {
-	tree := NewTree(Spec{Name: "workflow"})
-	_, err := tree.AddSub(Spec{Name: "runs"}, func(context.Context, Invocation) (Result, error) {
-		return Text("unreachable"), nil
-	}, Flag("status").Enum("running", "succeeded", "failed"))
+	tree, err := NewTree("workflow").
+		Sub("runs", func(context.Context, Invocation) (Result, error) {
+			return Text("unreachable"), nil
+		}, Flag("status").Enum("running", "succeeded", "failed")).
+		Build()
 	require.NoError(t, err)
 
 	_, params, err := Parse("/workflow runs --status nope")
@@ -72,10 +75,11 @@ func TestTreeValidationReturnsStructuredHelpPayload(t *testing.T) {
 }
 
 func TestTreeValidationCoversMissingArgsTooManyArgsUnknownFlagsAndSubcommands(t *testing.T) {
-	tree := NewTree(Spec{Name: "workflow"})
-	_, err := tree.AddSub(Spec{Name: "show"}, func(context.Context, Invocation) (Result, error) {
-		return Text("unreachable"), nil
-	}, Arg("name").Required())
+	tree, err := NewTree("workflow").
+		Sub("show", func(context.Context, Invocation) (Result, error) {
+			return Text("unreachable"), nil
+		}, Arg("name").Required()).
+		Build()
 	require.NoError(t, err)
 
 	cases := []struct {
@@ -105,11 +109,12 @@ func TestTreeValidationCoversMissingArgsTooManyArgsUnknownFlagsAndSubcommands(t 
 
 func TestTreeExecuteMapUsesStructuredInputWithoutSlashStringification(t *testing.T) {
 	var got Invocation
-	tree := NewTree(Spec{Name: "workflow"})
-	_, err := tree.AddSub(Spec{Name: "runs"}, func(_ context.Context, inv Invocation) (Result, error) {
-		got = inv
-		return Text(inv.Flag("status") + ":" + inv.Flag("workflow")), nil
-	}, Flag("workflow"), Flag("status").Enum("running", "succeeded", "failed"))
+	tree, err := NewTree("workflow").
+		Sub("runs", func(_ context.Context, inv Invocation) (Result, error) {
+			got = inv
+			return Text(inv.Flag("status") + ":" + inv.Flag("workflow")), nil
+		}, Flag("workflow"), Flag("status").Enum("running", "succeeded", "failed")).
+		Build()
 	require.NoError(t, err)
 
 	result, err := tree.ExecuteMap(context.Background(), []string{"workflow", "runs"}, map[string]any{
@@ -125,15 +130,17 @@ func TestTreeExecuteMapUsesStructuredInputWithoutSlashStringification(t *testing
 }
 
 func TestTreeDescriptorIncludesSubcommandsArgsFlagsAndEnums(t *testing.T) {
-	tree := NewTree(Spec{Name: "workflow", Description: "Inspect workflows"})
-	_, err := tree.AddSub(Spec{Name: "runs", Description: "List runs"}, nil,
-		Flag("workflow").Describe("Workflow name"),
-		Flag("status").Enum("running", "succeeded", "failed"),
-	)
-	require.NoError(t, err)
-	_, err = tree.AddSub(Spec{Name: "show", Description: "Show workflow"}, nil,
-		Arg("name").Required().Describe("Workflow name"),
-	)
+	tree, err := NewTree("workflow", Description("Inspect workflows")).
+		Sub("runs", nil,
+			Description("List runs"),
+			Flag("workflow").Describe("Workflow name"),
+			Flag("status").Enum("running", "succeeded", "failed"),
+		).
+		Sub("show", nil,
+			Description("Show workflow"),
+			Arg("name").Required().Describe("Workflow name"),
+		).
+		Build()
 	require.NoError(t, err)
 
 	desc := tree.Descriptor()
@@ -151,15 +158,23 @@ func TestTreeDescriptorIncludesSubcommandsArgsFlagsAndEnums(t *testing.T) {
 }
 
 func TestTreeRejectsDuplicateAndInvalidSpecs(t *testing.T) {
-	tree := NewTree(Spec{Name: "workflow"})
-	_, err := tree.AddSub(Spec{Name: "show"}, nil)
-	require.NoError(t, err)
-	_, err = tree.AddSub(Spec{Name: "show"}, nil)
+	_, err := NewTree("workflow").
+		Sub("show", nil).
+		Sub("show", nil).
+		Build()
 	var dup ErrDuplicate
 	require.ErrorAs(t, err, &dup)
 
-	_, err = tree.AddSub(Spec{Name: "bad"}, nil, Arg("rest").Variadic(), Arg("later"))
+	_, err = NewTree("workflow").
+		Sub("bad", nil, Arg("rest").Variadic(), Arg("later")).
+		Build()
 	var validation ValidationError
 	require.ErrorAs(t, err, &validation)
 	require.Equal(t, ValidationInvalidSpec, validation.Code)
+}
+
+func TestTreeBuilderSupportsAliasesAndPolicy(t *testing.T) {
+	tree, err := NewTree("workflow", Alias("wf"), WithPolicy(Policy{AgentCallable: true})).Build()
+	require.NoError(t, err)
+	require.Equal(t, Spec{Name: "workflow", Aliases: []string{"wf"}, Policy: Policy{AgentCallable: true}}, tree.Spec())
 }

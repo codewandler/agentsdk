@@ -12,11 +12,11 @@ type SessionCommandHandler struct {
 
 func NewSessionCommand(session *Session) (*command.Tree, error) {
 	h := SessionCommandHandler{Session: session}
-	tree := command.NewTree(command.Spec{Name: "session", Description: "Inspect the active session"})
-	if _, err := tree.AddSub(command.Spec{Name: "info", Description: "Show session metadata"}, h.sessionInfoCommand); err != nil {
-		return nil, err
-	}
-	return tree, nil
+	return command.NewTree("session", command.Description("Inspect the active session")).
+		Sub("info", h.sessionInfoCommand,
+			command.Description("Show session metadata"),
+		).
+		Build()
 }
 
 func (h SessionCommandHandler) sessionInfoCommand(context.Context, command.Invocation) (command.Result, error) {
