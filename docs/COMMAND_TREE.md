@@ -201,6 +201,30 @@ text, err := command.Render(command.Display(tree.Descriptor()), command.DisplayJ
 
 `DisplayJSON` uses the structured payload directly instead of terminal `Display(...)` strings, so descriptor consumers get stable JSON with lower-camel field names such as `input.fields`, `enumValues`, and `subcommands`.
 
+## JSON Schema projection
+
+Command input descriptors can be projected into a small JSON Schema-compatible object schema:
+
+```go
+schema := command.CommandInputSchema(tree.Descriptor().Subcommands[0])
+text, err := command.Render(command.Display(schema), command.DisplayJSON)
+```
+
+Example schema for `/workflow start <name> [input]`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "input": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["name"]
+}
+```
+
+Descriptors remain the source of truth. The schema projection intentionally models only the small subset currently needed for form/API/tool discovery surfaces: object properties, primitive types, arrays, required fields, descriptions, and enums.
+
 This enables future surfaces from the same command model:
 
 - terminal slash commands;
@@ -220,6 +244,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 4. Typed command input binding: ✅
 5. JSON rendering for structured command payloads/descriptors: ✅
 6. Typed input descriptor type hints: ✅
+7. JSON Schema projection for command inputs: ✅
 
 Recommended commit sequence:
 
