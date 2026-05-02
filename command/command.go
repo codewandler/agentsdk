@@ -94,6 +94,29 @@ type TextPayload struct {
 	Text string `json:"text"`
 }
 
+// NoticeLevel classifies generic command messages without forcing callers to
+// parse terminal text.
+type NoticeLevel string
+
+const (
+	NoticeInfo        NoticeLevel = "info"
+	NoticeNotFound    NoticeLevel = "not_found"
+	NoticeUnavailable NoticeLevel = "unavailable"
+)
+
+// NoticePayload is a generic structured payload for common command outcomes
+// that do not need a domain-specific result type.
+type NoticePayload struct {
+	Level    NoticeLevel `json:"level"`
+	Message  string      `json:"message"`
+	Resource string      `json:"resource,omitempty"`
+	ID       string      `json:"id,omitempty"`
+}
+
+func (p NoticePayload) Display(DisplayMode) (string, error) {
+	return p.Message, nil
+}
+
 // AgentTurnPayload asks the caller to run Input as an agent turn.
 type AgentTurnPayload struct {
 	Input string `json:"input"`
@@ -112,6 +135,26 @@ func Handled() Result { return Result{Kind: ResultHandled} }
 
 // Text returns a structured display result containing plain text.
 func Text(text string) Result { return Display(TextPayload{Text: text}) }
+
+// Notice returns a generic structured display message.
+func Notice(message string) Result {
+	return Display(NoticePayload{Level: NoticeInfo, Message: message})
+}
+
+// NotFound returns a generic structured not-found display result.
+func NotFound(resource string, id string) Result {
+	return Display(NoticePayload{
+		Level:    NoticeNotFound,
+		Message:  fmt.Sprintf("%s %q not found", resource, id),
+		Resource: resource,
+		ID:       id,
+	})
+}
+
+// Unavailable returns a generic structured unavailable display result.
+func Unavailable(message string) Result {
+	return Display(NoticePayload{Level: NoticeUnavailable, Message: message})
+}
 
 // Display asks the caller to render payload to the user.
 func Display(payload any) Result { return Result{Kind: ResultDisplay, Payload: payload} }
@@ -151,6 +194,13 @@ func RenderPayload(payload any, mode DisplayMode) (string, error) {
 			return "", nil
 		}
 		return p.Text, nil
+	case NoticePayload:
+		return p.Display(mode)
+	case *NoticePayload:
+		if p == nil {
+			return "", nil
+		}
+		return p.Display(mode)
 	case Displayable:
 		return p.Display(mode)
 	default:

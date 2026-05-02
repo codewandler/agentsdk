@@ -104,6 +104,18 @@ func TestRenderPayloadJSONRendersStructuredPayload(t *testing.T) {
 	require.JSONEq(t, `{"text":"hello"}`, text)
 }
 
+func TestNoticePayloadRendersTextAndJSON(t *testing.T) {
+	result := NotFound("workflow", "missing")
+
+	terminal, err := Render(result, DisplayTerminal)
+	require.NoError(t, err)
+	require.Equal(t, `workflow "missing" not found`, terminal)
+
+	jsonText, err := Render(result, DisplayJSON)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"level":"not_found","message":"workflow \"missing\" not found","resource":"workflow","id":"missing"}`, jsonText)
+}
+
 func TestRenderPayloadJSONBypassesDisplayableTerminalRendering(t *testing.T) {
 	payload := HelpPayload{Descriptor: Descriptor{Name: "workflow", Path: []string{"workflow"}}}
 

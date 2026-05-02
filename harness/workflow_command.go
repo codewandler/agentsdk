@@ -101,11 +101,11 @@ func (h WorkflowCommandHandler) workflowList() command.Result {
 func (h WorkflowCommandHandler) workflowShow(name string) command.Result {
 	s := h.Session
 	if s == nil || s.App == nil {
-		return command.Text(fmt.Sprintf("workflow %q not found", name))
+		return command.NotFound("workflow", name)
 	}
 	def, ok := s.App.Workflow(name)
 	if !ok {
-		return command.Text(fmt.Sprintf("workflow %q not found", name))
+		return command.NotFound("workflow", name)
 	}
 	return command.Display(WorkflowDefinitionPayload{Definition: def})
 }
@@ -116,7 +116,7 @@ func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName 
 		return command.Result{}, fmt.Errorf("harness: app is required")
 	}
 	if _, ok := s.App.Workflow(workflowName); !ok {
-		return command.Text(fmt.Sprintf("workflow %q not found", workflowName)), nil
+		return command.NotFound("workflow", workflowName), nil
 	}
 	runID := workflow.NewRunID()
 	result := s.ExecuteWorkflow(ctx, workflowName, input, app.WithWorkflowRunID(runID))
@@ -133,7 +133,7 @@ func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName 
 func (h WorkflowCommandHandler) workflowRun(ctx context.Context, runID workflow.RunID) (command.Result, error) {
 	s := h.Session
 	if s == nil {
-		return command.Text("workflow runs require a thread-backed session"), nil
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
 	}
 	state, ok, err := s.WorkflowRunState(ctx, runID)
 	if err != nil {
@@ -141,9 +141,9 @@ func (h WorkflowCommandHandler) workflowRun(ctx context.Context, runID workflow.
 	}
 	if !ok {
 		if _, hasStore := s.WorkflowRunStore(); !hasStore {
-			return command.Text("workflow runs require a thread-backed session"), nil
+			return command.Unavailable("workflow runs require a thread-backed session"), nil
 		}
-		return command.Text(fmt.Sprintf("workflow run %q not found", runID)), nil
+		return command.NotFound("workflow run", string(runID)), nil
 	}
 	return command.Display(WorkflowRunPayload{State: state}), nil
 }
@@ -151,14 +151,14 @@ func (h WorkflowCommandHandler) workflowRun(ctx context.Context, runID workflow.
 func (h WorkflowCommandHandler) workflowRuns(ctx context.Context, filters WorkflowRunFilters) (command.Result, error) {
 	s := h.Session
 	if s == nil {
-		return command.Text("workflow runs require a thread-backed session"), nil
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
 	}
 	summaries, ok, err := s.WorkflowRuns(ctx)
 	if err != nil {
 		return command.Result{}, err
 	}
 	if !ok {
-		return command.Text("workflow runs require a thread-backed session"), nil
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
 	}
 	return command.Display(WorkflowRunsPayload{Summaries: filterWorkflowRuns(summaries, filters), Filters: filters}), nil
 }
