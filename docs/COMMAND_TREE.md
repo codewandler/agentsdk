@@ -229,6 +229,14 @@ Exact per-command schemas are provided through `AgentCommandCatalog()` as contex
 
 The envelope is tool/action neutral. Agent-facing adapters should call `ExecuteAgentCommandEnvelope`, which enforces `AgentCallable` policy. Trusted SDK and API callers can call `ExecuteCommandEnvelope` and apply their own policy boundary.
 
+Harness sessions expose an LLM-facing tool adapter over the same envelope:
+
+```go
+tool := session.AgentCommandTool() // tool name: session_command
+```
+
+The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.AgentCommandCatalog()` and should be provided as model context/discovery metadata. Tool execution calls `ExecuteAgentCommandEnvelope`, so non-agent-callable commands are rejected before command execution.
+
 Harness sessions also expose a workflow/action adapter:
 
 ```go
@@ -308,6 +316,7 @@ Do not keep adding command namespaces with handwritten switch-based subcommand p
 9. Policy-aware command catalog filters: ✅
 10. Generic command execution envelope: ✅
 11. Command envelope action adapter: ✅
+12. Agent command envelope tool adapter: ✅
 
 Recommended commit sequence:
 
