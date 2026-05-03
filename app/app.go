@@ -227,13 +227,6 @@ func (a *App) registerDataSources(defs ...datasource.Definition) error {
 	return a.datasources.Register(defs...)
 }
 
-func (a *App) DataSource(name string) (datasource.Definition, bool) {
-	if a == nil || a.datasources == nil {
-		return datasource.Definition{}, false
-	}
-	return a.datasources.Get(name)
-}
-
 func (a *App) registerWorkflows(defs ...workflow.Definition) error {
 	if a.workflows == nil {
 		a.workflows = map[string]workflow.Definition{}

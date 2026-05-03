@@ -61,7 +61,7 @@ func TestAgentMaterializesLoadedSkills(t *testing.T) {
 	require.Contains(t, a.MaterializedSystem(), "Base system.")
 	require.Contains(t, a.MaterializedSystem(), "Loaded skills:")
 	require.Contains(t, a.MaterializedSystem(), "Use careful edits.")
-	require.Equal(t, []string{"coder"}, a.SkillRepository().LoadedNames())
+	require.Equal(t, []string{"coder"}, a.skillRepo.LoadedNames())
 }
 
 func TestAgentReadsInstructionPathsFromSpecAndReflectsAgentsMarkdownUpdates(t *testing.T) {

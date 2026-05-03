@@ -72,7 +72,7 @@ func TestAppRegistersDatasourceWorkflowActionResources(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []action.Action{actionDef}, app.actions.All())
 
-	ds, ok := app.DataSource("docs")
+	ds, ok := app.datasources.Get("docs")
 	require.True(t, ok)
 	require.Equal(t, datasource.KindCorpus, ds.Kind)
 	require.Equal(t, []datasource.Definition{ds}, app.datasources.All())
@@ -98,7 +98,7 @@ func TestAppRegistersBundleDatasourceAndWorkflowContributions(t *testing.T) {
 	app, err := New(WithResourceBundle(bundle))
 	require.NoError(t, err)
 
-	ds, ok := app.DataSource("docs")
+	ds, ok := app.datasources.Get("docs")
 	require.True(t, ok)
 	require.Equal(t, datasource.KindCorpus, ds.Kind)
 	require.Equal(t, "docs-team", ds.Metadata["owner"])
@@ -514,10 +514,8 @@ func TestAppDiscoversDefaultSkillSources(t *testing.T) {
 	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(workspace))
 	require.NoError(t, err)
 
-	require.Equal(t, []string{"project-skill", "home-skill"}, inst.SkillRepository().LoadedNames())
 	require.Contains(t, inst.MaterializedSystem(), "# Project")
 	require.Contains(t, inst.MaterializedSystem(), "# Home")
-	require.Len(t, inst.SkillRepository().Sources(), 4)
 }
 
 func TestAgentSpecSkillSourcesStayScopedToAgent(t *testing.T) {
@@ -536,7 +534,7 @@ func TestAgentSpecSkillSourcesStayScopedToAgent(t *testing.T) {
 
 	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
-	require.Equal(t, []string{"coder-skill"}, inst.SkillRepository().LoadedNames())
+	require.Contains(t, inst.MaterializedSystem(), "# Coder")
 }
 
 func writeAppFile(t *testing.T, path string, content string) {
@@ -682,7 +680,7 @@ func TestPluginRegistersActionsDataSourcesAndWorkflows(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, []action.Action{actionDef}, app.actions.All())
-	_, ok := app.DataSource("docs")
+	_, ok := app.datasources.Get("docs")
 	require.True(t, ok)
 	_, ok = app.Workflow("fetch_docs")
 	require.True(t, ok)

@@ -228,13 +228,6 @@ func (a *Instance) Spec() Spec {
 	}
 }
 
-func (a *Instance) SkillRepository() *skill.Repository {
-	if a == nil {
-		return nil
-	}
-	return a.skillRepo
-}
-
 func (a *Instance) MaterializedSystem() string {
 	if a == nil {
 		return ""
