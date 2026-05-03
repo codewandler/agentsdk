@@ -70,12 +70,12 @@ func TestAppRegistersDatasourceWorkflowActionResources(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, []action.Action{actionDef}, app.Actions())
+	require.Equal(t, []action.Action{actionDef}, app.actions.All())
 
 	ds, ok := app.DataSource("docs")
 	require.True(t, ok)
 	require.Equal(t, datasource.KindCorpus, ds.Kind)
-	require.Equal(t, []datasource.Definition{ds}, app.DataSources())
+	require.Equal(t, []datasource.Definition{ds}, app.datasources.All())
 
 	wf, ok := app.Workflow("search_docs")
 	require.True(t, ok)
@@ -731,7 +731,7 @@ func TestPluginRegistersActionsDataSourcesAndWorkflows(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, []action.Action{actionDef}, app.Actions())
+	require.Equal(t, []action.Action{actionDef}, app.actions.All())
 	_, ok := app.DataSource("docs")
 	require.True(t, ok)
 	_, ok = app.Workflow("fetch_docs")

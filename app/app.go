@@ -222,20 +222,6 @@ func (a *App) RegisterActions(actions ...action.Action) error {
 	return a.actions.Register(actions...)
 }
 
-func (a *App) ActionRegistry() *action.Registry {
-	if a == nil {
-		return nil
-	}
-	return a.actions
-}
-
-func (a *App) Actions() []action.Action {
-	if a == nil || a.actions == nil {
-		return nil
-	}
-	return a.actions.All()
-}
-
 func (a *App) registerDataSources(defs ...datasource.Definition) error {
 	if a.datasources == nil {
 		a.datasources = datasource.NewRegistry()
@@ -248,13 +234,6 @@ func (a *App) DataSource(name string) (datasource.Definition, bool) {
 		return datasource.Definition{}, false
 	}
 	return a.datasources.Get(name)
-}
-
-func (a *App) DataSources() []datasource.Definition {
-	if a == nil || a.datasources == nil {
-		return nil
-	}
-	return a.datasources.All()
 }
 
 func (a *App) registerWorkflows(defs ...workflow.Definition) error {
@@ -356,7 +335,7 @@ func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
 
 func (a *App) workflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
 	cfg := applyWorkflowExecutionOptions(opts)
-	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.ActionRegistry()}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}
+	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.actions}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}
 }
 
 func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...WorkflowExecutionOption) action.Result {
@@ -556,29 +535,11 @@ func (a *App) AgentSpecs() []agent.Spec {
 	return out
 }
 
-func (a *App) DefaultAgentName() string {
-	if a == nil {
-		return ""
-	}
-	return a.defaultAgent
-}
 func (a *App) DefaultAgent() (*agent.Instance, bool) {
 	if a == nil || a.defaultAgent == "" {
 		return nil, false
 	}
 	return a.Agent(a.defaultAgent)
-}
-
-func (a *App) AgentNames() []string {
-	if a == nil {
-		return nil
-	}
-	names := make([]string, 0, len(a.agents))
-	for name := range a.agents {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }
 
 func (a *App) registerPlugin(plugin Plugin) error {

@@ -144,7 +144,11 @@ func (h controlCommandHandler) agentsCommand(context.Context, command.Invocation
 	if h.Session == nil || h.Session.App == nil {
 		return command.Display(AgentsPayload{}), nil
 	}
-	return command.Display(AgentsPayload{Agents: h.Session.App.AgentSpecs(), DefaultAgent: h.Session.App.DefaultAgentName()}), nil
+	defaultAgent := ""
+	if h.Session.Agent != nil {
+		defaultAgent = h.Session.Agent.Spec().Name
+	}
+	return command.Display(AgentsPayload{Agents: h.Session.App.AgentSpecs(), DefaultAgent: defaultAgent}), nil
 }
 
 func (h controlCommandHandler) newCommand(context.Context, command.Invocation) (command.Result, error) {
