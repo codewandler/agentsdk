@@ -34,7 +34,7 @@ func TurnAction(inst *Instance, spec action.Spec) action.Action {
 		if err != nil {
 			return action.Result{Error: err}
 		}
-		output, err := inst.RunTurnText(ctx, 0, prompt)
+		output, err := inst.runTurnText(ctx, 0, prompt)
 		if err != nil {
 			return action.Result{Error: err}
 		}
@@ -47,9 +47,9 @@ func (a *Instance) TurnAction(spec action.Spec) action.Action {
 	return TurnAction(a, spec)
 }
 
-// RunTurnText runs an agent turn and returns the latest assistant text projected
+// runTurnText runs an agent turn and returns the latest assistant text projected
 // from conversation history after the turn commits.
-func (a *Instance) RunTurnText(ctx action.Ctx, turnID int, task string) (string, error) {
+func (a *Instance) runTurnText(ctx action.Ctx, turnID int, task string) (string, error) {
 	if a == nil {
 		return "", fmt.Errorf("agent: instance is nil")
 	}
