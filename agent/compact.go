@@ -34,12 +34,14 @@ const defaultKeepWindow = 4
 
 // AutoCompactionConfig controls automatic compaction between turns.
 type AutoCompactionConfig struct {
-	Enabled        bool
-	TokenThreshold int // explicit override; 0 = use model-aware default
-	KeepWindow     int // messages to preserve; 0 = default (4)
+	Enabled            bool
+	TokenThreshold     int     // explicit override; 0 = use model-aware default
+	ContextWindowRatio float64 // fraction of model context window; 0 = default (0.8)
+	KeepWindow         int     // messages to preserve; 0 = default (4)
 }
 
 const defaultAutoCompactionThreshold = 80_000
+const defaultAutoCompactionContextWindowRatio = 0.8
 
 const compactionSystemPrompt = `Summarize the following conversation concisely. Preserve:
 - Key decisions and conclusions
@@ -228,7 +230,14 @@ func (a *Instance) autoCompactionThreshold() int {
 		return a.autoCompaction.TokenThreshold
 	}
 	if a.contextWindow > 0 {
-		return int(float64(a.contextWindow) * 0.8)
+		ratio := a.autoCompaction.ContextWindowRatio
+		if ratio <= 0 {
+			ratio = defaultAutoCompactionContextWindowRatio
+		}
+		if ratio > 1 {
+			ratio = 1
+		}
+		return int(float64(a.contextWindow) * ratio)
 	}
 	return defaultAutoCompactionThreshold
 }

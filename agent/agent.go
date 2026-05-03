@@ -38,19 +38,21 @@ const EventUsageRecorded thread.EventKind = "harness.usage_recorded"
 // Spec describes an agent identity/configuration independent of a running
 // conversation session.
 type Spec struct {
-	Name             string
-	Description      string
-	System           string
-	Inference        InferenceOptions
-	MaxSteps         int
-	Tools            []string
-	Skills           []string
-	SkillSources     []skill.Source
-	Commands         []string
-	InstructionPaths []string
-	ResourceID       string
-	ResourceFrom     string
-	Capabilities     []capability.AttachSpec
+	Name              string
+	Description       string
+	System            string
+	Inference         InferenceOptions
+	MaxSteps          int
+	Tools             []string
+	Skills            []string
+	SkillSources      []skill.Source
+	Commands          []string
+	InstructionPaths  []string
+	ResourceID        string
+	ResourceFrom      string
+	Capabilities      []capability.AttachSpec
+	AutoCompaction    AutoCompactionConfig
+	AutoCompactionSet bool
 }
 
 // Instance is a running session-backed agent built from a Spec and runtime
@@ -113,13 +115,14 @@ func New(opts ...Option) (*Instance, error) {
 		return nil, err
 	}
 	a := &Instance{
-		inference:     DefaultInferenceOptions(),
-		maxSteps:      30,
-		out:           io.Discard,
-		toolTimeout:   30 * time.Second,
-		sessionID:     sessionID,
-		sourceAPI:     adapt.ApiOpenAIResponses,
-		systemBuilder: func(_ string, prompt string) string { return prompt },
+		inference:      DefaultInferenceOptions(),
+		maxSteps:       30,
+		out:            io.Discard,
+		toolTimeout:    30 * time.Second,
+		sessionID:      sessionID,
+		sourceAPI:      adapt.ApiOpenAIResponses,
+		autoCompaction: AutoCompactionConfig{Enabled: true},
+		systemBuilder:  func(_ string, prompt string) string { return prompt },
 	}
 	for _, opt := range opts {
 		if opt != nil {

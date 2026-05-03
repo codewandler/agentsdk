@@ -20,19 +20,61 @@ import (
 )
 
 type AgentFrontmatter struct {
-	Name         string         `yaml:"name"`
-	Description  string         `yaml:"description"`
-	Model        string         `yaml:"model"`
-	MaxTokens    int            `yaml:"max-tokens"`
-	MaxSteps     int            `yaml:"max-steps"`
-	Temperature  float64        `yaml:"temperature"`
-	Thinking     string         `yaml:"thinking"`
-	Effort       string         `yaml:"effort"`
-	Tools        stringList     `yaml:"tools"`
-	Skills       stringList     `yaml:"skills"`
-	Commands     stringList     `yaml:"commands"`
-	SkillSources stringList     `yaml:"skill-sources"`
-	Capabilities capabilityList `yaml:"capabilities"`
+	Name           string                     `yaml:"name"`
+	Description    string                     `yaml:"description"`
+	Model          string                     `yaml:"model"`
+	MaxTokens      int                        `yaml:"max-tokens"`
+	MaxSteps       int                        `yaml:"max-steps"`
+	Temperature    float64                    `yaml:"temperature"`
+	Thinking       string                     `yaml:"thinking"`
+	Effort         string                     `yaml:"effort"`
+	Tools          stringList                 `yaml:"tools"`
+	Skills         stringList                 `yaml:"skills"`
+	Commands       stringList                 `yaml:"commands"`
+	SkillSources   stringList                 `yaml:"skill-sources"`
+	Capabilities   capabilityList             `yaml:"capabilities"`
+	AutoCompaction *AutoCompactionFrontmatter `yaml:"auto-compaction"`
+}
+
+// AutoCompactionFrontmatter configures automatic conversation compaction for
+// filesystem-described agents. Omitted fields use agent defaults.
+type AutoCompactionFrontmatter struct {
+	Enabled            *bool   `yaml:"enabled"`
+	TokenThreshold     int     `yaml:"token-threshold"`
+	ContextWindowRatio float64 `yaml:"context-window-ratio"`
+	KeepWindow         int     `yaml:"keep-window"`
+}
+
+func (fm *AutoCompactionFrontmatter) config() agent.AutoCompactionConfig {
+	if fm == nil {
+		return agent.AutoCompactionConfig{}
+	}
+	enabled := true
+	if fm.Enabled != nil {
+		enabled = *fm.Enabled
+	}
+	return agent.AutoCompactionConfig{
+		Enabled:            enabled,
+		TokenThreshold:     fm.TokenThreshold,
+		ContextWindowRatio: fm.ContextWindowRatio,
+		KeepWindow:         fm.KeepWindow,
+	}
+}
+
+func (fm *AutoCompactionFrontmatter) validate() error {
+	if fm == nil {
+		return nil
+	}
+	if fm.TokenThreshold < 0 {
+		return fmt.Errorf("auto-compaction.token-threshold must be >= 0")
+	}
+	if fm.ContextWindowRatio < 0 || fm.ContextWindowRatio > 1 {
+		return fmt.Errorf("auto-compaction.context-window-ratio must be between 0 and 1")
+	}
+	if fm.KeepWindow < 0 {
+		return fmt.Errorf("auto-compaction.keep-window must be >= 0")
+	}
+	return nil
 }
 
 type stringList []string
@@ -332,6 +374,9 @@ func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, 
 	if err != nil {
 		return agent.Spec{}, AgentFrontmatter{}, err
 	}
+	if err := fm.AutoCompaction.validate(); err != nil {
+		return agent.Spec{}, AgentFrontmatter{}, err
+	}
 	if fm.Name == "" {
 		fm.Name = strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
 	}
@@ -351,7 +396,7 @@ func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, 
 	if fm.Effort != "" {
 		inference.Effort = unified.ReasoningEffort(fm.Effort)
 	}
-	return agent.Spec{
+	spec := agent.Spec{
 		Name:         fm.Name,
 		Description:  fm.Description,
 		System:       body,
@@ -361,7 +406,12 @@ func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, 
 		Skills:       append([]string(nil), []string(fm.Skills)...),
 		Commands:     append([]string(nil), []string(fm.Commands)...),
 		Capabilities: append([]capability.AttachSpec(nil), []capability.AttachSpec(fm.Capabilities)...),
-	}, fm, nil
+	}
+	if fm.AutoCompaction != nil {
+		spec.AutoCompaction = fm.AutoCompaction.config()
+		spec.AutoCompactionSet = true
+	}
+	return spec, fm, nil
 }
 
 func skillSourcesFromFrontmatter(fsys fs.FS, agentDir string, agentFile string, roots []string, source resource.SourceRef) ([]skill.Source, []resource.SkillContribution, error) {

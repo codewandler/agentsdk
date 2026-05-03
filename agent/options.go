@@ -73,6 +73,9 @@ func WithSpec(spec Spec) Option {
 		if spec.MaxSteps > 0 {
 			a.maxSteps = spec.MaxSteps
 		}
+		if spec.AutoCompactionSet {
+			a.autoCompaction = spec.AutoCompaction
+		}
 	}
 }
 

@@ -668,7 +668,31 @@ func TestAgentAutoCompactionTriggersAboveThreshold(t *testing.T) {
 	require.Contains(t, buf.String(), "auto-compacted")
 }
 
-func TestAgentAutoCompactionDisabledByDefault(t *testing.T) {
+func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
+	largeResponse := strings.Repeat("x", 400_000)
+	client := runnertest.NewClient(
+		runnertest.TextStream("resp1"),
+		runnertest.TextStream("resp2"),
+		runnertest.TextStream(largeResponse),
+		runnertest.TextStream("Summary of conversation."),
+	)
+	var buf bytes.Buffer
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithOutput(&buf),
+		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+	)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, a.RunTurn(ctx, 1, "hello"))
+	require.NoError(t, a.RunTurn(ctx, 2, "continue"))
+	require.NoError(t, a.RunTurn(ctx, 3, "generate large"))
+	require.Contains(t, buf.String(), "auto-compacted")
+}
+
+func TestAgentAutoCompactionCanBeDisabled(t *testing.T) {
 	largeResponse := strings.Repeat("x", 400_000)
 	client := runnertest.NewClient(runnertest.TextStream(largeResponse))
 	var buf bytes.Buffer
@@ -677,6 +701,7 @@ func TestAgentAutoCompactionDisabledByDefault(t *testing.T) {
 		WithWorkspace(t.TempDir()),
 		WithOutput(&buf),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+		WithAutoCompaction(AutoCompactionConfig{Enabled: false}),
 	)
 	require.NoError(t, err)
 
@@ -692,10 +717,25 @@ func TestAgentAutoCompactionThresholdUsesContextWindow(t *testing.T) {
 	require.Equal(t, 160_000, a.autoCompactionThreshold())
 }
 
+func TestAgentAutoCompactionThresholdUsesConfiguredContextWindowRatio(t *testing.T) {
+	a := &Instance{
+		contextWindow:  200_000,
+		autoCompaction: AutoCompactionConfig{Enabled: true, ContextWindowRatio: 0.5},
+	}
+	require.Equal(t, 100_000, a.autoCompactionThreshold())
+}
+
+func TestAgentAutoCompactionThresholdClampsContextWindowRatio(t *testing.T) {
+	a := &Instance{
+		contextWindow:  200_000,
+		autoCompaction: AutoCompactionConfig{Enabled: true, ContextWindowRatio: 1.2},
+	}
+	require.Equal(t, 200_000, a.autoCompactionThreshold())
+}
 func TestAgentAutoCompactionThresholdExplicitOverride(t *testing.T) {
 	a := &Instance{
 		contextWindow:  200_000,
-		autoCompaction: AutoCompactionConfig{Enabled: true, TokenThreshold: 50_000},
+		autoCompaction: AutoCompactionConfig{Enabled: true, TokenThreshold: 50_000, ContextWindowRatio: 0.5},
 	}
 	require.Equal(t, 50_000, a.autoCompactionThreshold())
 }

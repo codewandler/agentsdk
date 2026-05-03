@@ -83,6 +83,68 @@ func TestLoadFSAcceptsClaudeStringToolList(t *testing.T) {
 	require.Equal(t, []string{"Bash", "Grep", "Read"}, bundle.AgentSpecs[0].Tools)
 }
 
+func TestLoadFSParsesAutoCompactionConfig(t *testing.T) {
+	fys := fstest.MapFS{
+		".agents/agents/coder.md": {
+			Data: []byte(`---
+name: coder
+auto-compaction:
+  enabled: true
+  token-threshold: 50000
+  context-window-ratio: 0.75
+  keep-window: 6
+---
+You are a coder.`),
+		},
+	}
+
+	bundle, err := LoadFS(fys, ".")
+	require.NoError(t, err)
+	require.Len(t, bundle.AgentSpecs, 1)
+	spec := bundle.AgentSpecs[0]
+	require.True(t, spec.AutoCompactionSet)
+	require.True(t, spec.AutoCompaction.Enabled)
+	require.Equal(t, 50_000, spec.AutoCompaction.TokenThreshold)
+	require.Equal(t, 0.75, spec.AutoCompaction.ContextWindowRatio)
+	require.Equal(t, 6, spec.AutoCompaction.KeepWindow)
+}
+
+func TestLoadFSParsesAutoCompactionDisabled(t *testing.T) {
+	fys := fstest.MapFS{
+		".agents/agents/coder.md": {
+			Data: []byte(`---
+name: coder
+auto-compaction:
+  enabled: false
+---
+You are a coder.`),
+		},
+	}
+
+	bundle, err := LoadFS(fys, ".")
+	require.NoError(t, err)
+	require.Len(t, bundle.AgentSpecs, 1)
+	spec := bundle.AgentSpecs[0]
+	require.True(t, spec.AutoCompactionSet)
+	require.False(t, spec.AutoCompaction.Enabled)
+}
+
+func TestLoadFSRejectsInvalidAutoCompactionRatio(t *testing.T) {
+	fys := fstest.MapFS{
+		".agents/agents/coder.md": {
+			Data: []byte(`---
+name: coder
+auto-compaction:
+  context-window-ratio: 1.1
+---
+You are a coder.`),
+		},
+	}
+
+	_, err := LoadFS(fys, ".")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "auto-compaction.context-window-ratio")
+}
 func TestResolveDirPrefersManifest(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "app.manifest.json"), `{"default_agent":"main","sources":["plugin"]}`)
