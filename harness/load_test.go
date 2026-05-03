@@ -173,6 +173,51 @@ func TestLoadSessionAppliesModelPolicy(t *testing.T) {
 	require.ErrorContains(t, err, "approved-only model policy requires auto mux routing")
 }
 
+func TestResolveAgentLoadConfigUsesResolvedModelPolicy(t *testing.T) {
+	resolved := agentdir.Resolution{
+		HasModelPolicy: true,
+		ModelPolicy: agent.ModelPolicy{
+			UseCase:      agent.ModelUseCaseAgenticCoding,
+			ApprovedOnly: true,
+		},
+	}
+
+	cfg := ResolveAgentLoadConfig(resolved, AgentLoadOverrides{})
+
+	require.True(t, cfg.ApplyModelPolicy)
+	require.Equal(t, agent.ModelUseCaseAgenticCoding, cfg.ModelPolicy.UseCase)
+	require.True(t, cfg.ModelPolicy.ApprovedOnly)
+}
+
+func TestResolveAgentLoadConfigOverlaysCLIModelPolicy(t *testing.T) {
+	resolved := agentdir.Resolution{
+		HasModelPolicy: true,
+		ModelPolicy: agent.ModelPolicy{
+			UseCase:      agent.ModelUseCaseAgenticCoding,
+			ApprovedOnly: true,
+		},
+	}
+
+	cfg := ResolveAgentLoadConfig(resolved, AgentLoadOverrides{
+		ModelPolicy: agent.ModelPolicy{
+			AllowUntested: true,
+			EvidencePath:  "evidence.json",
+		},
+		ApplyModelPolicy: true,
+		SourceAPI:        adapt.ApiOpenAIChatCompletions,
+		ApplySourceAPI:   true,
+	})
+
+	require.True(t, cfg.ApplyModelPolicy)
+	require.Equal(t, agent.ModelUseCaseAgenticCoding, cfg.ModelPolicy.UseCase)
+	require.True(t, cfg.ModelPolicy.ApprovedOnly)
+	require.True(t, cfg.ModelPolicy.AllowUntested)
+	require.Equal(t, "evidence.json", cfg.ModelPolicy.EvidencePath)
+	require.Equal(t, adapt.ApiOpenAIChatCompletions, cfg.ModelPolicy.SourceAPI)
+	require.Equal(t, adapt.ApiOpenAIChatCompletions, cfg.SourceAPI)
+	require.True(t, cfg.ApplySourceAPI)
+}
+
 func TestLoadSessionAppliesSourceAPI(t *testing.T) {
 	var got adapt.ApiKind
 	loaded, err := LoadSession(SessionLoadConfig{

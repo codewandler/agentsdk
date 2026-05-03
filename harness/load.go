@@ -36,6 +36,13 @@ type AppLoadConfig struct {
 	ToolTimeout                time.Duration
 }
 
+type AgentLoadOverrides struct {
+	ModelPolicy      agent.ModelPolicy
+	ApplyModelPolicy bool
+	SourceAPI        adapt.ApiKind
+	ApplySourceAPI   bool
+}
+
 type AgentLoadConfig struct {
 	ModelPolicy      agent.ModelPolicy
 	ApplyModelPolicy bool
@@ -60,6 +67,51 @@ func EnsureFallbackAgent(resolved *agentdir.Resolution, requestedName string, fa
 	resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, fallback.Spec)
 	resolved.DefaultAgent = fallback.Spec.Name
 	return true
+}
+
+func ResolveAgentLoadConfig(resolved agentdir.Resolution, overrides AgentLoadOverrides) AgentLoadConfig {
+	modelPolicy := overrides.ModelPolicy
+	applyModelPolicy := overrides.ApplyModelPolicy
+	if resolved.HasModelPolicy {
+		if applyModelPolicy {
+			modelPolicy = overlayModelPolicy(resolved.ModelPolicy, overrides.ModelPolicy)
+		} else {
+			modelPolicy = resolved.ModelPolicy
+		}
+		applyModelPolicy = true
+	}
+	if overrides.ApplySourceAPI && applyModelPolicy {
+		modelPolicy.SourceAPI = overrides.SourceAPI
+	}
+	return AgentLoadConfig{
+		ModelPolicy:      modelPolicy,
+		ApplyModelPolicy: applyModelPolicy,
+		SourceAPI:        overrides.SourceAPI,
+		ApplySourceAPI:   overrides.ApplySourceAPI,
+	}
+}
+
+func overlayModelPolicy(base agent.ModelPolicy, override agent.ModelPolicy) agent.ModelPolicy {
+	out := base
+	if override.UseCase != "" {
+		out.UseCase = override.UseCase
+	}
+	if override.SourceAPI != "" {
+		out.SourceAPI = override.SourceAPI
+	}
+	if override.ApprovedOnly {
+		out.ApprovedOnly = true
+	}
+	if override.AllowDegraded {
+		out.AllowDegraded = true
+	}
+	if override.AllowUntested {
+		out.AllowUntested = true
+	}
+	if override.EvidencePath != "" {
+		out.EvidencePath = override.EvidencePath
+	}
+	return out
 }
 
 type AgentSpecOverrides struct {

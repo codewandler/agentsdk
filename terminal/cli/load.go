@@ -114,45 +114,11 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		return nil, err
 	}
 	name := selection.Name
-	modelPolicy, applyModelPolicy, err := selectModelPolicy(resolved, cfg)
+	loadCfg, err := harnessSessionLoadConfig(ctx, resolved, cfg, env, name)
 	if err != nil {
 		return nil, err
 	}
-	sourceAPI, applySourceAPI, err := sourceAPIOption(cfg)
-	if err != nil {
-		return nil, err
-	}
-	appOpts, err := appOptions(ctx, resolved, cfg, env)
-	if err != nil {
-		return nil, err
-	}
-	agentOpts, err := agentOptions(cfg, env)
-	if err != nil {
-		return nil, err
-	}
-	loaded, err := harness.LoadSession(harness.SessionLoadConfig{
-		App: harness.AppLoadConfig{
-			Output:                     env.Out,
-			ResourceBundle:             resolved.Bundle,
-			DefaultAgent:               name,
-			Workspace:                  env.Workspace,
-			IncludeGlobalUserResources: env.Discovery.IncludeGlobalUserResources,
-			Verbose:                    cfg.Verbose,
-			ToolTimeout:                cfg.ToolTimeout,
-		},
-		Agent: harness.AgentLoadConfig{
-			ModelPolicy:      modelPolicy,
-			ApplyModelPolicy: applyModelPolicy,
-			SourceAPI:        sourceAPI,
-			ApplySourceAPI:   applySourceAPI,
-		},
-		Session: harness.SessionOpenConfig{
-			StoreDir: env.SessionsDir,
-			Resume:   env.ResumePath,
-		},
-		AppOptions:   appOpts,
-		AgentOptions: agentOpts,
-	})
+	loaded, err := harness.LoadSession(loadCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +132,45 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		In:        env.In,
 		Out:       env.Out,
 		Err:       env.Err,
+	}, nil
+}
+
+func harnessSessionLoadConfig(ctx context.Context, resolved agentdir.Resolution, cfg Config, env loadEnvironment, agentName string) (harness.SessionLoadConfig, error) {
+	sourceAPI, applySourceAPI, err := sourceAPIOption(cfg)
+	if err != nil {
+		return harness.SessionLoadConfig{}, err
+	}
+	agentCfg := harness.ResolveAgentLoadConfig(resolved, harness.AgentLoadOverrides{
+		ModelPolicy:      cfg.ModelPolicy,
+		ApplyModelPolicy: cfg.ApplyModelPolicy,
+		SourceAPI:        sourceAPI,
+		ApplySourceAPI:   applySourceAPI,
+	})
+	appOpts, err := appOptions(ctx, resolved, cfg, env)
+	if err != nil {
+		return harness.SessionLoadConfig{}, err
+	}
+	agentOpts, err := agentOptions(cfg, env)
+	if err != nil {
+		return harness.SessionLoadConfig{}, err
+	}
+	return harness.SessionLoadConfig{
+		App: harness.AppLoadConfig{
+			Output:                     env.Out,
+			ResourceBundle:             resolved.Bundle,
+			DefaultAgent:               agentName,
+			Workspace:                  env.Workspace,
+			IncludeGlobalUserResources: env.Discovery.IncludeGlobalUserResources,
+			Verbose:                    cfg.Verbose,
+			ToolTimeout:                cfg.ToolTimeout,
+		},
+		Agent: agentCfg,
+		Session: harness.SessionOpenConfig{
+			StoreDir: env.SessionsDir,
+			Resume:   env.ResumePath,
+		},
+		AppOptions:   appOpts,
+		AgentOptions: agentOpts,
 	}, nil
 }
 
@@ -221,27 +226,6 @@ func resolveConfiguredResources(cfg Config, env loadEnvironment) (agentdir.Resol
 		Spec:    localcli.DefaultAgent(),
 	})
 	return resolved, nil
-}
-
-func selectModelPolicy(resolved agentdir.Resolution, cfg Config) (agent.ModelPolicy, bool, error) {
-	modelPolicy := cfg.ModelPolicy
-	applyModelPolicy := cfg.ApplyModelPolicy
-	if resolved.HasModelPolicy {
-		if applyModelPolicy {
-			modelPolicy = overlayModelPolicy(resolved.ModelPolicy, cfg.ModelPolicy)
-		} else {
-			modelPolicy = resolved.ModelPolicy
-		}
-		applyModelPolicy = true
-	}
-	if cfg.ApplySourceAPI && applyModelPolicy {
-		sourceAPI, err := agent.ParseSourceAPI(cfg.SourceAPI)
-		if err != nil {
-			return agent.ModelPolicy{}, false, err
-		}
-		modelPolicy.SourceAPI = sourceAPI
-	}
-	return modelPolicy, applyModelPolicy, nil
 }
 
 func sourceAPIOption(cfg Config) (adapt.ApiKind, bool, error) {
@@ -323,29 +307,6 @@ func debugMessageObserver(out io.Writer) runner.RequestObserver {
 		fmt.Fprintln(out, "---")
 		_, _ = out.Write(payload)
 	}
-}
-
-func overlayModelPolicy(base agent.ModelPolicy, override agent.ModelPolicy) agent.ModelPolicy {
-	out := base
-	if override.UseCase != "" {
-		out.UseCase = override.UseCase
-	}
-	if override.SourceAPI != "" {
-		out.SourceAPI = override.SourceAPI
-	}
-	if override.ApprovedOnly {
-		out.ApprovedOnly = true
-	}
-	if override.AllowDegraded {
-		out.AllowDegraded = true
-	}
-	if override.AllowUntested {
-		out.AllowUntested = true
-	}
-	if override.EvidencePath != "" {
-		out.EvidencePath = override.EvidencePath
-	}
-	return out
 }
 
 // marshalMessagesYAML serializes the messages slice as YAML, routing through
