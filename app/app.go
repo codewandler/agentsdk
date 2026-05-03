@@ -412,7 +412,7 @@ func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instan
 			return nil, err
 		}
 	}
-	if view := a.AgentCommandView(name); len(view.AgentCommands()) > 0 {
+	if view := a.agentCommandView(name); len(view.AgentCommands()) > 0 {
 		tools = append(tools, command.Tool(view))
 	}
 	repo, err := skill.NewRepository(a.agentSkillSources(spec), spec.Skills)
@@ -473,7 +473,7 @@ func (a *App) InstantiateDefaultAgent(opts ...agent.Option) (*agent.Instance, er
 	return a.InstantiateAgent(a.defaultAgent, opts...)
 }
 
-func (a *App) AgentCommandView(name string) *command.Registry {
+func (a *App) agentCommandView(name string) *command.Registry {
 	view := command.NewRegistry()
 	if a == nil || a.commands == nil {
 		return view

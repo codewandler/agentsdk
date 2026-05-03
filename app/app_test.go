@@ -481,7 +481,7 @@ func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 		}, nil)),
 	)
 	require.NoError(t, err)
-	require.Empty(t, app.AgentCommandView("coder").AgentCommands())
+	require.Empty(t, app.agentCommandView("coder").AgentCommands())
 
 	app, err = New(
 		WithAgentSpec(agent.Spec{Name: "coder", Commands: []string{"review"}}),
@@ -491,7 +491,7 @@ func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 		}, nil)),
 	)
 	require.NoError(t, err)
-	require.Len(t, app.AgentCommandView("coder").AgentCommands(), 1)
+	require.Len(t, app.agentCommandView("coder").AgentCommands(), 1)
 }
 
 func TestAppDiscoversDefaultSkillSources(t *testing.T) {

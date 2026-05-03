@@ -235,19 +235,6 @@ func (a *Instance) SkillRepository() *skill.Repository {
 	return a.skillRepo
 }
 
-func (a *Instance) LoadedSkills() []skill.Skill {
-	if a == nil {
-		return nil
-	}
-	if a.skillState != nil {
-		return a.skillState.ActiveSkills()
-	}
-	if a.skillRepo == nil {
-		return nil
-	}
-	return a.skillRepo.Loaded()
-}
-
 func (a *Instance) MaterializedSystem() string {
 	if a == nil {
 		return ""

@@ -23,7 +23,7 @@
     - `agent.New` no longer imports or silently installs generic tool bundles.
     - Hosts pass tools explicitly.
     - Ambiguous `app.WithTools(...)` has been removed; hosts choose `app.WithDefaultTools(...)`, `app.WithCatalogTools(...)`, or plugin facets explicitly.
-    - Redundant app command-name exposure was removed; `AgentSpec(...)` and `AgentCommandView(...)` are the remaining command-selection surfaces.
+    - Redundant app command-name exposure was removed; `AgentSpec(...)` remains the public spec lookup surface, while agent command selection is internal to instantiation.
 
 - **Phase 2 — Re-evaluate late-registration APIs after ownership fix** ✅
   - Completed in:
