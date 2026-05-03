@@ -167,22 +167,6 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 	require.False(t, completed.At.IsZero())
 }
 
-func TestAppWorkflowActionAcceptsExecutionOptions(t *testing.T) {
-	app, err := New(
-		WithActions(action.New(action.Spec{Name: "echo"}, func(_ action.Ctx, input any) action.Result {
-			return action.Result{Data: input}
-		})),
-		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-	)
-	require.NoError(t, err)
-
-	wfAction, ok := app.WorkflowAction("echo_flow", workflow.WithRunID("run_action"))
-	require.True(t, ok)
-	result := wfAction.Execute(context.Background(), "hi")
-	require.NoError(t, result.Error)
-	require.Equal(t, workflow.RunID("run_action"), result.Data.(workflow.Result).RunID)
-}
-
 func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	ctx := context.Background()
 	client := runnertest.NewClient(runnertest.TextStream("model says hi"))
@@ -272,23 +256,6 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestAppWorkflowActionExposesRegisteredWorkflow(t *testing.T) {
-	app, err := New(
-		WithActions(action.New(action.Spec{Name: "echo"}, func(_ action.Ctx, input any) action.Result {
-			return action.Result{Data: input}
-		})),
-		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-	)
-	require.NoError(t, err)
-
-	wfAction, ok := app.WorkflowAction("echo_flow")
-	require.True(t, ok)
-	require.Equal(t, "echo_flow", wfAction.Spec().Name)
-	result := wfAction.Execute(context.Background(), "hi")
-	require.NoError(t, result.Error)
-	require.Equal(t, "hi", result.Data.(workflow.Result).Data)
-}
-
 func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 	app, err := New(
 		WithWorkflows(workflow.Definition{Name: "missing_action", Steps: []workflow.Step{{ID: "missing", Action: workflow.ActionRef{Name: "missing"}}}}),
@@ -297,8 +264,6 @@ func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 
 	require.ErrorContains(t, app.ExecuteWorkflow(context.Background(), "nope", nil).Error, "workflow \"nope\" not found")
 	require.ErrorContains(t, app.ExecuteWorkflow(context.Background(), "missing_action", nil).Error, "action \"missing\" not found")
-	_, ok := app.WorkflowAction("nope")
-	require.False(t, ok)
 }
 
 func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {

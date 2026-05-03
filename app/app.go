@@ -281,14 +281,6 @@ func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...wo
 	return a.workflowExecutor(opts...).Execute(ctx, def, input)
 }
 
-func (a *App) WorkflowAction(name string, opts ...workflow.ExecuteOption) (action.Action, bool) {
-	def, ok := a.Workflow(name)
-	if !ok {
-		return nil, false
-	}
-	return workflow.WorkflowAction{Definition: def, Executor: a.workflowExecutor(opts...)}, true
-}
-
 func (a *App) agent(name string) (*agent.Instance, bool) {
 	if a == nil {
 		return nil, false
