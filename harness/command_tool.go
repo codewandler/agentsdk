@@ -11,10 +11,7 @@ import (
 
 const AgentCommandToolName = "session_command"
 
-// AgentCommandTool returns an LLM-facing tool for agent-callable harness commands.
-// It executes through ExecuteAgentCommandEnvelope, so command policy is enforced
-// before the underlying command tree runs.
-func (s *Session) AgentCommandTool() tool.Tool {
+func (s *Session) agentCommandTool() tool.Tool {
 	return &agentCommandTool{Session: s}
 }
 

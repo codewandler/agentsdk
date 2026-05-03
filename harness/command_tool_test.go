@@ -12,7 +12,7 @@ import (
 
 func TestSessionAgentCommandToolExecutesAgentCallableCommand(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
-	tk := session.AgentCommandTool()
+	tk := session.AgentCommandProjection().Tools[0]
 
 	require.Equal(t, AgentCommandToolName, tk.Name())
 	require.NotEmpty(t, tk.Description())
@@ -28,7 +28,7 @@ func TestSessionAgentCommandToolExecutesAgentCallableCommand(t *testing.T) {
 
 func TestSessionAgentCommandToolRejectsNonAgentCallableCommand(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
-	tk := session.AgentCommandTool()
+	tk := session.AgentCommandProjection().Tools[0]
 
 	res, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
 
@@ -39,7 +39,7 @@ func TestSessionAgentCommandToolRejectsNonAgentCallableCommand(t *testing.T) {
 
 func TestSessionAgentCommandToolReportsMissingPathAsToolError(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
-	tk := session.AgentCommandTool()
+	tk := session.AgentCommandProjection().Tools[0]
 
 	res, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{}`))
 
@@ -52,7 +52,7 @@ func TestSessionAgentCommandToolReportsMissingPathAsToolError(t *testing.T) {
 }
 
 func TestSessionAgentCommandToolSchemaUsesCommandEnvelope(t *testing.T) {
-	schema := newCommandEnvelopeTestSession(t).AgentCommandTool().Schema()
+	schema := newCommandEnvelopeTestSession(t).AgentCommandProjection().Tools[0].Schema()
 
 	require.Equal(t, "object", schema.Type)
 	path, ok := schema.Properties.Get("path")
@@ -68,7 +68,7 @@ func TestSessionAgentCommandToolSchemaUsesCommandEnvelope(t *testing.T) {
 
 func TestSessionAgentCommandToolParseErrorIsInfrastructureError(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
-	tk := session.AgentCommandTool()
+	tk := session.AgentCommandProjection().Tools[0]
 
 	_, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`not-json`))
 

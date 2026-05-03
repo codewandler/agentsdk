@@ -45,9 +45,9 @@ func TestFormatAgentCommandCatalogRendersEnums(t *testing.T) {
 	require.Contains(t, text, "status: string optional source=flag enum=running|succeeded|failed")
 }
 
-func TestSessionAgentCommandCatalogContextProvider(t *testing.T) {
+func TestAgentCommandProjectionIncludesCatalogContextProvider(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
-	provider := session.AgentCommandCatalogContextProvider()
+	provider := session.AgentCommandProjection().ContextProviders[0]
 
 	require.Equal(t, AgentCommandCatalogProviderKey, provider.Key())
 

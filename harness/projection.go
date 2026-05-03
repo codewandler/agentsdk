@@ -23,10 +23,10 @@ func (s *Session) AgentCommandProjection() AgentProjection {
 	}
 	return AgentProjection{
 		Tools: []tool.Tool{
-			s.AgentCommandTool(),
+			s.agentCommandTool(),
 		},
 		ContextProviders: []agentcontext.Provider{
-			s.AgentCommandCatalogContextProvider(),
+			s.agentCommandCatalogContextProvider(),
 		},
 	}
 }

@@ -70,9 +70,7 @@ func FormatAgentCommandCatalog(catalog []CommandCatalogEntry) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// AgentCommandCatalogContextProvider returns a context provider that exposes the
-// current agent-callable command catalog for use with AgentCommandTool.
-func (s *Session) AgentCommandCatalogContextProvider() agentcontext.Provider {
+func (s *Session) agentCommandCatalogContextProvider() agentcontext.Provider {
 	return agentCommandCatalogProvider{Session: s}
 }
 
