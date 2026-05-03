@@ -55,7 +55,6 @@ type Option func(*config)
 type config struct {
 	out             io.Writer
 	commands        []command.Command
-	agents          map[string]*agent.Instance
 	specs           []agent.Spec
 	defaultAgent    string
 	plugins         []Plugin
@@ -72,7 +71,7 @@ type config struct {
 }
 
 func New(opts ...Option) (*App, error) {
-	cfg := config{out: os.Stdout, agents: map[string]*agent.Instance{}}
+	cfg := config{out: os.Stdout}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&cfg)
@@ -116,16 +115,6 @@ func New(opts ...Option) (*App, error) {
 		}
 	}
 	a.defaultTools = append([]tool.Tool(nil), defaultTools...)
-	for name, inst := range cfg.agents {
-		if inst != nil {
-			a.agents[name] = inst
-		}
-	}
-	if len(a.agents) == 1 && a.defaultAgent == "" {
-		for name := range a.agents {
-			a.defaultAgent = name
-		}
-	}
 	if len(cfg.commands) > 0 {
 		if err := a.RegisterCommands(cfg.commands...); err != nil {
 			return nil, err
@@ -164,15 +153,6 @@ func WithOutput(out io.Writer) Option {
 
 func WithCommand(commands ...command.Command) Option {
 	return func(c *config) { c.commands = append(c.commands, commands...) }
-}
-
-func WithAgent(name string, inst *agent.Instance) Option {
-	return func(c *config) {
-		if c.agents == nil {
-			c.agents = map[string]*agent.Instance{}
-		}
-		c.agents[name] = inst
-	}
 }
 
 func WithAgentSpec(spec agent.Spec) Option {
