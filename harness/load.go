@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -67,6 +68,46 @@ func EnsureFallbackAgent(resolved *agentdir.Resolution, requestedName string, fa
 	resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, fallback.Spec)
 	resolved.DefaultAgent = fallback.Spec.Name
 	return true
+}
+
+type PluginLoadConfig struct {
+	Factory  app.PluginFactory
+	Defaults []agentdir.PluginRef
+	Manifest []agentdir.PluginRef
+	Explicit []agentdir.PluginRef
+}
+
+func ResolvePlugins(ctx context.Context, cfg PluginLoadConfig) ([]app.Plugin, error) {
+	refs := orderedPluginRefs(cfg)
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	if cfg.Factory == nil {
+		return nil, fmt.Errorf("harness: plugin factory is required when plugins are configured")
+	}
+	seen := map[string]bool{}
+	plugins := make([]app.Plugin, 0, len(refs))
+	for _, ref := range refs {
+		name := strings.TrimSpace(ref.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		plugin, err := cfg.Factory.PluginForName(ctx, name, ref.Config)
+		if err != nil {
+			return nil, err
+		}
+		plugins = append(plugins, plugin)
+	}
+	return plugins, nil
+}
+
+func orderedPluginRefs(cfg PluginLoadConfig) []agentdir.PluginRef {
+	refs := make([]agentdir.PluginRef, 0, len(cfg.Defaults)+len(cfg.Manifest)+len(cfg.Explicit))
+	refs = append(refs, cfg.Defaults...)
+	refs = append(refs, cfg.Manifest...)
+	refs = append(refs, cfg.Explicit...)
+	return refs
 }
 
 func ResolveAgentLoadConfig(resolved agentdir.Resolution, overrides AgentLoadOverrides) AgentLoadConfig {

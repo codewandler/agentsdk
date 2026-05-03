@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"testing"
 
 	"github.com/codewandler/agentsdk/agent"
@@ -122,6 +123,70 @@ func TestEnsureFallbackAgentSkipsWhenDisabled(t *testing.T) {
 	require.False(t, changed)
 	require.Empty(t, resolved.Bundle.AgentSpecs)
 }
+
+func TestResolvePluginsOrdersAndDedupesRefs(t *testing.T) {
+	factory := &recordingPluginFactory{}
+	plugins, err := ResolvePlugins(t.Context(), PluginLoadConfig{
+		Factory: factory,
+		Defaults: []agentdir.PluginRef{
+			{Name: "default", Config: map[string]any{"from": "default"}},
+			{Name: "  "},
+		},
+		Manifest: []agentdir.PluginRef{
+			{Name: "manifest"},
+			{Name: "default", Config: map[string]any{"from": "manifest"}},
+		},
+		Explicit: []agentdir.PluginRef{
+			{Name: "explicit"},
+			{Name: "manifest"},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, plugins, 3)
+	require.Equal(t, []string{"default", "manifest", "explicit"}, pluginNames(plugins))
+	require.Equal(t, []string{"default", "manifest", "explicit"}, factory.names)
+	require.Equal(t, "default", factory.configs[0]["from"])
+}
+
+func TestResolvePluginsSkipsNilFactoryWhenNoRefs(t *testing.T) {
+	plugins, err := ResolvePlugins(t.Context(), PluginLoadConfig{})
+
+	require.NoError(t, err)
+	require.Empty(t, plugins)
+}
+
+func TestResolvePluginsRequiresFactoryForRefs(t *testing.T) {
+	plugins, err := ResolvePlugins(t.Context(), PluginLoadConfig{
+		Explicit: []agentdir.PluginRef{{Name: "plugin"}},
+	})
+
+	require.Nil(t, plugins)
+	require.ErrorContains(t, err, "plugin factory is required")
+}
+
+func pluginNames(plugins []app.Plugin) []string {
+	names := make([]string, 0, len(plugins))
+	for _, plugin := range plugins {
+		names = append(names, plugin.Name())
+	}
+	return names
+}
+
+type recordingPluginFactory struct {
+	names   []string
+	configs []map[string]any
+}
+
+func (f *recordingPluginFactory) PluginForName(_ context.Context, name string, config map[string]any) (app.Plugin, error) {
+	f.names = append(f.names, name)
+	f.configs = append(f.configs, config)
+	return namedPlugin(name), nil
+}
+
+type namedPlugin string
+
+func (p namedPlugin) Name() string { return string(p) }
 
 func TestLoadSessionAppliesResumeSession(t *testing.T) {
 	dir := t.TempDir()

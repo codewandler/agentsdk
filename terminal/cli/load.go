@@ -266,32 +266,42 @@ func agentOptions(cfg Config, env loadEnvironment) ([]agent.Option, error) {
 }
 
 func pluginOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config) ([]app.Option, error) {
-	refs := append([]agentdir.PluginRef(nil), resolved.ManifestPluginRefs()...)
-	for _, name := range cfg.PluginNames {
-		refs = append(refs, agentdir.PluginRef{Name: name})
+	plugins, err := harness.ResolvePlugins(ctx, harness.PluginLoadConfig{
+		Factory:  pluginFactory(cfg),
+		Defaults: defaultPluginRefs(cfg),
+		Manifest: resolved.ManifestPluginRefs(),
+		Explicit: pluginRefsFromNames(cfg.PluginNames),
+	})
+	if err != nil {
+		return nil, err
 	}
-	if !cfg.NoDefaultPlugins {
-		refs = append([]agentdir.PluginRef{{Name: localcli.PluginName}}, refs...)
-	}
-	seen := map[string]bool{}
-	var opts []app.Option
-	for _, ref := range refs {
-		name := strings.TrimSpace(ref.Name)
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		factory := cfg.PluginFactory
-		if factory == nil {
-			factory = localcli.NewFactory()
-		}
-		plugin, err := factory.PluginForName(ctx, name, ref.Config)
-		if err != nil {
-			return nil, err
-		}
+	opts := make([]app.Option, 0, len(plugins))
+	for _, plugin := range plugins {
 		opts = append(opts, app.WithPlugin(plugin))
 	}
 	return opts, nil
+}
+
+func pluginFactory(cfg Config) app.PluginFactory {
+	if cfg.PluginFactory != nil {
+		return cfg.PluginFactory
+	}
+	return localcli.NewFactory()
+}
+
+func defaultPluginRefs(cfg Config) []agentdir.PluginRef {
+	if cfg.NoDefaultPlugins {
+		return nil
+	}
+	return []agentdir.PluginRef{{Name: localcli.PluginName}}
+}
+
+func pluginRefsFromNames(names []string) []agentdir.PluginRef {
+	refs := make([]agentdir.PluginRef, 0, len(names))
+	for _, name := range names {
+		refs = append(refs, agentdir.PluginRef{Name: name})
+	}
+	return refs
 }
 
 // debugMessageObserver returns a RequestObserver that prints each outgoing
