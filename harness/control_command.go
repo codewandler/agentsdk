@@ -163,10 +163,10 @@ func (h controlCommandHandler) quitCommand(context.Context, command.Invocation) 
 }
 
 func (h controlCommandHandler) turnCommand(ctx context.Context, input turnCommandInput) (command.Result, error) {
-	if h.Session == nil || h.Session.App == nil {
-		return command.Result{}, fmt.Errorf("harness: app is required")
+	if h.Session == nil {
+		return command.Result{}, fmt.Errorf("harness: session is required")
 	}
-	return h.Session.App.Send(ctx, input.Text)
+	return h.Session.runAgentTurn(ctx, input.Text, 0)
 }
 
 func (h controlCommandHandler) contextCommand(context.Context, command.Invocation) (command.Result, error) {

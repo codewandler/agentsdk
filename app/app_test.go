@@ -356,19 +356,14 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 	}))
 	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
 
-	result, err := app.Send(context.Background(), "hello")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultHandled, result.Kind)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 	require.Len(t, client.Requests(), 1)
-
-	inst, ok := app.DefaultAgent()
-	require.True(t, ok)
 	require.Contains(t, inst.ContextState(), "provider: environment")
 	require.Contains(t, inst.ContextState(), "provider: time")
 }
@@ -405,13 +400,12 @@ func TestAppDefaultSpecUsesConfiguredLocalCLIPluginTools(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
-	_, err = app.Send(context.Background(), "hello")
-	require.NoError(t, err)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 
 	var names []string
 	for _, tool := range client.RequestAt(0).Tools {
@@ -440,13 +434,12 @@ func TestAppPluginCapabilityFactoriesConfigureAgentCapabilities(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = app.InstantiateAgent("planner_agent",
+	inst, err := app.InstantiateAgent("planner_agent",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
-	_, err = app.Send(context.Background(), "hello")
-	require.NoError(t, err)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 
 	var names []string
 	for _, tool := range client.RequestAt(0).Tools {
@@ -470,53 +463,13 @@ func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 	}))
 	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
 
-	_, err = app.Send(context.Background(), "first")
-	require.NoError(t, err)
-	_, err = app.Send(context.Background(), "second")
-	require.NoError(t, err)
-
-	inst, ok := app.DefaultAgent()
-	require.True(t, ok)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "first"))
+	require.NoError(t, inst.RunTurn(context.Background(), 2, "second"))
 	require.Equal(t, 1, inst.Tracker().AggregateTurn("1").Usage.Tokens.Count(unified.TokenKindInputNew))
 	require.Equal(t, 2, inst.Tracker().AggregateTurn("2").Usage.Tokens.Count(unified.TokenKindInputNew))
-}
-
-func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {
-	client := runnertest.NewClient(runnertest.TextStream("ok"))
-	app, err := New(
-		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		WithCommand(command.New(command.Descriptor{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
-			return command.AgentTurn("expanded"), nil
-		})),
-	)
-	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-
-	result, err := app.Send(context.Background(), "/ask")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultHandled, result.Kind)
-	require.Len(t, client.Requests(), 1)
-}
-
-func TestAppSendRejectsAgentOnlyCommandsFromUserInput(t *testing.T) {
-	app, err := New(
-		WithCommand(command.New(command.Descriptor{
-			Name:   "agent_only",
-			Policy: command.Policy{AgentCallable: true},
-		}, func(context.Context, command.Params) (command.Result, error) {
-			return command.Text("no"), nil
-		})),
-	)
-	require.NoError(t, err)
-
-	_, err = app.Send(context.Background(), "/agent_only")
-	var notCallable command.ErrNotCallable
-	require.ErrorAs(t, err, &notCallable)
-	require.Equal(t, "user", notCallable.Caller)
 }
 
 func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
@@ -674,19 +627,16 @@ func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
 
 	// Run a turn and verify the plugin provider's context is included.
-	_, err = app.Send(context.Background(), "hello")
-	require.NoError(t, err)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 
 	// The context state should mention the plugin provider key.
-	inst, ok := app.DefaultAgent()
-	require.True(t, ok)
 	require.Contains(t, inst.ContextState(), "plugin_git")
 }
 
@@ -802,18 +752,14 @@ func TestAgentContextPluginForwardedToAgent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
 
 	// Run a turn and verify the agent-scoped provider is present.
-	_, err = app.Send(context.Background(), "hello")
-	require.NoError(t, err)
-
-	inst, ok := app.DefaultAgent()
-	require.True(t, ok)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 	require.Contains(t, inst.ContextState(), "test_skills")
 }
 
@@ -831,7 +777,7 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
@@ -839,11 +785,7 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 
 	// Run a turn — the plugin should contribute a provider because the
 	// agent always creates a skill repo (even if empty).
-	_, err = app.Send(context.Background(), "hello")
-	require.NoError(t, err)
-
-	inst, ok := app.DefaultAgent()
-	require.True(t, ok)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
 	require.Contains(t, inst.ContextState(), "test_skills")
 }
 

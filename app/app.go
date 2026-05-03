@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -19,8 +18,8 @@ import (
 	"github.com/codewandler/agentsdk/workflow"
 )
 
-// App is the user-facing composition root. It owns command dispatch and one or
-// more running agent instances.
+// App is the user-facing composition root. It owns registries and running agent
+// instances; channel dispatch lives at harness/session boundaries.
 type App struct {
 	commands              *command.Registry
 	agents                map[string]*agent.Instance
@@ -43,7 +42,6 @@ type App struct {
 	workflowOrder         []string
 	tools                 *tool.Catalog
 	defaultTools          []tool.Tool
-	turnID                int
 }
 
 type Option func(*config)
@@ -322,7 +320,7 @@ func (a *App) agentTurnAction(agentName string, spec action.Spec) (action.Action
 	if agentName == "" {
 		return nil, fmt.Errorf("app: no default agent configured")
 	}
-	inst, ok := a.Agent(agentName)
+	inst, ok := a.agent(agentName)
 	if !ok || inst == nil {
 		return nil, fmt.Errorf("app: agent %q not found", agentName)
 	}
@@ -357,27 +355,7 @@ func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (acti
 	return workflow.WorkflowAction{Definition: def, Executor: a.workflowExecutor(opts...)}, true
 }
 
-func (a *App) RegisterAgent(name string, inst *agent.Instance) error {
-	if name == "" {
-		return fmt.Errorf("app: agent name is required")
-	}
-	if inst == nil {
-		return fmt.Errorf("app: agent %q is nil", name)
-	}
-	if a.agents == nil {
-		a.agents = map[string]*agent.Instance{}
-	}
-	if _, exists := a.agents[name]; exists {
-		return fmt.Errorf("app: agent %q already registered", name)
-	}
-	a.agents[name] = inst
-	if a.defaultAgent == "" {
-		a.defaultAgent = name
-	}
-	return nil
-}
-
-func (a *App) Agent(name string) (*agent.Instance, bool) {
+func (a *App) agent(name string) (*agent.Instance, bool) {
 	if a == nil {
 		return nil, false
 	}
@@ -539,7 +517,7 @@ func (a *App) DefaultAgent() (*agent.Instance, bool) {
 	if a == nil || a.defaultAgent == "" {
 		return nil, false
 	}
-	return a.Agent(a.defaultAgent)
+	return a.agent(a.defaultAgent)
 }
 
 func (a *App) registerPlugin(plugin Plugin) error {
@@ -797,61 +775,8 @@ func (a *App) ToolCatalog() *tool.Catalog {
 	return a.tools
 }
 
-// Send routes user input through command dispatch or the default agent.
-func (a *App) Send(ctx context.Context, input string) (command.Result, error) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return command.Handled(), nil
-	}
-	if strings.HasPrefix(input, "/") {
-		result, err := a.commands.ExecuteUser(ctx, input)
-		if err != nil {
-			return command.Result{}, err
-		}
-		return a.Apply(ctx, result, 0)
-	}
-	inst, ok := a.DefaultAgent()
-	if !ok {
-		return command.Result{}, fmt.Errorf("app: no default agent configured")
-	}
-	return command.Handled(), inst.RunTurn(ctx, a.nextTurnID(), input)
-}
-
-// Apply performs an already-executed command result. turnID is used when a
-// result asks to run the default agent.
-func (a *App) Apply(ctx context.Context, result command.Result, turnID int) (command.Result, error) {
-	switch result.Kind {
-	case command.ResultAgentTurn:
-		inst, ok := a.DefaultAgent()
-		if !ok {
-			return command.Result{}, fmt.Errorf("app: no default agent configured")
-		}
-		input, ok := command.AgentTurnInput(result)
-		if !ok || strings.TrimSpace(input) == "" {
-			return command.Handled(), nil
-		}
-		if turnID <= 0 {
-			turnID = a.nextTurnID()
-		}
-		return command.Handled(), inst.RunTurn(ctx, turnID, input)
-	case command.ResultReset:
-		if inst, ok := a.DefaultAgent(); ok {
-			inst.Reset()
-		}
-		a.turnID = 0
-		return command.Handled(), nil
-	default:
-		return result, nil
-	}
-}
-
 func (a *App) agentSkillSources(spec agent.Spec) []skill.Source {
 	sources := append([]skill.Source(nil), a.skillSources...)
 	sources = append(sources, spec.SkillSources...)
 	return sources
-}
-
-func (a *App) nextTurnID() int {
-	a.turnID++
-	return a.turnID
 }
