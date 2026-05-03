@@ -69,6 +69,25 @@ func TestRunRendersOneShotWorkflowCommandResult(t *testing.T) {
 	require.Contains(t, out.String(), "No workflows registered.")
 }
 
+func TestRunStartsResourceBackedWorkflowWithSessionTurnAction(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("workflow answer"))
+	var out bytes.Buffer
+
+	err := Run(t.Context(), Config{
+		Resources:    EmbeddedResources(workflowBundle(), ".agents"),
+		Task:         "/workflow start ask_agent_flow hello from workflow",
+		Workspace:    t.TempDir(),
+		AgentOptions: []agent.Option{agent.WithClient(client)},
+		Out:          &out,
+		Err:          &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, client.Requests(), 1)
+	require.Contains(t, out.String(), "workflow completed: ask_agent_flow")
+	require.Contains(t, out.String(), "output: workflow answer")
+}
+
 func TestRunStartsREPLWithoutTask(t *testing.T) {
 	var out bytes.Buffer
 
@@ -359,4 +378,15 @@ max-tokens: 1000
 ---
 You are a test agent.`)},
 	}
+}
+
+func workflowBundle() fstest.MapFS {
+	bundle := testBundle()
+	bundle[".agents/workflows/ask-agent.yaml"] = &fstest.MapFile{Data: []byte(`name: ask_agent_flow
+description: Ask the default agent through a resource workflow
+steps:
+  - id: ask
+    action: agent.turn
+`)}
+	return bundle
 }

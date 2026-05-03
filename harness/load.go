@@ -2,11 +2,13 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
@@ -214,7 +216,29 @@ func LoadSession(cfg SessionLoadConfig) (*LoadedSession, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := registerSessionActions(application, inst, session); err != nil {
+		return nil, err
+	}
 	return &LoadedSession{App: application, Agent: inst, Service: service, Session: session}, nil
+}
+
+func registerSessionActions(application *app.App, inst *agent.Instance, session *Session) error {
+	if application == nil {
+		return fmt.Errorf("harness: app is required")
+	}
+	for _, sessionAction := range []action.Action{
+		agent.TurnAction(inst, action.Spec{}),
+		session.CommandAction(),
+	} {
+		if err := application.RegisterActions(sessionAction); err != nil {
+			var duplicate action.ErrDuplicate
+			if errors.As(err, &duplicate) {
+				continue
+			}
+			return fmt.Errorf("harness: register session action %q: %w", sessionAction.Spec().Name, err)
+		}
+	}
+	return nil
 }
 
 func sessionAppOptions(cfg SessionLoadConfig) []app.Option {

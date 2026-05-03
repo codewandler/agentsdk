@@ -9,6 +9,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
+	"github.com/codewandler/agentsdk/workflow"
 	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/adapterconfig"
 	"github.com/stretchr/testify/require"
@@ -38,6 +39,25 @@ func TestLoadSessionReturnsAppCreationError(t *testing.T) {
 	require.Nil(t, loaded)
 	require.ErrorContains(t, err, "app: no default agent configured")
 }
+func TestLoadSessionRegistersSessionScopedActions(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("workflow answer"))
+	loaded, err := LoadSession(SessionLoadConfig{
+		App: AppLoadConfig{DefaultAgent: "test"},
+		AppOptions: []app.Option{
+			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
+			app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: agent.DefaultTurnActionName}}}}),
+		},
+		AgentOptions: []agent.Option{agent.WithClient(client)},
+	})
+
+	require.NoError(t, err)
+	result := loaded.Session.ExecuteWorkflow(t.Context(), "ask_flow", "hello through workflow")
+
+	require.NoError(t, result.Error)
+	require.Equal(t, "workflow answer", result.Data.(workflow.Result).Data)
+	require.Len(t, client.Requests(), 1)
+}
+
 func TestLoadSessionAppliesPlugins(t *testing.T) {
 	loaded, err := LoadSession(SessionLoadConfig{
 		App: AppLoadConfig{DefaultAgent: "plugin-agent"},
