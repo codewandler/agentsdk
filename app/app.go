@@ -377,7 +377,7 @@ func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
 	return a.AgentTurnAction("", spec)
 }
 
-func (a *App) WorkflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
+func (a *App) workflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
 	cfg := applyWorkflowExecutionOptions(opts)
 	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.ActionRegistry()}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}
 }
@@ -390,7 +390,7 @@ func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...Wo
 	if !ok {
 		return action.Result{Error: fmt.Errorf("app: workflow %q not found", name)}
 	}
-	return a.WorkflowExecutor(opts...).Execute(ctx, def, input)
+	return a.workflowExecutor(opts...).Execute(ctx, def, input)
 }
 
 func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (action.Action, bool) {
@@ -398,7 +398,7 @@ func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (acti
 	if !ok {
 		return nil, false
 	}
-	return workflow.WorkflowAction{Definition: def, Executor: a.WorkflowExecutor(opts...)}, true
+	return workflow.WorkflowAction{Definition: def, Executor: a.workflowExecutor(opts...)}, true
 }
 
 func (a *App) RegisterWorkflowActions(names ...string) error {
