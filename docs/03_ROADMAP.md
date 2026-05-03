@@ -296,7 +296,7 @@ Tasks:
 2. Define `workflow.ActionRef` as the graph-level reference to an `action.Action`; workflow owns references/dataflow, action owns execution. ✅ aliases `action.Ref`
 3. Support initial action implementations:
 
-   - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially; ✅ `agent.TurnAction` and app default-agent turn action helpers exist
+   - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially; ✅ `agent.TurnAction` exists; app default-agent helper was removed in favor of explicit instance composition
    - legacy tool adapter action wrapping `tool.Tool` where needed;
    - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer; ✅ initial app helper exists
    - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result; ✅ harness `/workflow start` command exists on the declarative command tree
@@ -329,7 +329,7 @@ Acceptance criteria:
 - A Go-defined pipeline can execute end-to-end. ✅
 - Workflow steps use `workflow.ActionRef` resolved to `action.Action`. ✅
 - Output from one step can feed the next. ✅
-- A prompt/model-turn can run as an action. ✅ `agent.TurnAction` exposes an `agent.Instance` turn as an `action.Action` and app helpers can register the default agent as a workflow action
+- A prompt/model-turn can run as an action. ✅ `agent.TurnAction` exposes an `agent.Instance` turn as an `action.Action`; hosts register the desired instance explicitly as a workflow action
 - A workflow can be exposed as an action. ✅
 - A command can trigger a workflow through `harness.Session`; an initial dogfood workflow resource fixture exercises the resource-defined workflow path.
 - Action intent can be inspected before execution, including actions exposed as tools.

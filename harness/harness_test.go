@@ -270,14 +270,13 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder",
+	inst, err := application.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 		agent.WithSessionStoreDir(t.TempDir()),
 	)
 	require.NoError(t, err)
-	turnAction, err := application.DefaultAgentTurnAction(action.Spec{Name: "ask_agent"})
-	require.NoError(t, err)
+	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
 	require.NoError(t, application.RegisterActions(turnAction))
 
 	session, err := NewService(application).DefaultSession()
@@ -470,10 +469,9 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
+	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
 	require.NoError(t, err)
-	turnAction, err := application.DefaultAgentTurnAction(action.Spec{Name: "ask_agent"})
-	require.NoError(t, err)
+	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
 	require.NoError(t, application.RegisterActions(turnAction))
 	session, err := NewService(application).DefaultSession()
 	require.NoError(t, err)

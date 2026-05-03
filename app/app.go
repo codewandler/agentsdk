@@ -302,28 +302,6 @@ func applyWorkflowExecutionOptions(opts []WorkflowExecutionOption) workflowExecu
 	return cfg
 }
 
-func (a *App) agentTurnAction(agentName string, spec action.Spec) (action.Action, error) {
-	if a == nil {
-		return nil, fmt.Errorf("app: nil app")
-	}
-	agentName = strings.TrimSpace(agentName)
-	if agentName == "" {
-		agentName = a.defaultAgent
-	}
-	if agentName == "" {
-		return nil, fmt.Errorf("app: no default agent configured")
-	}
-	inst, ok := a.agent(agentName)
-	if !ok || inst == nil {
-		return nil, fmt.Errorf("app: agent %q not found", agentName)
-	}
-	return agent.TurnAction(inst, spec), nil
-}
-
-func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
-	return a.agentTurnAction("", spec)
-}
-
 func (a *App) workflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
 	cfg := applyWorkflowExecutionOptions(opts)
 	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.actions}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}

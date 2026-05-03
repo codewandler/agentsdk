@@ -191,13 +191,12 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 		WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
-	turnAction, err := app.DefaultAgentTurnAction(action.Spec{Name: "ask_agent", Description: "Ask the default agent"})
-	require.NoError(t, err)
+	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent", Description: "Ask the default agent"})
 	require.NoError(t, app.RegisterActions(turnAction))
 
 	result := app.ExecuteWorkflow(ctx, "ask_flow", "say hi")
@@ -207,7 +206,7 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 	requireAppRequestContainsText(t, client.RequestAt(0), "say hi")
 }
-func TestWorkflowResourceCanUseDefaultAgentTurnAction(t *testing.T) {
+func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
 	ctx := context.Background()
 	bundle, err := agentdir.LoadDir("../testdata/workflow-app")
 	require.NoError(t, err)
@@ -217,14 +216,13 @@ func TestWorkflowResourceCanUseDefaultAgentTurnAction(t *testing.T) {
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder",
+	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 		agent.WithSessionStoreDir(t.TempDir()),
 	)
 	require.NoError(t, err)
-	turnAction, err := app.DefaultAgentTurnAction(action.Spec{Name: "ask_agent"})
-	require.NoError(t, err)
+	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
 	require.NoError(t, app.RegisterActions(turnAction))
 
 	def, ok := app.Workflow("ask_agent_flow")
