@@ -508,7 +508,7 @@ func (a *App) AgentSpec(name string) (agent.Spec, bool) {
 func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instance, error) {
 	// Ensure middleware plugins are applied before tools are consumed.
 	// Idempotent — safe to call multiple times.
-	a.ApplyToolMiddlewares()
+	a.applyToolMiddlewares()
 
 	spec, ok := a.AgentSpec(name)
 	if !ok {
@@ -718,7 +718,7 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 	if acp, ok := plugin.(AgentContextPlugin); ok {
 		a.agentContextPlugins = append(a.agentContextPlugins, acp)
 	}
-	// Middleware plugins are collected now, applied later via ApplyToolMiddlewares.
+	// Middleware plugins are collected now, applied later during agent instantiation.
 	if tmp, ok := plugin.(ToolMiddlewarePlugin); ok {
 		a.toolMiddlewarePlugins = append(a.toolMiddlewarePlugins, tmp)
 	}
@@ -873,13 +873,11 @@ func (a *App) SkillSources() []skill.Source {
 	return append([]skill.Source(nil), a.skillSources...)
 }
 
-// ApplyToolMiddlewares applies collected middleware plugins to the tool catalog.
-// Call this after all plugins have been registered and before agent instantiation.
-//
+// applyToolMiddlewares applies collected middleware plugins to the tool catalog.
 // Application order:
 //  1. ToolTargetedMiddlewarePlugin middlewares are applied per-tool (innermost).
 //  2. ToolMiddlewarePlugin middlewares are applied globally (outermost).
-func (a *App) ApplyToolMiddlewares() {
+func (a *App) applyToolMiddlewares() {
 	if a == nil || a.tools == nil || a.toolMwApplied {
 		return
 	}
