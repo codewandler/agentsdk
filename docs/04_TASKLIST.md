@@ -146,28 +146,28 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 8. Workflow lifecycle
 
-- [ ] Add asynchronous workflow start.
-- [ ] Add queued run status.
-- [ ] Add running run status lifecycle handling.
-- [ ] Add canceled run status.
-- [ ] Add workflow cancellation.
-- [ ] Persist session ID metadata for workflow runs.
-- [ ] Persist agent name metadata for workflow runs.
-- [ ] Persist thread ID / branch ID metadata for workflow runs.
-- [ ] Persist trigger/source metadata for workflow runs.
-- [ ] Persist invoking command path metadata for workflow runs.
-- [ ] Persist workflow input references.
-- [ ] Add chronological run ordering.
-- [ ] Add pagination for run lists.
-- [ ] Add `/workflow rerun <id>`.
-- [ ] Add `/workflow events <id>`.
-- [ ] Add `/workflow cancel <id>`.
-- [ ] Add richer `/workflow show` metadata.
-- [ ] Add workflow input validation.
-- [ ] Add workflow output validation.
-- [ ] Add workflow definition hash/versioning.
-- [ ] Add action identity/version metadata where needed.
-- [ ] Decide whether thread-backed run storage remains enough.
+- [x] Add asynchronous workflow start.
+- [x] Add queued run status.
+- [x] Add running run status lifecycle handling.
+- [x] Add canceled run status.
+- [x] Add workflow cancellation.
+- [x] Persist session ID metadata for workflow runs.
+- [x] Persist agent name metadata for workflow runs.
+- [x] Persist thread ID / branch ID metadata for workflow runs.
+- [x] Persist trigger/source metadata for workflow runs.
+- [x] Persist invoking command path metadata for workflow runs.
+- [x] Persist workflow input references.
+- [x] Add chronological run ordering.
+- [x] Add pagination for run lists.
+- [x] Add `/workflow rerun <id>`.
+- [x] Add `/workflow events <id>`.
+- [x] Add `/workflow cancel <id>`.
+- [x] Add richer `/workflow show` metadata.
+- [x] Add workflow input validation.
+- [x] Add workflow output validation.
+- [x] Add workflow definition hash/versioning.
+- [x] Add action identity/version metadata where needed.
+- [x] Decide whether thread-backed run storage remains enough.
 
 ## 9. Workflow execution semantics
 

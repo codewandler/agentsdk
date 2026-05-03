@@ -67,6 +67,8 @@ func ThreadEventForWorkflowEvent(event any) (thread.Event, bool, error) {
 
 func workflowThreadEventPayload(event any) (thread.EventKind, any, bool) {
 	switch e := event.(type) {
+	case Queued:
+		return EventQueued, e, true
 	case Started:
 		return EventStarted, e, true
 	case StepStarted:
@@ -79,6 +81,8 @@ func workflowThreadEventPayload(event any) (thread.EventKind, any, bool) {
 		return EventCompleted, e, true
 	case Failed:
 		return EventFailed, e, true
+	case Canceled:
+		return EventCanceled, e, true
 	default:
 		return "", nil, false
 	}

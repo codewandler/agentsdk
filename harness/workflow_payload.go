@@ -40,12 +40,21 @@ func (p WorkflowDefinitionPayload) Display(command.DisplayMode) (string, error) 
 	if def.Description != "" {
 		fmt.Fprintf(&b, "\ndescription: %s", def.Description)
 	}
+	if def.Version != "" {
+		fmt.Fprintf(&b, "\nversion: %s", def.Version)
+	}
+	if hash := workflow.DefinitionHash(def); hash != "" {
+		fmt.Fprintf(&b, "\nhash: %s", hash)
+	}
 	if len(def.Steps) == 0 {
 		return b.String(), nil
 	}
 	b.WriteString("\n\nsteps:")
 	for _, step := range def.Steps {
 		fmt.Fprintf(&b, "\n- %s: %s", step.ID, step.Action.Name)
+		if step.Action.Version != "" {
+			fmt.Fprintf(&b, "@%s", step.Action.Version)
+		}
 		if len(step.DependsOn) > 0 {
 			fmt.Fprintf(&b, " depends_on=%s", strings.Join(step.DependsOn, ","))
 		}
@@ -63,9 +72,12 @@ type WorkflowStartPayload struct {
 
 func (p WorkflowStartPayload) Display(command.DisplayMode) (string, error) {
 	var b strings.Builder
-	if p.Status == workflow.RunFailed {
+	switch p.Status {
+	case workflow.RunFailed:
 		fmt.Fprintf(&b, "workflow failed: %s\n", p.WorkflowName)
-	} else {
+	case workflow.RunQueued, workflow.RunRunning:
+		fmt.Fprintf(&b, "workflow started: %s\n", p.WorkflowName)
+	default:
 		fmt.Fprintf(&b, "workflow completed: %s\n", p.WorkflowName)
 	}
 	fmt.Fprintf(&b, "run: %s\n", p.RunID)
@@ -82,10 +94,12 @@ func (p WorkflowStartPayload) Display(command.DisplayMode) (string, error) {
 type WorkflowRunFilters struct {
 	WorkflowName string
 	Status       workflow.RunStatus
+	Limit        int
+	Offset       int
 }
 
 func (f WorkflowRunFilters) IsZero() bool {
-	return f.WorkflowName == "" && f.Status == ""
+	return f.WorkflowName == "" && f.Status == "" && f.Limit <= 0 && f.Offset <= 0
 }
 
 type WorkflowRunsPayload struct {
@@ -109,6 +123,12 @@ func (p WorkflowRunsPayload) Display(command.DisplayMode) (string, error) {
 		}
 		if p.Filters.Status != "" {
 			fmt.Fprintf(&b, " status=%s", p.Filters.Status)
+		}
+		if p.Filters.Limit > 0 {
+			fmt.Fprintf(&b, " limit=%d", p.Filters.Limit)
+		}
+		if p.Filters.Offset > 0 {
+			fmt.Fprintf(&b, " offset=%d", p.Filters.Offset)
 		}
 	}
 	b.WriteByte('\n')
@@ -144,6 +164,16 @@ func (p WorkflowRunPayload) Display(command.DisplayMode) (string, error) {
 	if state.Error != "" {
 		fmt.Fprintf(&b, "\nerror: %s", state.Error)
 	}
+	writeWorkflowMetadata(&b, state.Metadata)
+	if !emptyWorkflowValue(state.Input) {
+		fmt.Fprintf(&b, "\ninput: %s", renderWorkflowValue(state.Input))
+	}
+	if state.DefinitionVersion != "" {
+		fmt.Fprintf(&b, "\ndefinition_version: %s", state.DefinitionVersion)
+	}
+	if state.DefinitionHash != "" {
+		fmt.Fprintf(&b, "\ndefinition_hash: %s", state.DefinitionHash)
+	}
 	if !emptyWorkflowValue(state.Output) {
 		fmt.Fprintf(&b, "\noutput: %s", renderWorkflowValue(state.Output))
 	}
@@ -174,6 +204,84 @@ func (p WorkflowRunPayload) Display(command.DisplayMode) (string, error) {
 		}
 	}
 	return b.String(), nil
+}
+
+type WorkflowEventsPayload struct {
+	RunID  workflow.RunID
+	Events []any
+}
+
+func (p WorkflowEventsPayload) Display(command.DisplayMode) (string, error) {
+	if len(p.Events) == 0 {
+		return fmt.Sprintf("No workflow events recorded for %s.", p.RunID), nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "workflow events: %s", p.RunID)
+	for _, event := range p.Events {
+		fmt.Fprintf(&b, "\n- %s", workflowEventName(event))
+	}
+	return b.String(), nil
+}
+
+type WorkflowCancelPayload struct {
+	RunID  workflow.RunID
+	Status workflow.RunStatus
+	Error  string
+}
+
+func (p WorkflowCancelPayload) Display(command.DisplayMode) (string, error) {
+	if p.Error != "" {
+		return fmt.Sprintf("workflow cancel failed: %s\nrun: %s", p.Error, p.RunID), nil
+	}
+	return fmt.Sprintf("workflow canceled: %s\nstatus: %s", p.RunID, p.Status), nil
+}
+
+func writeWorkflowMetadata(b *strings.Builder, metadata workflow.RunMetadata) {
+	if metadata.IsZero() {
+		return
+	}
+	b.WriteString("\nmetadata:")
+	if metadata.SessionID != "" {
+		fmt.Fprintf(b, "\n  session: %s", metadata.SessionID)
+	}
+	if metadata.AgentName != "" {
+		fmt.Fprintf(b, "\n  agent: %s", metadata.AgentName)
+	}
+	if metadata.ThreadID != "" {
+		fmt.Fprintf(b, "\n  thread: %s", metadata.ThreadID)
+	}
+	if metadata.BranchID != "" {
+		fmt.Fprintf(b, "\n  branch: %s", metadata.BranchID)
+	}
+	if metadata.Trigger != "" {
+		fmt.Fprintf(b, "\n  trigger: %s", metadata.Trigger)
+	}
+	if len(metadata.CommandPath) > 0 {
+		fmt.Fprintf(b, "\n  command: /%s", strings.Join(metadata.CommandPath, " "))
+	}
+}
+
+func workflowEventName(event any) string {
+	switch event.(type) {
+	case workflow.Queued:
+		return string(workflow.EventQueued)
+	case workflow.Started:
+		return string(workflow.EventStarted)
+	case workflow.StepStarted:
+		return string(workflow.EventStepStarted)
+	case workflow.StepCompleted:
+		return string(workflow.EventStepCompleted)
+	case workflow.StepFailed:
+		return string(workflow.EventStepFailed)
+	case workflow.Completed:
+		return string(workflow.EventCompleted)
+	case workflow.Failed:
+		return string(workflow.EventFailed)
+	case workflow.Canceled:
+		return string(workflow.EventCanceled)
+	default:
+		return fmt.Sprintf("%T", event)
+	}
 }
 
 func formatWorkflowTime(t time.Time) string {

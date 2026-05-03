@@ -27,53 +27,76 @@ func NewRunID() RunID {
 type RunStatus string
 
 const (
+	RunQueued    RunStatus = "queued"
 	RunRunning   RunStatus = "running"
 	RunSucceeded RunStatus = "succeeded"
 	RunFailed    RunStatus = "failed"
+	RunCanceled  RunStatus = "canceled"
 )
 
 // StepStatus is the materialized status of a workflow step.
 type StepStatus string
 
 const (
+	StepQueued       StepStatus = "queued"
 	StepRunning      StepStatus = "running"
 	StepSucceeded    StepStatus = "succeeded"
 	StepFailedStatus StepStatus = "failed"
+	StepCanceled     StepStatus = "canceled"
 )
 
 // RunState is the materialized state of one workflow execution.
 type RunState struct {
-	ID           RunID
-	WorkflowName string
-	Status       RunStatus
-	StartedAt    time.Time
-	CompletedAt  time.Time
-	Duration     time.Duration
-	Steps        map[string]StepState
-	Output       ValueRef
-	Error        string
+	ID                RunID
+	WorkflowName      string
+	Status            RunStatus
+	StartedAt         time.Time
+	CompletedAt       time.Time
+	Duration          time.Duration
+	Steps             map[string]StepState
+	Output            ValueRef
+	Error             string
+	Metadata          RunMetadata
+	Input             ValueRef
+	DefinitionHash    string
+	DefinitionVersion string
 }
 
 // RunSummary is the compact read-model view for listing workflow executions.
 type RunSummary struct {
-	ID           RunID
-	WorkflowName string
-	Status       RunStatus
-	StartedAt    time.Time
-	CompletedAt  time.Time
-	Duration     time.Duration
-	Error        string
+	ID                RunID
+	WorkflowName      string
+	Status            RunStatus
+	StartedAt         time.Time
+	CompletedAt       time.Time
+	Duration          time.Duration
+	Error             string
+	Metadata          RunMetadata
+	Input             ValueRef
+	DefinitionHash    string
+	DefinitionVersion string
+}
+
+// RunMetadata describes the harness/session source that invoked a workflow run.
+type RunMetadata struct {
+	SessionID   string   `json:"session_id,omitempty"`
+	AgentName   string   `json:"agent_name,omitempty"`
+	ThreadID    string   `json:"thread_id,omitempty"`
+	BranchID    string   `json:"branch_id,omitempty"`
+	Trigger     string   `json:"trigger,omitempty"`
+	CommandPath []string `json:"command_path,omitempty"`
 }
 
 // StepState is the materialized state of one workflow step.
 type StepState struct {
-	ID         string
-	ActionName string
-	Status     StepStatus
-	Attempt    int
-	Attempts   []AttemptState
-	Output     ValueRef
-	Error      string
+	ID            string
+	ActionName    string
+	ActionVersion string
+	Status        StepStatus
+	Attempt       int
+	Attempts      []AttemptState
+	Output        ValueRef
+	Error         string
 }
 
 // AttemptState is the materialized state of one step attempt.
@@ -112,6 +135,19 @@ func (p Projector) ProjectRun(events []any, runID RunID) (RunState, bool, error)
 
 func applyEvent(states map[RunID]RunState, event any) error {
 	switch e := event.(type) {
+	case Queued:
+		state := stateFor(states, e.RunID)
+		state.ID = e.RunID
+		state.WorkflowName = e.WorkflowName
+		state.Status = RunQueued
+		state.Metadata = e.Metadata
+		state.Input = e.Input
+		state.DefinitionHash = e.DefinitionHash
+		state.DefinitionVersion = e.DefinitionVersion
+		state.StartedAt = time.Time{}
+		state.CompletedAt = time.Time{}
+		state.Duration = 0
+		states[e.RunID] = state
 	case Started:
 		state := stateFor(states, e.RunID)
 		state.ID = e.RunID
@@ -120,12 +156,25 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.StartedAt = e.At
 		state.CompletedAt = time.Time{}
 		state.Duration = 0
+		if !e.Metadata.IsZero() {
+			state.Metadata = e.Metadata
+		}
+		if !emptyValueRef(e.Input) {
+			state.Input = e.Input
+		}
+		if e.DefinitionHash != "" {
+			state.DefinitionHash = e.DefinitionHash
+		}
+		if e.DefinitionVersion != "" {
+			state.DefinitionVersion = e.DefinitionVersion
+		}
 		states[e.RunID] = state
 	case StepStarted:
 		state := stateFor(states, e.RunID)
 		step := state.Steps[e.StepID]
 		step.ID = e.StepID
 		step.ActionName = e.ActionName
+		step.ActionVersion = e.ActionVersion
 		step.Status = StepRunning
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Error = ""
@@ -137,6 +186,7 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		step := state.Steps[e.StepID]
 		step.ID = e.StepID
 		step.ActionName = e.ActionName
+		step.ActionVersion = e.ActionVersion
 		step.Status = StepSucceeded
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Output = e.Output
@@ -149,6 +199,7 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		step := state.Steps[e.StepID]
 		step.ID = e.StepID
 		step.ActionName = e.ActionName
+		step.ActionVersion = e.ActionVersion
 		step.Status = StepFailedStatus
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Error = e.Error
@@ -174,7 +225,16 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.Duration = runDuration(state.StartedAt, state.CompletedAt)
 		state.Error = e.Error
 		states[e.RunID] = state
-	case *Started, *StepStarted, *StepCompleted, *StepFailed, *Completed, *Failed:
+	case Canceled:
+		state := stateFor(states, e.RunID)
+		state.ID = e.RunID
+		state.WorkflowName = e.WorkflowName
+		state.Status = RunCanceled
+		state.CompletedAt = e.At
+		state.Duration = runDuration(state.StartedAt, state.CompletedAt)
+		state.Error = e.Reason
+		states[e.RunID] = state
+	case *Queued, *Started, *StepStarted, *StepCompleted, *StepFailed, *Completed, *Failed, *Canceled:
 		return fmt.Errorf("workflow: pointer events are not supported")
 	default:
 		return nil
@@ -214,4 +274,12 @@ func stateFor(states map[RunID]RunState, runID RunID) RunState {
 		state.Steps = map[string]StepState{}
 	}
 	return state
+}
+
+func (m RunMetadata) IsZero() bool {
+	return m.SessionID == "" && m.AgentName == "" && m.ThreadID == "" && m.BranchID == "" && m.Trigger == "" && len(m.CommandPath) == 0
+}
+
+func emptyValueRef(value ValueRef) bool {
+	return value.ID == "" && value.MediaType == "" && value.ExternalURI == "" && value.Inline == nil && !value.Redacted
 }

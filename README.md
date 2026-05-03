@@ -467,6 +467,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/08_OUTPUT_EVENT_MODEL.md`](docs/08_OUTPUT_EVENT_MODEL.md) — structured output/event model and renderer contracts.
 - [`docs/09_COMMAND_SYSTEM_FOLLOWUPS.md`](docs/09_COMMAND_SYSTEM_FOLLOWUPS.md) — command descriptor, schema/export, policy, and `session_command` follow-up decisions.
 - [`docs/10_COMMAND_RENDERING_CLEANUP.md`](docs/10_COMMAND_RENDERING_CLEANUP.md) — command result/rendering audit, generic payload decisions, and rendering coverage.
+- [`docs/11_WORKFLOW_LIFECYCLE.md`](docs/11_WORKFLOW_LIFECYCLE.md) — async workflow lifecycle, run metadata, validation, and command UX decisions.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 

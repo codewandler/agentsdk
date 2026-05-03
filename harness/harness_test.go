@@ -234,19 +234,22 @@ func TestSessionCommandCatalogIncludesExecutableCommandsWithSchemas(t *testing.T
 	require.NoError(t, err)
 
 	catalog := session.CommandCatalog()
-	require.Len(t, catalog, 6)
+	require.Len(t, catalog, 9)
 	requireCatalogPath(t, catalog, "workflow", "list")
 	requireCatalogPath(t, catalog, "workflow", "show")
 	start := requireCatalogPath(t, catalog, "workflow", "start")
 	runs := requireCatalogPath(t, catalog, "workflow", "runs")
 	requireCatalogPath(t, catalog, "workflow", "run")
+	requireCatalogPath(t, catalog, "workflow", "rerun")
+	requireCatalogPath(t, catalog, "workflow", "events")
+	requireCatalogPath(t, catalog, "workflow", "cancel")
 	requireCatalogPath(t, catalog, "session", "info")
 
 	require.Equal(t, "object", start.InputSchema.Type)
 	require.Equal(t, "string", start.InputSchema.Properties["name"].Type)
 	require.Equal(t, "array", start.InputSchema.Properties["input"].Type)
 	require.Equal(t, []string{"name"}, start.InputSchema.Required)
-	require.Equal(t, []string{"running", "succeeded", "failed"}, runs.InputSchema.Properties["status"].Enum)
+	require.Equal(t, []string{"queued", "running", "succeeded", "failed", "canceled"}, runs.InputSchema.Properties["status"].Enum)
 
 	text, err := command.Render(command.Display(catalog), command.DisplayJSON)
 	require.NoError(t, err)
@@ -306,7 +309,14 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, summaries, 1)
-	require.Equal(t, workflow.RunSummary{ID: "run_harness", WorkflowName: "ask_flow", Status: workflow.RunSucceeded, StartedAt: summaries[0].StartedAt, CompletedAt: summaries[0].CompletedAt, Duration: summaries[0].Duration}, summaries[0])
+	require.Equal(t, "run_harness", string(summaries[0].ID))
+	require.Equal(t, "ask_flow", summaries[0].WorkflowName)
+	require.Equal(t, workflow.RunSucceeded, summaries[0].Status)
+	require.Equal(t, "coder", summaries[0].Metadata.AgentName)
+	require.Equal(t, "harness", summaries[0].Metadata.Trigger)
+	require.Equal(t, []string{"workflow", "start"}, summaries[0].Metadata.CommandPath)
+	require.Equal(t, workflow.InlineValue("answer through harness"), summaries[0].Input)
+	require.NotEmpty(t, summaries[0].DefinitionHash)
 	require.False(t, summaries[0].StartedAt.IsZero())
 	require.False(t, summaries[0].CompletedAt.IsZero())
 	require.GreaterOrEqual(t, summaries[0].Duration, time.Duration(0))
@@ -410,11 +420,11 @@ func TestSessionWorkflowCommandUsageAndNotFound(t *testing.T) {
 	result, err := session.Send(context.Background(), "/workflow")
 	require.NoError(t, err)
 	text := renderCommandResult(t, result)
-	require.Contains(t, text, "usage: /workflow <list|show|start|runs|run>")
+	require.Contains(t, text, "usage: /workflow <list|show|start|runs|run|rerun|events|cancel>")
 	require.Contains(t, text, "/workflow list")
 	require.Contains(t, text, "/workflow show <name>")
 	require.Contains(t, text, "/workflow start <name> [input...]")
-	require.Contains(t, text, "/workflow runs [--workflow <workflow>] [--status <running|succeeded|failed>]")
+	require.Contains(t, text, "/workflow runs [--workflow <workflow>] [--status <queued|running|succeeded|failed|canceled>] [--limit <limit>] [--offset <offset>]")
 	require.Contains(t, text, "/workflow run <run-id>")
 
 	result, err = session.Send(context.Background(), "/workflow run missing")
@@ -638,13 +648,85 @@ func TestSessionWorkflowRunsCommandFiltersByWorkflowAndStatus(t *testing.T) {
 	require.NoError(t, err)
 	text = renderCommandResult(t, result)
 	require.Contains(t, text, "invalid value \"nope\" for --status")
-	require.Contains(t, text, "usage: /workflow runs [--workflow <workflow>] [--status <running|succeeded|failed>]")
+	require.Contains(t, text, "usage: /workflow runs [--workflow <workflow>] [--status <queued|running|succeeded|failed|canceled>] [--limit <limit>] [--offset <offset>]")
 
 	result, err = session.Send(ctx, "/workflow runs --workflow")
 	require.NoError(t, err)
 	text = renderCommandResult(t, result)
 	require.Contains(t, text, "missing value for --workflow")
-	require.Contains(t, text, "usage: /workflow runs [--workflow <workflow>] [--status <running|succeeded|failed>]")
+	require.Contains(t, text, "usage: /workflow runs [--workflow <workflow>] [--status <queued|running|succeeded|failed|canceled>] [--limit <limit>] [--offset <offset>]")
+}
+
+func TestSessionWorkflowAsyncRerunEventsCancelAndPagination(t *testing.T) {
+	ctx := context.Background()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	application, err := app.New(
+		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
+		app.WithActions(
+			action.New(action.Spec{Name: "echo"}, func(_ action.Ctx, input any) action.Result {
+				return action.Result{Data: input}
+			}),
+			action.New(action.Spec{Name: "block"}, func(ctx action.Ctx, input any) action.Result {
+				select {
+				case <-started:
+				default:
+					close(started)
+				}
+				select {
+				case <-ctx.Done():
+					return action.Result{Error: ctx.Err()}
+				case <-release:
+					return action.Result{Data: input}
+				}
+			}),
+		),
+		app.WithWorkflows(
+			workflow.Definition{Name: "echo_flow", Version: "v1", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo", Version: "v1"}}}},
+			workflow.Definition{Name: "block_flow", Steps: []workflow.Step{{ID: "block", Action: workflow.ActionRef{Name: "block"}}}},
+		),
+	)
+	require.NoError(t, err)
+	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
+	require.NoError(t, err)
+	session, err := NewService(application).DefaultSession()
+	require.NoError(t, err)
+
+	first, err := session.Send(ctx, "/workflow start echo_flow first")
+	require.NoError(t, err)
+	firstRun := first.Payload.(WorkflowStartPayload).RunID
+
+	async, err := session.ExecuteCommand(ctx, []string{"workflow", "start"}, map[string]any{"name": "block_flow", "input": "wait", "async": true})
+	require.NoError(t, err)
+	asyncPayload := async.Payload.(WorkflowStartPayload)
+	require.Equal(t, workflow.RunQueued, asyncPayload.Status)
+	<-started
+
+	eventsResult, err := session.Send(ctx, "/workflow events "+string(firstRun))
+	require.NoError(t, err)
+	eventsText := renderCommandResult(t, eventsResult)
+	require.Contains(t, eventsText, "workflow events: "+string(firstRun))
+	require.Contains(t, eventsText, string(workflow.EventStarted))
+	require.Contains(t, eventsText, string(workflow.EventCompleted))
+
+	rerun, err := session.Send(ctx, "/workflow rerun "+string(firstRun))
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, rerun), "workflow completed: echo_flow")
+
+	cancelResult, err := session.Send(ctx, "/workflow cancel "+string(asyncPayload.RunID)+" no longer needed")
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, cancelResult), "workflow canceled: "+string(asyncPayload.RunID))
+
+	require.Eventually(t, func() bool {
+		state, ok, err := session.WorkflowRunState(ctx, asyncPayload.RunID)
+		return err == nil && ok && state.Status == workflow.RunCanceled
+	}, time.Second, 10*time.Millisecond)
+
+	runs, err := session.Send(ctx, "/workflow runs --limit 1 --offset 1")
+	require.NoError(t, err)
+	text := renderCommandResult(t, runs)
+	require.Contains(t, text, "limit=1")
+	require.Contains(t, text, "offset=1")
 }
 
 func TestSessionWorkflowListNoWorkflows(t *testing.T) {

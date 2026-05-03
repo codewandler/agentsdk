@@ -2,6 +2,9 @@
 package workflow
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -26,6 +29,7 @@ type Step struct {
 type Definition struct {
 	Name        string
 	Description string
+	Version     string
 	Steps       []Step
 }
 
@@ -37,12 +41,14 @@ type Result struct {
 }
 
 const (
+	EventQueued        thread.EventKind = "workflow.queued"
 	EventStarted       thread.EventKind = "workflow.started"
 	EventStepStarted   thread.EventKind = "workflow.step_started"
 	EventStepCompleted thread.EventKind = "workflow.step_completed"
 	EventStepFailed    thread.EventKind = "workflow.step_failed"
 	EventCompleted     thread.EventKind = "workflow.completed"
 	EventFailed        thread.EventKind = "workflow.failed"
+	EventCanceled      thread.EventKind = "workflow.canceled"
 )
 
 // EventDefinitions returns persistent thread-event definitions for workflow
@@ -51,48 +57,67 @@ const (
 // thread log.
 func EventDefinitions() []thread.EventDefinition {
 	return []thread.EventDefinition{
+		thread.DefineEvent[Queued](EventQueued),
 		thread.DefineEvent[Started](EventStarted),
 		thread.DefineEvent[StepStarted](EventStepStarted),
 		thread.DefineEvent[StepCompleted](EventStepCompleted),
 		thread.DefineEvent[StepFailed](EventStepFailed),
 		thread.DefineEvent[Completed](EventCompleted),
 		thread.DefineEvent[Failed](EventFailed),
+		thread.DefineEvent[Canceled](EventCanceled),
 	}
 }
 
+type Queued struct {
+	RunID             RunID       `json:"run_id"`
+	WorkflowName      string      `json:"workflow_name"`
+	Metadata          RunMetadata `json:"metadata,omitempty"`
+	Input             ValueRef    `json:"input,omitempty"`
+	DefinitionHash    string      `json:"definition_hash,omitempty"`
+	DefinitionVersion string      `json:"definition_version,omitempty"`
+	At                time.Time   `json:"at,omitempty"`
+}
+
 type Started struct {
-	RunID        RunID     `json:"run_id"`
-	WorkflowName string    `json:"workflow_name"`
-	At           time.Time `json:"at,omitempty"`
+	RunID             RunID       `json:"run_id"`
+	WorkflowName      string      `json:"workflow_name"`
+	Metadata          RunMetadata `json:"metadata,omitempty"`
+	Input             ValueRef    `json:"input,omitempty"`
+	DefinitionHash    string      `json:"definition_hash,omitempty"`
+	DefinitionVersion string      `json:"definition_version,omitempty"`
+	At                time.Time   `json:"at,omitempty"`
 }
 
 type StepStarted struct {
-	RunID        RunID     `json:"run_id"`
-	WorkflowName string    `json:"workflow_name"`
-	StepID       string    `json:"step_id"`
-	ActionName   string    `json:"action_name"`
-	Attempt      int       `json:"attempt"`
-	At           time.Time `json:"at,omitempty"`
+	RunID         RunID     `json:"run_id"`
+	WorkflowName  string    `json:"workflow_name"`
+	StepID        string    `json:"step_id"`
+	ActionName    string    `json:"action_name"`
+	ActionVersion string    `json:"action_version,omitempty"`
+	Attempt       int       `json:"attempt"`
+	At            time.Time `json:"at,omitempty"`
 }
 
 type StepCompleted struct {
-	RunID        RunID     `json:"run_id"`
-	WorkflowName string    `json:"workflow_name"`
-	StepID       string    `json:"step_id"`
-	ActionName   string    `json:"action_name"`
-	Attempt      int       `json:"attempt"`
-	Output       ValueRef  `json:"output,omitempty"`
-	At           time.Time `json:"at,omitempty"`
+	RunID         RunID     `json:"run_id"`
+	WorkflowName  string    `json:"workflow_name"`
+	StepID        string    `json:"step_id"`
+	ActionName    string    `json:"action_name"`
+	ActionVersion string    `json:"action_version,omitempty"`
+	Attempt       int       `json:"attempt"`
+	Output        ValueRef  `json:"output,omitempty"`
+	At            time.Time `json:"at,omitempty"`
 }
 
 type StepFailed struct {
-	RunID        RunID     `json:"run_id"`
-	WorkflowName string    `json:"workflow_name"`
-	StepID       string    `json:"step_id"`
-	ActionName   string    `json:"action_name"`
-	Attempt      int       `json:"attempt"`
-	Error        string    `json:"error"`
-	At           time.Time `json:"at,omitempty"`
+	RunID         RunID     `json:"run_id"`
+	WorkflowName  string    `json:"workflow_name"`
+	StepID        string    `json:"step_id"`
+	ActionName    string    `json:"action_name"`
+	ActionVersion string    `json:"action_version,omitempty"`
+	Attempt       int       `json:"attempt"`
+	Error         string    `json:"error"`
+	At            time.Time `json:"at,omitempty"`
 }
 
 type Completed struct {
@@ -106,6 +131,13 @@ type Failed struct {
 	RunID        RunID     `json:"run_id"`
 	WorkflowName string    `json:"workflow_name"`
 	Error        string    `json:"error"`
+	At           time.Time `json:"at,omitempty"`
+}
+
+type Canceled struct {
+	RunID        RunID     `json:"run_id"`
+	WorkflowName string    `json:"workflow_name"`
+	Reason       string    `json:"reason,omitempty"`
 	At           time.Time `json:"at,omitempty"`
 }
 
@@ -138,11 +170,15 @@ func (r RegistryResolver) ResolveAction(_ action.Ctx, ref ActionRef) (action.Act
 
 // Executor executes workflows over resolved actions.
 type Executor struct {
-	Resolver Resolver
-	OnEvent  EventHandler
-	RunID    RunID
-	NewRunID func() RunID
-	Now      func() time.Time
+	Resolver          Resolver
+	OnEvent           EventHandler
+	RunID             RunID
+	NewRunID          func() RunID
+	Now               func() time.Time
+	Metadata          RunMetadata
+	Input             ValueRef
+	DefinitionHash    string
+	DefinitionVersion string
 }
 
 type ExecuteOption func(*Executor)
@@ -176,6 +212,21 @@ func WithRunID(runID RunID) ExecuteOption {
 	return func(e *Executor) { e.RunID = runID }
 }
 
+func WithRunMetadata(metadata RunMetadata) ExecuteOption {
+	return func(e *Executor) { e.Metadata = metadata }
+}
+
+func WithInputRef(input ValueRef) ExecuteOption {
+	return func(e *Executor) { e.Input = input }
+}
+
+func WithDefinitionIdentity(hash, version string) ExecuteOption {
+	return func(e *Executor) {
+		e.DefinitionHash = hash
+		e.DefinitionVersion = version
+	}
+}
+
 // Execute runs def and returns a workflow result in action.Result.Data. Execution
 // stops at the first failed or unresolved step; partial step results are kept in
 // Result.StepResults.
@@ -199,11 +250,18 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 			e.OnEvent(ctx, event)
 		}
 	}
+	cancel := func(reason string, data any) action.Result {
+		emit(Canceled{RunID: runID, WorkflowName: def.Name, Reason: reason, At: now()})
+		return action.Result{Data: data, Error: ctx.Err(), Events: events}
+	}
 	fail := func(err error, data any) action.Result {
 		emit(Failed{RunID: runID, WorkflowName: def.Name, Error: err.Error(), At: now()})
 		return action.Result{Data: data, Error: err, Events: events}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return cancel(err.Error(), nil)
+	}
 	if e.Resolver == nil {
 		return fail(fmt.Errorf("workflow %q has no action resolver", def.Name), nil)
 	}
@@ -211,27 +269,48 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 	if err != nil {
 		return fail(err, nil)
 	}
-	emit(Started{RunID: runID, WorkflowName: def.Name, At: now()})
+	definitionHash := e.DefinitionHash
+	if definitionHash == "" {
+		definitionHash = DefinitionHash(def)
+	}
+	definitionVersion := e.DefinitionVersion
+	if definitionVersion == "" {
+		definitionVersion = def.Version
+	}
+	emit(Started{RunID: runID, WorkflowName: def.Name, Metadata: e.Metadata, Input: e.Input, DefinitionHash: definitionHash, DefinitionVersion: definitionVersion, At: now()})
 	results := make(map[string]action.Result, len(ordered))
 	var last any = input
 	for _, step := range ordered {
+		if err := ctx.Err(); err != nil {
+			return cancel(err.Error(), Result{RunID: runID, StepResults: results, Data: last})
+		}
 		a, ok := e.Resolver.ResolveAction(ctx, step.Action)
 		if !ok || a == nil {
 			return fail(fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name), Result{RunID: runID, StepResults: results, Data: last})
 		}
 		stepInput := stepInput(step, input, results)
+		if err := validateActionValue(a.Spec().Input, stepInput, "input"); err != nil {
+			return fail(fmt.Errorf("workflow %q step %q invalid input: %w", def.Name, step.ID, err), Result{RunID: runID, StepResults: results, Data: last})
+		}
 		attempt := 1
-		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, At: now()})
+		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, At: now()})
 		res := a.Execute(ctx, stepInput)
 		results[step.ID] = res
 		events = append(events, res.Events...)
 		if res.Error != nil {
+			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Error: res.Error.Error(), At: now()})
+			if err := ctx.Err(); err != nil {
+				return cancel(err.Error(), Result{RunID: runID, StepResults: results, Data: last})
+			}
 			err := fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, res.Error)
-			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Error: res.Error.Error(), At: now()})
 			return fail(err, Result{RunID: runID, StepResults: results, Data: last})
 		}
+		if err := validateActionValue(a.Spec().Output, res.Data, "output"); err != nil {
+			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Error: err.Error(), At: now()})
+			return fail(fmt.Errorf("workflow %q step %q invalid output: %w", def.Name, step.ID, err), Result{RunID: runID, StepResults: results, Data: last})
+		}
 		last = res.Data
-		emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, Attempt: attempt, Output: InlineValue(res.Data), At: now()})
+		emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Output: InlineValue(res.Data), At: now()})
 	}
 	emit(Completed{RunID: runID, WorkflowName: def.Name, Output: InlineValue(last), At: now()})
 	return action.Result{Data: Result{RunID: runID, StepResults: results, Data: last}, Events: events}
@@ -253,6 +332,34 @@ func stepInput(step Step, initial any, results map[string]action.Result) any {
 		}
 		return in
 	}
+}
+
+func DefinitionHash(def Definition) string {
+	canonical := struct {
+		Name    string
+		Version string
+		Steps   []Step
+	}{Name: def.Name, Version: def.Version, Steps: def.Steps}
+	raw, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func validateActionValue(t action.Type, value any, role string) error {
+	if t.IsZero() || t.Schema == nil {
+		return nil
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("%s is not JSON serializable: %w", role, err)
+	}
+	if err := t.ValidateJSON(raw); err != nil {
+		return fmt.Errorf("%s does not match schema: %w", role, err)
+	}
+	return nil
 }
 
 // Validate checks workflow definition invariants that are independent of action

@@ -58,6 +58,7 @@ func TestHarnessStructuredPayloadsRenderJSON(t *testing.T) {
 		"Definitions": [{
 			"Name": "ask_flow",
 			"Description": "Ask the agent",
+			"Version": "",
 			"Steps": null
 		}]
 	}`, workflowJSON)

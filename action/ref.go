@@ -5,7 +5,8 @@ package action
 // owned by the caller's registry/executor so refs stay serializable and
 // surface-neutral.
 type Ref struct {
-	Name string `json:"name" yaml:"name"`
+	Name    string `json:"name" yaml:"name"`
+	Version string `json:"version,omitempty" yaml:"version,omitempty"`
 }
 
 // IsZero reports whether ref does not identify an action.

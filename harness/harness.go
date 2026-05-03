@@ -36,11 +36,12 @@ type Session struct {
 	Name   string
 	turnID int
 
-	service *Service
-	mu      sync.Mutex
-	closed  bool
-	nextSub int
-	subs    map[int]chan SessionEvent
+	service         *Service
+	mu              sync.Mutex
+	closed          bool
+	nextSub         int
+	subs            map[int]chan SessionEvent
+	workflowCancels map[workflow.RunID]context.CancelFunc
 }
 
 // SessionOpenRequest describes a harness-owned session open/resume operation.
@@ -163,7 +164,7 @@ func (s *Service) attachSession(name string, inst *agent.Instance) (*Session, er
 	if strings.TrimSpace(name) == "" {
 		name = inst.SessionID()
 	}
-	session := &Session{App: s.App, Agent: inst, Name: name, service: s, subs: map[int]chan SessionEvent{}}
+	session := &Session{App: s.App, Agent: inst, Name: name, service: s, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
 	if err := session.AttachAgentProjection(session.AgentCommandProjection()); err != nil {
 		return nil, err
 	}
@@ -336,7 +337,7 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	if s == nil || s.App == nil {
 		return action.Result{Error: fmt.Errorf("harness: app is required")}
 	}
-	execOpts, recorder := s.workflowExecutionOptions(opts)
+	execOpts, recorder := s.workflowExecutionOptions(workflowName, input, opts)
 	result := s.App.ExecuteWorkflow(ctx, workflowName, input, execOpts...)
 	if recorder != nil {
 		result.Error = errors.Join(result.Error, recorder.Err())
@@ -345,12 +346,88 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	return result
 }
 
-func (s *Session) workflowExecutionOptions(opts []workflow.ExecuteOption) ([]workflow.ExecuteOption, *workflow.ThreadRecorder) {
+func (s *Session) StartWorkflow(ctx context.Context, workflowName string, input any, opts ...workflow.ExecuteOption) workflow.RunID {
+	runID := workflow.NewRunID()
+	s.StartWorkflowWithRunID(ctx, runID, workflowName, input, opts...)
+	return runID
+}
+
+func (s *Session) StartWorkflowWithRunID(ctx context.Context, runID workflow.RunID, workflowName string, input any, opts ...workflow.ExecuteOption) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if store, ok := s.WorkflowRunStore(); ok {
+		_ = store.Append(ctx, runID, workflow.Queued{RunID: runID, WorkflowName: workflowName, Metadata: s.WorkflowRunMetadata("command", []string{"workflow", "start"}), Input: workflow.InlineValue(input)})
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	s.mu.Lock()
+	if s.workflowCancels == nil {
+		s.workflowCancels = map[workflow.RunID]context.CancelFunc{}
+	}
+	s.workflowCancels[runID] = cancel
+	s.mu.Unlock()
+	go func() {
+		defer func() {
+			s.mu.Lock()
+			delete(s.workflowCancels, runID)
+			s.mu.Unlock()
+		}()
+		s.ExecuteWorkflow(runCtx, workflowName, input, append(opts, workflow.WithRunID(runID))...)
+	}()
+}
+
+func (s *Session) CancelWorkflow(ctx context.Context, runID workflow.RunID, reason string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.mu.Lock()
+	cancel := s.workflowCancels[runID]
+	if cancel != nil {
+		delete(s.workflowCancels, runID)
+	}
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	state, ok, err := s.WorkflowRunState(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("workflow run %q not found", runID)
+	}
+	if state.Status == workflow.RunSucceeded || state.Status == workflow.RunFailed || state.Status == workflow.RunCanceled {
+		return nil
+	}
+	store, hasStore := s.WorkflowRunStore()
+	if !hasStore {
+		return fmt.Errorf("workflow runs require a thread-backed session")
+	}
+	if reason == "" {
+		reason = "canceled"
+	}
+	return store.Append(ctx, runID, workflow.Canceled{RunID: runID, WorkflowName: state.WorkflowName, Reason: reason})
+}
+
+func (s *Session) WorkflowRunMetadata(trigger string, commandPath []string) workflow.RunMetadata {
+	info := s.Info()
+	metadata := workflow.RunMetadata{SessionID: info.SessionID, AgentName: info.AgentName, ThreadID: string(info.ThreadID), BranchID: string(info.BranchID), Trigger: trigger}
+	metadata.CommandPath = append([]string(nil), commandPath...)
+	return metadata
+}
+
+func (s *Session) workflowExecutionOptions(workflowName string, input any, opts []workflow.ExecuteOption) ([]workflow.ExecuteOption, *workflow.ThreadRecorder) {
+	out := []workflow.ExecuteOption{workflow.WithRunMetadata(s.WorkflowRunMetadata("harness", []string{"workflow", "start"})), workflow.WithInputRef(workflow.InlineValue(input))}
+	if s != nil && s.App != nil {
+		if def, ok := s.App.Workflow(workflowName); ok {
+			out = append(out, workflow.WithDefinitionIdentity(workflow.DefinitionHash(def), def.Version))
+		}
+	}
+	out = append(out, opts...)
 	if s == nil || s.Agent == nil || s.Agent.LiveThread() == nil {
-		return opts, nil
+		return out, nil
 	}
 	recorder := &workflow.ThreadRecorder{Live: s.Agent.LiveThread()}
-	out := append([]workflow.ExecuteOption(nil), opts...)
 	out = append(out, workflow.WithEventHandler(recorder.OnEvent))
 	return out, recorder
 }
@@ -377,6 +454,13 @@ func (s *Session) WorkflowRunState(ctx context.Context, runID workflow.RunID) (w
 		return workflow.RunState{}, false, nil
 	}
 	return store.State(ctx, runID)
+}
+func (s *Session) WorkflowRunEvents(ctx context.Context, runID workflow.RunID) ([]any, bool, error) {
+	store, ok := s.WorkflowRunStore()
+	if !ok {
+		return nil, false, nil
+	}
+	return store.Events(ctx, runID)
 }
 
 func (s *Session) WorkflowRuns(ctx context.Context) ([]workflow.RunSummary, bool, error) {

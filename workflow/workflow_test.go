@@ -153,6 +153,24 @@ func TestExecutorEmitsFailureEvents(t *testing.T) {
 	require.Contains(t, result.Events, action.Event(StepFailed{RunID: live[0].(Started).RunID, WorkflowName: "failflow", StepID: "fail", ActionName: "fail", Attempt: 1, Error: boom.Error(), At: failed.At}))
 }
 
+func TestExecutorValidatesActionInputAndOutput(t *testing.T) {
+	reg := action.NewRegistry()
+	require.NoError(t, reg.Register(
+		action.New(action.Spec{Name: "needs_string", Input: action.TypeOf[string](), Output: action.TypeOf[string]()}, func(action.Ctx, any) action.Result {
+			return action.Result{Data: "ok"}
+		}),
+		action.New(action.Spec{Name: "returns_wrong", Output: action.TypeOf[string]()}, func(action.Ctx, any) action.Result {
+			return action.Result{Data: 123}
+		}),
+	))
+
+	inputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), Definition{Name: "input", Steps: []Step{{ID: "needs_string", Action: ActionRef{Name: "needs_string"}}}}, 123)
+	require.ErrorContains(t, inputResult.Error, "invalid input")
+
+	outputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), Definition{Name: "output", Steps: []Step{{ID: "returns_wrong", Action: ActionRef{Name: "returns_wrong"}}}}, nil)
+	require.ErrorContains(t, outputResult.Error, "invalid output")
+}
+
 func eventKinds(events []action.Event) []thread.EventKind {
 	out := make([]thread.EventKind, len(events))
 	for i, event := range events {

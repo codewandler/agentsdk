@@ -105,16 +105,32 @@ func (s ThreadRunStore) Runs(ctx context.Context) ([]RunSummary, error) {
 	summaries := make([]RunSummary, 0, len(states))
 	for _, state := range states {
 		summaries = append(summaries, RunSummary{
-			ID:           state.ID,
-			WorkflowName: state.WorkflowName,
-			Status:       state.Status,
-			StartedAt:    state.StartedAt,
-			CompletedAt:  state.CompletedAt,
-			Duration:     state.Duration,
-			Error:        state.Error,
+			ID:                state.ID,
+			WorkflowName:      state.WorkflowName,
+			Status:            state.Status,
+			StartedAt:         state.StartedAt,
+			CompletedAt:       state.CompletedAt,
+			Duration:          state.Duration,
+			Error:             state.Error,
+			Metadata:          state.Metadata,
+			Input:             state.Input,
+			DefinitionHash:    state.DefinitionHash,
+			DefinitionVersion: state.DefinitionVersion,
 		})
 	}
-	sort.Slice(summaries, func(i, j int) bool { return summaries[i].ID < summaries[j].ID })
+	sort.Slice(summaries, func(i, j int) bool {
+		left, right := summaries[i], summaries[j]
+		if !left.StartedAt.Equal(right.StartedAt) {
+			if left.StartedAt.IsZero() {
+				return false
+			}
+			if right.StartedAt.IsZero() {
+				return true
+			}
+			return left.StartedAt.Before(right.StartedAt)
+		}
+		return left.ID < right.ID
+	})
 	return summaries, nil
 }
 
@@ -168,6 +184,9 @@ func (s ThreadRunStore) allEvents(ctx context.Context) ([]any, error) {
 // ok=false.
 func WorkflowEventForThreadEvent(event thread.Event) (any, bool, error) {
 	switch event.Kind {
+	case EventQueued:
+		var payload Queued
+		return payload, true, decodeWorkflowThreadEvent(event, &payload)
 	case EventStarted:
 		var payload Started
 		return payload, true, decodeWorkflowThreadEvent(event, &payload)
@@ -186,6 +205,9 @@ func WorkflowEventForThreadEvent(event thread.Event) (any, bool, error) {
 	case EventFailed:
 		var payload Failed
 		return payload, true, decodeWorkflowThreadEvent(event, &payload)
+	case EventCanceled:
+		var payload Canceled
+		return payload, true, decodeWorkflowThreadEvent(event, &payload)
 	default:
 		return nil, false, nil
 	}
@@ -203,6 +225,8 @@ func decodeWorkflowThreadEvent(event thread.Event, target any) error {
 
 func workflowEventRunID(event any) RunID {
 	switch e := event.(type) {
+	case Queued:
+		return e.RunID
 	case Started:
 		return e.RunID
 	case StepStarted:
@@ -214,6 +238,8 @@ func workflowEventRunID(event any) RunID {
 	case Completed:
 		return e.RunID
 	case Failed:
+		return e.RunID
+	case Canceled:
 		return e.RunID
 	default:
 		return ""

@@ -21,6 +21,7 @@ type workflowShowCommandInput struct {
 type workflowStartCommandInput struct {
 	Name  string `command:"arg=name"`
 	Input string `command:"arg=input"`
+	Async bool   `command:"flag=async"`
 }
 
 type workflowRunCommandInput struct {
@@ -30,6 +31,22 @@ type workflowRunCommandInput struct {
 type workflowRunsCommandInput struct {
 	Workflow string             `command:"flag=workflow"`
 	Status   workflow.RunStatus `command:"flag=status"`
+	Limit    int                `command:"flag=limit"`
+	Offset   int                `command:"flag=offset"`
+}
+
+type workflowRerunCommandInput struct {
+	RunID workflow.RunID `command:"arg=run-id"`
+	Async bool           `command:"flag=async"`
+}
+
+type workflowEventsCommandInput struct {
+	RunID workflow.RunID `command:"arg=run-id"`
+}
+
+type workflowCancelCommandInput struct {
+	RunID  workflow.RunID `command:"arg=run-id"`
+	Reason string         `command:"arg=reason"`
 }
 
 func newWorkflowCommand(session *Session) (*command.Tree, error) {
@@ -52,13 +69,16 @@ func newWorkflowCommand(session *Session) (*command.Tree, error) {
 			command.TypedInput[workflowStartCommandInput](),
 			command.Arg("name").Required(),
 			command.Arg("input").Variadic(),
+			command.Flag("async").Describe("Start asynchronously when true"),
 			command.Output(outputDescriptor("harness.workflow.start", "Started workflow run result")),
 		).
 		Sub("runs", command.Typed(h.workflowRunsCommand),
 			command.Description("List workflow runs"),
 			command.TypedInput[workflowRunsCommandInput](),
 			command.Flag("workflow"),
-			command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
+			command.Flag("status").Enum(string(workflow.RunQueued), string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed), string(workflow.RunCanceled)),
+			command.Flag("limit").Describe("Maximum number of runs to return"),
+			command.Flag("offset").Describe("Number of runs to skip"),
 			command.Output(outputDescriptor("harness.workflow.runs", "Workflow run summaries")),
 		).
 		Sub("run", command.Typed(h.workflowRunCommand),
@@ -66,6 +86,26 @@ func newWorkflowCommand(session *Session) (*command.Tree, error) {
 			command.TypedInput[workflowRunCommandInput](),
 			command.Arg("run-id").Required(),
 			command.Output(outputDescriptor("harness.workflow.run", "Workflow run detail")),
+		).
+		Sub("rerun", command.Typed(h.workflowRerunCommand),
+			command.Description("Rerun workflow from a previous run input"),
+			command.TypedInput[workflowRerunCommandInput](),
+			command.Arg("run-id").Required(),
+			command.Flag("async").Describe("Start asynchronously when true"),
+			command.Output(outputDescriptor("harness.workflow.start", "Rerun workflow result")),
+		).
+		Sub("events", command.Typed(h.workflowEventsCommand),
+			command.Description("Show workflow run events"),
+			command.TypedInput[workflowEventsCommandInput](),
+			command.Arg("run-id").Required(),
+			command.Output(outputDescriptor("harness.workflow.events", "Workflow run events")),
+		).
+		Sub("cancel", command.Typed(h.workflowCancelCommand),
+			command.Description("Cancel workflow run"),
+			command.TypedInput[workflowCancelCommandInput](),
+			command.Arg("run-id").Required(),
+			command.Arg("reason").Variadic(),
+			command.Output(outputDescriptor("harness.workflow.cancel", "Workflow cancellation result")),
 		).
 		Build()
 }
@@ -79,7 +119,7 @@ func (h WorkflowCommandHandler) workflowShowCommand(_ context.Context, input wor
 }
 
 func (h WorkflowCommandHandler) workflowStartCommand(ctx context.Context, input workflowStartCommandInput) (command.Result, error) {
-	return h.workflowStart(ctx, input.Name, input.Input)
+	return h.workflowStart(ctx, input.Name, input.Input, input.Async)
 }
 
 func (h WorkflowCommandHandler) workflowRunCommand(ctx context.Context, input workflowRunCommandInput) (command.Result, error) {
@@ -90,8 +130,22 @@ func (h WorkflowCommandHandler) workflowRunsCommand(ctx context.Context, input w
 	filters := WorkflowRunFilters{
 		WorkflowName: input.Workflow,
 		Status:       input.Status,
+		Limit:        input.Limit,
+		Offset:       input.Offset,
 	}
 	return h.workflowRuns(ctx, filters)
+}
+
+func (h WorkflowCommandHandler) workflowRerunCommand(ctx context.Context, input workflowRerunCommandInput) (command.Result, error) {
+	return h.workflowRerun(ctx, input.RunID, input.Async)
+}
+
+func (h WorkflowCommandHandler) workflowEventsCommand(ctx context.Context, input workflowEventsCommandInput) (command.Result, error) {
+	return h.workflowEvents(ctx, input.RunID)
+}
+
+func (h WorkflowCommandHandler) workflowCancelCommand(ctx context.Context, input workflowCancelCommandInput) (command.Result, error) {
+	return h.workflowCancel(ctx, input.RunID, input.Reason)
 }
 
 func (h WorkflowCommandHandler) workflowList() command.Result {
@@ -114,7 +168,7 @@ func (h WorkflowCommandHandler) workflowShow(name string) command.Result {
 	return command.Display(WorkflowDefinitionPayload{Definition: def})
 }
 
-func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName string, input string) (command.Result, error) {
+func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName string, input string, async bool) (command.Result, error) {
 	s := h.Session
 	if s == nil || s.App == nil {
 		return command.Result{}, fmt.Errorf("harness: app is required")
@@ -123,7 +177,11 @@ func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName 
 		return command.NotFound("workflow", workflowName), nil
 	}
 	runID := workflow.NewRunID()
-	result := s.ExecuteWorkflow(ctx, workflowName, input, workflow.WithRunID(runID))
+	if async {
+		s.StartWorkflowWithRunID(ctx, runID, workflowName, input)
+		return command.Display(WorkflowStartPayload{WorkflowName: workflowName, RunID: runID, Status: workflow.RunQueued}), nil
+	}
+	result := s.ExecuteWorkflow(ctx, workflowName, input, workflow.WithRunID(runID), workflow.WithRunMetadata(s.WorkflowRunMetadata("command", []string{"workflow", "start"})))
 	if result.Error != nil {
 		return command.Display(WorkflowStartPayload{WorkflowName: workflowName, RunID: runID, Status: workflow.RunFailed, Error: result.Error.Error()}), nil
 	}
@@ -152,6 +210,56 @@ func (h WorkflowCommandHandler) workflowRun(ctx context.Context, runID workflow.
 	return command.Display(WorkflowRunPayload{State: state}), nil
 }
 
+func (h WorkflowCommandHandler) workflowRerun(ctx context.Context, runID workflow.RunID, async bool) (command.Result, error) {
+	s := h.Session
+	if s == nil {
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
+	}
+	state, ok, err := s.WorkflowRunState(ctx, runID)
+	if err != nil {
+		return command.Result{}, err
+	}
+	if !ok {
+		return command.NotFound("workflow run", string(runID)), nil
+	}
+	input := state.Input.Inline
+	return h.workflowStart(ctx, state.WorkflowName, fmt.Sprint(input), async)
+}
+
+func (h WorkflowCommandHandler) workflowEvents(ctx context.Context, runID workflow.RunID) (command.Result, error) {
+	s := h.Session
+	if s == nil {
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
+	}
+	events, ok, err := s.WorkflowRunEvents(ctx, runID)
+	if err != nil {
+		return command.Result{}, err
+	}
+	if !ok {
+		return command.NotFound("workflow run", string(runID)), nil
+	}
+	return command.Display(WorkflowEventsPayload{RunID: runID, Events: events}), nil
+}
+
+func (h WorkflowCommandHandler) workflowCancel(ctx context.Context, runID workflow.RunID, reason string) (command.Result, error) {
+	s := h.Session
+	if s == nil {
+		return command.Unavailable("workflow runs require a thread-backed session"), nil
+	}
+	if err := s.CancelWorkflow(ctx, runID, reason); err != nil {
+		return command.Display(WorkflowCancelPayload{RunID: runID, Status: workflow.RunFailed, Error: err.Error()}), nil
+	}
+	state, ok, err := s.WorkflowRunState(ctx, runID)
+	if err != nil {
+		return command.Result{}, err
+	}
+	status := workflow.RunCanceled
+	if ok {
+		status = state.Status
+	}
+	return command.Display(WorkflowCancelPayload{RunID: runID, Status: status}), nil
+}
+
 func (h WorkflowCommandHandler) workflowRuns(ctx context.Context, filters WorkflowRunFilters) (command.Result, error) {
 	s := h.Session
 	if s == nil {
@@ -168,9 +276,6 @@ func (h WorkflowCommandHandler) workflowRuns(ctx context.Context, filters Workfl
 }
 
 func filterWorkflowRuns(summaries []workflow.RunSummary, filters WorkflowRunFilters) []workflow.RunSummary {
-	if filters.IsZero() {
-		return summaries
-	}
 	out := make([]workflow.RunSummary, 0, len(summaries))
 	for _, summary := range summaries {
 		if filters.WorkflowName != "" && summary.WorkflowName != filters.WorkflowName {
@@ -180,6 +285,15 @@ func filterWorkflowRuns(summaries []workflow.RunSummary, filters WorkflowRunFilt
 			continue
 		}
 		out = append(out, summary)
+	}
+	if filters.Offset > 0 {
+		if filters.Offset >= len(out) {
+			return nil
+		}
+		out = out[filters.Offset:]
+	}
+	if filters.Limit > 0 && filters.Limit < len(out) {
+		out = out[:filters.Limit]
 	}
 	return out
 }

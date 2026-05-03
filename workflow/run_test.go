@@ -16,6 +16,31 @@ func TestValueRefHelpers(t *testing.T) {
 	require.Equal(t, ValueRef{ID: "secret-output", Redacted: true}, RedactedValue("secret-output"))
 }
 
+func TestProjectorMaterializesQueuedAndCanceledRunState(t *testing.T) {
+	queuedAt := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
+	startedAt := queuedAt.Add(time.Second)
+	canceledAt := startedAt.Add(2 * time.Second)
+	metadata := RunMetadata{SessionID: "session_1", AgentName: "coder", ThreadID: "thread_1", BranchID: "main", Trigger: "command", CommandPath: []string{"workflow", "start"}}
+	events := []any{
+		Queued{RunID: "run_1", WorkflowName: "slow", Metadata: metadata, Input: InlineValue("hello"), DefinitionHash: "hash", DefinitionVersion: "v1", At: queuedAt},
+		Started{RunID: "run_1", WorkflowName: "slow", At: startedAt},
+		Canceled{RunID: "run_1", WorkflowName: "slow", Reason: "stop", At: canceledAt},
+	}
+
+	state, ok, err := Projector{}.ProjectRun(events, "run_1")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, RunCanceled, state.Status)
+	require.Equal(t, startedAt, state.StartedAt)
+	require.Equal(t, canceledAt, state.CompletedAt)
+	require.Equal(t, 2*time.Second, state.Duration)
+	require.Equal(t, "stop", state.Error)
+	require.Equal(t, metadata, state.Metadata)
+	require.Equal(t, InlineValue("hello"), state.Input)
+	require.Equal(t, "hash", state.DefinitionHash)
+	require.Equal(t, "v1", state.DefinitionVersion)
+}
+
 func TestProjectorMaterializesSuccessfulRunState(t *testing.T) {
 	startedAt := time.Date(2026, 5, 2, 13, 0, 0, 0, time.UTC)
 	completedAt := startedAt.Add(1500 * time.Millisecond)
