@@ -515,33 +515,55 @@ Verification:
 go test ./tool/... ./toolmw/... ./tools/shell/... ./workflow/...
 ```
 
-## Milestone 9 — Trigger interface and interval trigger
+## Milestone 9 — Harness daemon/service mode and triggers
 
-Goal: support background/event-driven work while reusing harness sessions.
+Goal: support long-running background/event-driven work while reusing harness sessions.
+
+This milestone is intentionally before concrete datasource expansion. Scheduled/background execution was one of the original refactor drivers, and it should prove the harness process/session lifecycle before more datasource-specific abstractions are added.
 
 Current state:
 
-- No generic trigger abstraction yet.
-- Harness/session APIs from prior milestones should provide a target.
+- `harness.Service` and `harness.Session` already provide session open/resume/list/close, command execution, workflow execution, and event subscription seams.
+- No generic trigger abstraction exists yet.
+- The terminal CLI currently hosts a harness session for one-shot and REPL usage, but there is no service/daemon command shape or REPL job/trigger control yet.
 
 Tasks:
 
-1. Add `trigger` package.
-2. Define minimal trigger/sink interfaces.
-3. Implement interval trigger as first proof.
-4. Route trigger events to harness sessions or workflows.
-5. Persist/observe trigger-caused runs with source metadata.
+1. Treat daemon as a harness deployment mode, not a separate product concept.
+2. Use `agentsdk serve` as the long-running host command.
+3. Add a slim daemon package wrapper above `harness.Service` for process/config/trigger ownership while keeping harness as the runtime/session owner.
+4. Add service-like lifecycle coverage for long-running harness/daemon hosts.
+5. Define trigger source and trigger/job sink interfaces.
+6. Define config for trigger targets, session mode, interval, and input/prompt.
+7. Implement interval trigger as first proof.
+8. Route interval triggers to harness sessions using explicit session modes: shared, trigger-owned, ephemeral, or resume-or-create.
+9. Prefer workflow targets for scheduled work; support prompt targets for simple repeated prompts and direct action targets only where policy/context are explicit.
+10. Enforce one active run per trigger by default; skip overlapping fires with no overlap-policy config initially.
+11. Persist/observe trigger-caused work with source metadata.
+12. Expose trigger/job inspection through daemon APIs and normal REPL slash commands such as `/triggers` or `/jobs`.
+13. Keep trigger implementation separate from channels; daemon mode is the same host without the main interactive agent I/O.
+14. Defer datasource resource/runtime expansion until daemon and triggers are proven.
 
 Acceptance criteria:
 
+- A service-like harness/daemon host can run without an interactive REPL.
 - A trigger can start/resume work through harness.
-- Trigger source metadata appears in thread/runtime events.
-- Trigger implementation is separate from channels.
+- An interval trigger can send a prompt into a configured target session mode.
+- A trigger can start a workflow with source metadata.
+- A normal `agentsdk run` REPL can start/list/stop repeating jobs in its current harness/session.
+- Trigger source metadata appears in thread/runtime/workflow events where persistence is available.
+- Trigger implementation is separate from terminal and HTTP channels.
+- Datasource work remains deferred unless a concrete case study needs it.
+
+Open-question checkpoint:
+
+- See [`docs/14_DAEMON_TRIGGER_SCHEDULING.md`](14_DAEMON_TRIGGER_SCHEDULING.md) for settled decisions and remaining implementation notes around CLI shape, daemon wrapper, session modes, targets, config, persistence, overlap, safety, observability, and REPL jobs.
 
 Verification:
 
 ```bash
 go test ./trigger/... ./harness/... ./workflow/...
+go test ./terminal/cli/... ./cmd/agentsdk/...
 ```
 
 ## Milestone 10 — Support-assistant case study validation
@@ -788,8 +810,10 @@ The root [`ROADMAP.md`](../ROADMAP.md) is the short contributor backlog. This fi
 
 The next practical sequence should be:
 
-1. split `plugins/localcli` into smaller named plugins only when that deletes use-case ambiguity rather than adding indirection;
-2. continue harness/channel cleanup only where it deletes or collapses remaining setup paths now that generic load mechanics are behind harness;
-3. keep new first-party composition named by concrete use case or environment.
+1. align the tasklist around daemon/service mode and trigger scheduling before touching datasource work;
+2. prove service-like harness lifecycle and interval-triggered agent prompts through small tests;
+3. add workflow trigger support only after prompt triggers work;
+4. continue harness/channel cleanup only where it deletes or collapses remaining setup paths now that generic load mechanics are behind harness;
+5. defer concrete datasource semantics until daemon/triggers and one concrete datasource case study justify the abstraction.
 
-This keeps the architecture grounded in working code while paying down the current default-composition smell before adding more feature surface.
+This keeps the architecture grounded in working code while addressing the original daemon/trigger motivation before adding fresh datasource surface area.

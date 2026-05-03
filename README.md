@@ -470,6 +470,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/11_WORKFLOW_LIFECYCLE.md`](docs/11_WORKFLOW_LIFECYCLE.md) — async workflow lifecycle, run metadata, validation, and command UX decisions.
 - [`docs/12_WORKFLOW_EXECUTION_SEMANTICS.md`](docs/12_WORKFLOW_EXECUTION_SEMANTICS.md) — workflow DAG scheduling, parallelism, retry/timeout/error policy, mapping, and replay constraints.
 - [`docs/13_ACTION_TOOL_CONVERGENCE.md`](docs/13_ACTION_TOOL_CONVERGENCE.md) — `action.Action` / `tool.Tool` boundaries, adapter policy, intent normalization, and action result contracts.
+- [`docs/14_DAEMON_TRIGGER_SCHEDULING.md`](docs/14_DAEMON_TRIGGER_SCHEDULING.md) — daemon/service mode, trigger scheduling checkpoint, and open questions.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 

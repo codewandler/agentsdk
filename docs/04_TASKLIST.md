@@ -205,32 +205,46 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Add action-to-command adapters only where they reduce boilerplate.
 - [x] Add action-to-tool adapters only where they are safe and explicit.
 
-## 11. Datasource work
+## 11. Harness daemon/service mode
 
-- [ ] Flesh out datasource resource format.
-- [ ] Add datasource config schemas.
-- [ ] Add datasource record/item schemas.
-- [ ] Add datasource sync semantics.
-- [ ] Add datasource checkpoint semantics.
-- [ ] Add standard datasource action refs: fetch.
-- [ ] Add standard datasource action refs: list.
-- [ ] Add standard datasource action refs: search.
-- [ ] Add standard datasource action refs: sync.
-- [ ] Add standard datasource action refs: map.
-- [ ] Add standard datasource action refs: transform.
-- [ ] Add datasource event model.
-- [ ] Add datasource thread/checkpoint persistence where useful.
-- [ ] Add datasource discovery in `agentdir`.
-- [ ] Add datasource plugin facets.
-- [ ] Add filesystem corpus datasource example.
-- [ ] Add git repository datasource example.
-- [ ] Add web/API datasource example.
-- [ ] Connect datasources cleanly to workflows via actions.
+- [ ] Use `agentsdk serve` as the daemon/service CLI command shape.
+- [ ] Define daemon as a harness deployment mode, not a separate product concept.
+- [ ] Add a slim daemon package wrapper above `harness.Service` for process/config/trigger ownership.
+- [ ] Keep `harness.Service` as the runtime/session owner; do not create a second app/runtime/plugin system.
+- [ ] Add stable service lifecycle API for long-running hosts.
+- [ ] Add session registry behavior suitable for daemon mode.
+- [ ] Add persisted session open/resume behavior for daemon-owned sessions.
+- [ ] Add graceful shutdown semantics.
+- [ ] Add health/status inspection API.
+- [ ] Add daemon/session storage path conventions.
+- [ ] Add daemon-readable config/resource loading conventions.
+- [ ] Add CLI smoke coverage for service-like harness lifecycle without starting an interactive REPL.
+- [ ] Document daemon/service conventions.
 
-## 12. Resource/app manifests
+## 12. Triggers and scheduling
+
+- [ ] Define `trigger` package boundary.
+- [ ] Define trigger source interface.
+- [ ] Define trigger/job sink interface targeting harness sessions/workflows.
+- [ ] Define config model for trigger targets, session mode, interval, and input/prompt.
+- [ ] Define trigger event metadata: trigger ID, type, source, schedule, target session, session mode, target agent/workflow/action, input/prompt.
+- [ ] Implement interval trigger as first proof.
+- [ ] Support configurable session modes: shared, trigger-owned, ephemeral, resume-or-create.
+- [ ] Support scheduled agent prompt through a workflow or direct prompt target.
+- [ ] Support scheduled workflow start as the preferred target model.
+- [ ] Allow direct action target only where policy/context are explicit; prefer workflow target first.
+- [ ] Enforce one active run per trigger by default; skip overlapping fires with no overlap-policy config initially.
+- [ ] Persist trigger-caused run/session metadata.
+- [ ] Publish trigger/job events through session/harness subscriptions.
+- [ ] Add cancellation/disable semantics for running triggers/jobs.
+- [ ] Add daemon API for listing active triggers/jobs and inspecting last fire/error.
+- [ ] Add REPL commands such as `/triggers` or `/jobs` so normal `agentsdk run` can start/manage repeating work in the current harness/session.
+- [ ] Add CLI smoke coverage for interval-triggered prompt/workflow execution.
+- [ ] Document trigger/scheduling conventions.
+
+## 13. Resource/app manifests
 
 - [ ] Extend resource bundles for workflows where still incomplete.
-- [ ] Extend resource bundles for datasources.
 - [ ] Extend resource bundles for actions.
 - [ ] Extend resource bundles for plugin refs where still incomplete.
 - [ ] Extend resource bundles for command tree descriptors if needed.
@@ -238,15 +252,15 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add validation for manifest plugin refs.
 - [ ] Improve diagnostics for invalid resources.
 - [ ] Add discover output for workflows.
-- [ ] Add discover output for datasources.
 - [ ] Add discover output for actions.
 - [ ] Add discover output for plugins.
 - [ ] Add discover output for command descriptors.
 - [ ] Add resource-only app example.
 - [ ] Add hybrid app example.
 - [ ] Keep compatibility roots only where intentionally supported.
+- [ ] Leave datasource resource expansion deferred until daemon/triggers and a concrete datasource case study are ready.
 
-## 13. Plugin/contribution model
+## 14. Plugin/contribution model
 
 - [ ] Keep one conceptual plugin/contribution model.
 - [ ] Do not add `harness.Plugin`.
@@ -259,7 +273,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Keep first-party plugins purpose-named.
 - [ ] Add new named plugins only for real use cases/environments.
 
-## 14. Terminal CLI polish
+## 15. Terminal CLI polish
 
 - [ ] Keep terminal as channel/presentation/CLI-policy boundary.
 - [ ] Reduce `terminal/cli.Load` further only if it deletes duplication.
@@ -275,7 +289,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add discover/inspect UX for command descriptors.
 - [ ] Add workflow UX polish after async lifecycle exists.
 
-## 15. HTTP/SSE / other channels
+## 16. HTTP/SSE / other channels
 
 - [ ] Define channel API over harness/session.
 - [ ] Use `Session.ExecuteCommand` for command execution.
@@ -288,7 +302,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add event stream endpoint.
 - [ ] Avoid duplicating terminal slash parsing as canonical API.
 
-## 16. Context system follow-ups
+## 17. Context system follow-ups
 
 - [ ] Keep `agentcontext.Manager` as context render/replay model.
 - [ ] Clarify app-level context provider lifecycle.
@@ -301,7 +315,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add context provider descriptors if needed.
 - [ ] Ensure cache policies are explicit and tested.
 
-## 17. Capability system follow-ups
+## 18. Capability system follow-ups
 
 - [ ] Keep planner as dogfood capability.
 - [ ] Clarify capability registry ownership.
@@ -312,7 +326,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Improve capability replay tests.
 - [ ] Decide how capabilities attach through harness/session lifecycle.
 
-## 18. Skill system follow-ups
+## 19. Skill system follow-ups
 
 - [ ] Keep skill repository construction in agent for now.
 - [ ] Revisit whether skill repository/state should move outward when session lifecycle clarifies.
@@ -322,7 +336,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add discover output for skills/references.
 - [ ] Improve skill context rendering metadata.
 
-## 19. Safety / risk policy
+## 20. Safety / risk policy
 
 - [ ] Do not migrate risk logging opportunistically.
 - [ ] Design safety policy model separately.
@@ -334,7 +348,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add tests for approval policy enforcement.
 - [ ] Add audit trail for approved/rejected operations.
 
-## 20. Persistence / thread model
+## 21. Persistence / thread model
 
 - [ ] Keep thread as durable event foundation.
 - [ ] Improve workflow event persistence indexing only if needed.
@@ -349,7 +363,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add event replay tests for skills.
 - [ ] Add event replay tests for usage.
 
-## 21. Compaction / memory
+## 22. Compaction / memory
 
 - [ ] Keep current compaction APIs stable enough for dogfood.
 - [ ] Reduce writer output from compaction after displayable/event model exists.
@@ -358,7 +372,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add tests for auto-compaction with session/thread persistence.
 - [ ] Expose compaction state through session/harness if needed.
 
-## 22. Discover / introspection
+## 23. Discover / introspection
 
 - [ ] Keep `agentsdk discover` as debugging surface.
 - [ ] Add command descriptors to discover output.
@@ -369,7 +383,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add capability info if needed.
 - [ ] Add machine-readable discover output.
 
-## 23. Builder product
+## 24. Builder product
 
 - [ ] Design `agentsdk build`.
 - [ ] Make builder dogfood agentsdk itself.
@@ -389,7 +403,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Add validation loop: generate, test, inspect diagnostics, refine.
 - [ ] Use workflow engine for builder steps once workflow lifecycle is stronger.
 
-## 24. Examples / dogfood apps
+## 25. Examples / dogfood apps
 
 - [ ] Update local quickstart example.
 - [ ] Add workflow example.
@@ -402,7 +416,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Remove stale examples referencing old APIs.
 - [ ] Ensure every example passes `go test ./...`.
 
-## 25. Release readiness
+## 26. Release readiness
 
 - [ ] Decide pre-1.0 public API boundaries.
 - [ ] Mark unstable packages/docs clearly.
@@ -420,12 +434,36 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Tag an internal dogfood checkpoint.
 - [ ] Decide external release cadence.
 
-## 26. Usage readiness gates
+## 27. Usage readiness gates
 
 - [ ] Local/internal dogfooding through `agentsdk run` is confirmed manually.
 - [ ] Default internal SDK path is confirmed by one end-to-end harness/local CLI test.
 - [ ] Broader pre-1.0 usage is documented with quickstart and examples.
 - [ ] More stable public-facing use waits for displayable/output design, async workflow lifecycle, and better examples.
+
+## 28. Datasource work — deferred
+
+- [ ] Revisit datasource work after daemon/service mode and trigger scheduling are proven.
+- [ ] Pick one concrete datasource case study before expanding abstractions.
+- [ ] Flesh out datasource resource format.
+- [ ] Add datasource config schemas.
+- [ ] Add datasource record/item schemas.
+- [ ] Add datasource sync semantics.
+- [ ] Add datasource checkpoint semantics.
+- [ ] Add standard datasource action refs: fetch.
+- [ ] Add standard datasource action refs: list.
+- [ ] Add standard datasource action refs: search.
+- [ ] Add standard datasource action refs: sync.
+- [ ] Add standard datasource action refs: map.
+- [ ] Add standard datasource action refs: transform.
+- [ ] Add datasource event model.
+- [ ] Add datasource thread/checkpoint persistence where useful.
+- [ ] Add datasource discovery in `agentdir` only where current discovery is insufficient.
+- [ ] Add datasource plugin facets only if current plugin facets are insufficient.
+- [ ] Add filesystem corpus datasource example.
+- [ ] Add git repository datasource example.
+- [ ] Add web/API datasource example.
+- [ ] Connect datasources cleanly to workflows via actions.
 
 ## Recommended next sequence
 
