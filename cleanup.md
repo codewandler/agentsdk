@@ -69,10 +69,12 @@
   - Deleted generic `tools/standard` and `plugins/standard`; local terminal composition now lives in `plugins/localcli`.
   - Added context-aware `app.PluginFactory` so hosts can resolve named plugin refs from `context.Context` plus config without introducing a separate profile system.
   - Moved reusable terminal session loading into harness:
-    - `harness.LoadSession` owns app/default-agent/service/session construction and applies grouped app/agent/session load settings, including source API, model policy, and resume-session paths.
+    - `harness.LoadSession` owns app/default-agent/service/session construction and applies grouped app/agent/session load settings, including source API, model policy, resume-session paths, and loaded plugin application.
+    - `harness.ResolveAgentLoadConfig` owns manifest/CLI model-policy overlay and decoded source API application.
+    - `harness.ResolvePlugins` owns generic plugin-ref mechanics: ordered defaults/manifest/explicit refs, trimming, dedupe, config forwarding, and factory invocation.
     - `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics while the local CLI plugin still owns the fallback spec.
     - `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
-    - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy.
+    - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy: CLI flag/config decoding, local CLI default plugin policy, terminal UI adapters, debug-message output, risk-log presentation, and fallback spec selection.
   - Moved workflow thread recording out of `app.App` and into `harness.Session.ExecuteWorkflow`; app workflow helpers now stay registry/executor-focused while session live-thread persistence is owned by harness.
   - Removed legacy app-level workflow command shims (`RegisterWorkflowCommand` / `WorkflowCommand`); workflow slash commands now live on the harness command tree.
 
@@ -81,8 +83,8 @@
     - session lifecycle
     - context provider lifecycle
     - capability registry/session ownership
-  - Revisit `terminal/cli.Load`:
-    - continue moving shared resource/app/session setup toward harness loading helpers when it improves ownership boundaries
+  - Revisit `terminal/cli.Load` only when a slice deletes or clearly collapses remaining setup paths:
+    - most generic app/agent/session/plugin load mechanics now live in harness
     - keep terminal as the channel boundary for CLI flags, terminal fallback policy, terminal UI adapters, debug output, and experiments
   - Revisit payload display / output publication design later, as a designed channel/displayable model rather than opportunistic cleanup:
     - model user-visible output as structured displayable events/publications

@@ -350,7 +350,7 @@ Goal: consolidate current app/session setup without rewriting runtime.
 
 Current state:
 
-- `terminal/cli.Load` still resolves terminal/CLI policy, resources, plugin refs, session flags, and channel adapters, but reusable app/default-agent/session construction is moving into `harness.LoadSession` and related helpers.
+- `terminal/cli.Load` resolves terminal/CLI policy, resources, plugin defaults/flags, session flags, and channel adapters, while reusable app/default-agent/session/plugin loading mechanics now live in `harness.LoadSession` and related helpers.
 - `app.App` registers resources/plugins and instantiates agents.
 - `agent.Instance` owns runtime/session setup.
 - `harness.Service` and `harness.Session` wrap the existing app/default-agent stack.
@@ -374,7 +374,7 @@ Tasks:
      emits runner events
    ```
 
-3. Move the reusable parts of `terminal/cli.Load` toward harness loading functions. In progress: `harness.LoadSession` owns app/default-agent/service/session construction and grouped app/agent/session load settings such as source API, model policy, and resume-session paths, `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics, and `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
+3. Move the reusable parts of `terminal/cli.Load` toward harness loading functions. ✅ `harness.LoadSession` owns app/default-agent/service/session construction, loaded plugin application, and grouped app/agent/session load settings such as source API, model policy, and resume-session paths; `harness.ResolveAgentLoadConfig` owns model-policy/source-API load composition; `harness.ResolvePlugins` owns generic default/manifest/explicit plugin-ref resolution mechanics; `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics; and `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
 4. Keep `terminal/cli.Load` as compatibility wrapper initially. ✅
 5. Add session IDs and thread/session store handling through harness APIs where possible. ✅ `Session.Info`, `Session.AgentName`, `Session.ThreadID`, `/session info`, and workflow read APIs exist
 
@@ -401,7 +401,7 @@ Goal: make the existing terminal stack the first implementation of a channel bou
 
 Current state:
 
-- Terminal code works and now delegates more reusable app/default-agent/session setup to harness while keeping CLI-specific policy in `terminal/cli.Load`.
+- Terminal code works and now delegates reusable app/default-agent/session/plugin setup to harness while keeping CLI-specific policy in `terminal/cli.Load`.
 - Runner events already map well to terminal rendering, but direct writer plumbing remains a transitional compatibility seam.
 - Terminal one-shot and REPL sends route through `harness.Session`, which lets session-scoped commands such as `/workflow runs` use harness APIs.
 
@@ -789,7 +789,7 @@ The root [`ROADMAP.md`](../ROADMAP.md) is the short contributor backlog. This fi
 The next practical sequence should be:
 
 1. split `plugins/localcli` into smaller named plugins only when that deletes use-case ambiguity rather than adding indirection;
-2. continue harness/channel cleanup now that default composition is no longer hidden in generic packages;
+2. continue harness/channel cleanup only where it deletes or collapses remaining setup paths now that generic load mechanics are behind harness;
 3. keep new first-party composition named by concrete use case or environment.
 
 This keeps the architecture grounded in working code while paying down the current default-composition smell before adding more feature surface.
