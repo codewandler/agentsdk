@@ -236,7 +236,7 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 		)
 	}
 	if appCfg.Verbose {
-		opts = append(opts, app.WithAgentVerbose(true))
+		opts = append(opts, app.WithAgentOptions(agent.WithVerbose(true)))
 	}
 	if appCfg.ToolTimeout > 0 {
 		opts = append(opts, app.WithAgentToolTimeout(appCfg.ToolTimeout))

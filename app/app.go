@@ -220,10 +220,6 @@ func WithAgentSessionStoreDir(dir string) Option {
 	return WithAgentOptions(agent.WithSessionStoreDir(dir))
 }
 
-func WithAgentVerbose(verbose bool) Option {
-	return WithAgentOptions(agent.WithVerbose(verbose))
-}
-
 func WithAgentOutput(out io.Writer) Option {
 	return WithAgentOptions(agent.WithOutput(out))
 }
