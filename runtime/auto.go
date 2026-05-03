@@ -18,6 +18,7 @@ func DefaultAutoOptions(model string, sourceAPI adapt.ApiKind) adapterconfig.Aut
 		UseModelDB:        true,
 		DynamicModels:     true,
 		SourceAPI:         sourceAPI,
+		ModelDBAliases:    defaultModelDBAliases(),
 	}
 	if model != "" {
 		opts.Intents = []adapterconfig.AutoIntent{{
@@ -26,6 +27,13 @@ func DefaultAutoOptions(model string, sourceAPI adapt.ApiKind) adapterconfig.Aut
 		}}
 	}
 	return opts
+}
+
+func defaultModelDBAliases() []adapterconfig.ModelDBAliasConfig {
+	return []adapterconfig.ModelDBAliasConfig{
+		{Name: "opus", ServiceID: "anthropic", WireModelID: "claude-opus-4-6"},
+		{Name: "opus", ServiceID: "openrouter", WireModelID: "anthropic/claude-opus-4.6"},
+	}
 }
 
 func AutoMuxClient(model string, sourceAPI adapt.ApiKind, autoMux AutoClientFunc) (adapterconfig.AutoResult, error) {

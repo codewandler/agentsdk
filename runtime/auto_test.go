@@ -18,6 +18,16 @@ func TestDefaultAutoOptionsUsesRequestedModelIntent(t *testing.T) {
 	require.True(t, opts.UseModelDB)
 	require.True(t, opts.DynamicModels)
 	require.Equal(t, adapt.ApiOpenAIResponses, opts.SourceAPI)
+	require.Contains(t, opts.ModelDBAliases, adapterconfig.ModelDBAliasConfig{
+		Name:        "opus",
+		ServiceID:   "anthropic",
+		WireModelID: "claude-opus-4-6",
+	})
+	require.Contains(t, opts.ModelDBAliases, adapterconfig.ModelDBAliasConfig{
+		Name:        "opus",
+		ServiceID:   "openrouter",
+		WireModelID: "anthropic/claude-opus-4.6",
+	})
 	require.Len(t, opts.Intents, 1)
 	require.Equal(t, "haiku", opts.Intents[0].Name)
 	require.Equal(t, adapt.ApiOpenAIResponses, opts.Intents[0].SourceAPI)
