@@ -1,0 +1,15 @@
+name: session-summary
+path: [session, summary]
+description: Run the resource-defined session summary workflow.
+input_schema:
+  type: object
+  properties:
+    input:
+      type: string
+      description: Prompt input for the workflow.
+target:
+  workflow: session_summary
+  input: "{{ .input }}"
+policy:
+  user_callable: true
+  agent_callable: true

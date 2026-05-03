@@ -244,21 +244,21 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 13. Resource/app manifests
 
-- [ ] Extend resource bundles for workflows where still incomplete.
-- [ ] Extend resource bundles for actions.
-- [ ] Extend resource bundles for plugin refs where still incomplete.
-- [ ] Extend resource bundles for command tree descriptors if needed.
-- [ ] Improve app manifest plugin config.
-- [ ] Add validation for manifest plugin refs.
-- [ ] Improve diagnostics for invalid resources.
-- [ ] Add discover output for workflows.
-- [ ] Add discover output for actions.
-- [ ] Add discover output for plugins.
-- [ ] Add discover output for command descriptors.
-- [ ] Add resource-only app example.
-- [ ] Add hybrid app example.
-- [ ] Keep compatibility roots only where intentionally supported.
-- [ ] Leave datasource resource expansion deferred until daemon/triggers and a concrete datasource case study are ready.
+- [x] Extend resource bundles for workflows where still incomplete.
+- [x] Extend resource bundles for actions.
+- [x] Extend resource bundles for plugin refs where still incomplete.
+- [x] Extend resource bundles for structured command YAML resources in `commands/`.
+- [x] Improve app manifest plugin config.
+- [x] Add validation for manifest plugin refs.
+- [x] Improve diagnostics for invalid resources.
+- [x] Add discover output for workflows.
+- [x] Add discover output for actions.
+- [x] Add discover output for plugins.
+- [x] Add discover output for structured command resources.
+- [x] Add resource-only app example.
+- [x] Add hybrid app example.
+- [x] Keep compatibility roots only where intentionally supported.
+- [x] Leave datasource resource expansion deferred until daemon/triggers and a concrete datasource case study are ready.
 
 ## 14. Plugin/contribution model
 

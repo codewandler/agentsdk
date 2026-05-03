@@ -1,0 +1,12 @@
+id: hourly-summary
+description: Periodically ask for a short maintenance summary
+source:
+  interval: 1h
+  immediate: false
+target:
+  workflow: session_summary
+  input: Summarize the current repository maintenance state in three bullets.
+session:
+  mode: trigger_owned
+policy:
+  overlap: skip_if_running

@@ -117,6 +117,9 @@ func serveCmd() *cobra.Command {
 			if sessionName != "" && loaded.Session != nil {
 				loaded.Session.Name = sessionName
 			}
+			if err := addResourceTriggers(cmd.Context(), host, loaded.Resources.Bundle.Triggers, loaded.AgentName); err != nil {
+				return err
+			}
 			if triggerInterval > 0 {
 				rule, err := serveTriggerRule(triggerInterval, triggerWorkflow, triggerPrompt, triggerInput, agentName)
 				if err != nil {
@@ -211,6 +214,102 @@ func serveTriggerRule(every time.Duration, workflowName, prompt, input, agentNam
 		Session: trigger.SessionPolicy{Mode: trigger.SessionTriggerOwned, AgentName: agentName},
 		Policy:  trigger.JobPolicy{Overlap: trigger.OverlapSkipIfRunning},
 	}, nil
+}
+
+func addResourceTriggers(ctx context.Context, host *daemon.Host, contributions []resource.TriggerContribution, agentName string) error {
+	for _, contribution := range contributions {
+		rule, err := triggerRuleFromContribution(contribution, agentName)
+		if err != nil {
+			return err
+		}
+		if err := host.AddTrigger(ctx, rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func triggerRuleFromContribution(contribution resource.TriggerContribution, agentName string) (trigger.Rule, error) {
+	def := contribution.Definition
+	sourceDef := mapFromAny(def["source"])
+	interval := stringFromMap(sourceDef, "interval")
+	if interval == "" {
+		return trigger.Rule{}, fmt.Errorf("trigger %q: source.interval is required", contribution.Name)
+	}
+	every, err := time.ParseDuration(interval)
+	if err != nil {
+		return trigger.Rule{}, fmt.Errorf("trigger %q: parse source.interval: %w", contribution.Name, err)
+	}
+	targetDef := mapFromAny(def["target"])
+	target := trigger.Target{Input: targetDef["input"], IncludeEvent: boolFromMap(targetDef, "include_event")}
+	if workflowName := stringFromMap(targetDef, "workflow"); workflowName != "" {
+		target.Kind = trigger.TargetWorkflow
+		target.WorkflowName = workflowName
+	} else if prompt := stringFromMap(targetDef, "prompt"); prompt != "" {
+		target.Kind = trigger.TargetAgentPrompt
+		target.Prompt = prompt
+	} else if actionName := stringFromMap(targetDef, "action"); actionName != "" {
+		target.Kind = trigger.TargetAction
+		target.ActionName = actionName
+	} else {
+		return trigger.Rule{}, fmt.Errorf("trigger %q: target.workflow or target.prompt is required", contribution.Name)
+	}
+	target.AgentName = firstNonEmpty(stringFromMap(targetDef, "agent"), agentName)
+	sessionDef := mapFromAny(def["session"])
+	mode := trigger.SessionMode(stringFromMap(sessionDef, "mode"))
+	if mode == "" {
+		mode = trigger.SessionTriggerOwned
+	}
+	policyDef := mapFromAny(def["policy"])
+	overlap := trigger.OverlapPolicy(stringFromMap(policyDef, "overlap"))
+	if overlap == "" {
+		overlap = trigger.OverlapSkipIfRunning
+	}
+	ruleID := contribution.Name
+	return trigger.Rule{
+		ID:      trigger.RuleID(ruleID),
+		Source:  trigger.IntervalSource{SourceID: trigger.SourceID(ruleID), Every: every, Immediate: boolFromMap(sourceDef, "immediate")},
+		Matcher: trigger.All{trigger.EventType(trigger.EventTypeInterval), trigger.SourceIs(trigger.SourceID(ruleID))},
+		Target:  target,
+		Session: trigger.SessionPolicy{Mode: mode, Name: stringFromMap(sessionDef, "name"), AgentName: firstNonEmpty(stringFromMap(sessionDef, "agent"), target.AgentName)},
+		Policy:  trigger.JobPolicy{Overlap: overlap, Timeout: durationFromMap(policyDef, "timeout")},
+	}, nil
+}
+
+func mapFromAny(raw any) map[string]any {
+	m, _ := raw.(map[string]any)
+	if m == nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+func stringFromMap(m map[string]any, key string) string {
+	value, _ := m[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func boolFromMap(m map[string]any, key string) bool {
+	value, _ := m[key].(bool)
+	return value
+}
+
+func durationFromMap(m map[string]any, key string) time.Duration {
+	value := stringFromMap(m, key)
+	if value == "" {
+		return 0
+	}
+	d, _ := time.ParseDuration(value)
+	return d
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func toolCmd() *cobra.Command {
@@ -622,6 +721,10 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 	}
 	printDiscoveryDataSources(out, resolved.Bundle.DataSources)
 	printDiscoveryWorkflows(out, resolved.Bundle.Workflows)
+	printDiscoveryActions(out, resolved.Bundle.Actions)
+	printDiscoveryTriggers(out, resolved.Bundle.Triggers)
+	printDiscoveryStructuredCommands(out, resolved.Bundle.CommandResources)
+	printDiscoveryPlugins(out, resolved.ManifestPluginRefs())
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Skill sources:")
 	skillSources := imported.SkillSources()
@@ -681,6 +784,70 @@ func printDiscoveryWorkflows(out discoveryWriter, workflows []resource.WorkflowC
 	}
 	for _, workflow := range workflows {
 		fmt.Fprintf(out, "  %s  %s  %s\n", workflow.Name, displayDescription(workflow.Description), workflow.ID)
+	}
+}
+
+func printDiscoveryActions(out discoveryWriter, actions []resource.ActionContribution) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Actions:")
+	if len(actions) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, action := range actions {
+		kind := action.Kind
+		if kind == "" {
+			kind = "declarative"
+		}
+		fmt.Fprintf(out, "  %s  %s  kind=%s  %s\n", action.Name, displayDescription(action.Description), kind, action.ID)
+	}
+}
+
+func printDiscoveryTriggers(out discoveryWriter, triggers []resource.TriggerContribution) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Triggers:")
+	if len(triggers) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, item := range triggers {
+		fmt.Fprintf(out, "  %s  %s  %s\n", item.Name, displayDescription(item.Description), item.ID)
+	}
+}
+
+func printDiscoveryStructuredCommands(out discoveryWriter, commands []resource.CommandContribution) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Structured commands:")
+	if len(commands) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, item := range commands {
+		target := string(item.Target.Kind)
+		targetName := item.Target.Workflow
+		if targetName == "" {
+			targetName = item.Target.Action
+		}
+		if targetName == "" {
+			targetName = "prompt"
+		}
+		fmt.Fprintf(out, "  /%s  %s  target=%s:%s  %s\n", strings.Join(item.CommandPath, " "), displayDescription(item.Description), target, targetName, item.ID)
+	}
+}
+
+func printDiscoveryPlugins(out discoveryWriter, plugins []agentdir.PluginRef) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Plugins:")
+	if len(plugins) == 0 {
+		fmt.Fprintln(out, "  none")
+		return
+	}
+	for _, plugin := range plugins {
+		config := ""
+		if len(plugin.Config) > 0 {
+			config = "  config=true"
+		}
+		fmt.Fprintf(out, "  %s%s\n", plugin.Name, config)
 	}
 }
 

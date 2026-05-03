@@ -37,7 +37,16 @@ You are a coder.`),
 			Data: []byte("name: docs\ndescription: Documentation corpus\nkind: corpus\nconfig:\n  path: docs\n"),
 		},
 		".agents/workflows/sync-docs.yaml": {
-			Data: []byte("name: sync_docs\ndescription: Sync documentation\nsteps:\n  - id: fetch\n    action: docs.fetch\n"),
+			Data: []byte("name: sync_docs\ndescription: Sync documentation\nversion: v1\nsteps:\n  - id: fetch\n    action: docs.fetch\n    input_map:\n      query: input.query\n    retry:\n      max_attempts: 2\n      backoff: 1s\n    timeout: 5s\n    error_policy: continue\n"),
+		},
+		".agents/actions/echo.yaml": {
+			Data: []byte("name: echo\ndescription: Echo action\nkind: builtin\n"),
+		},
+		".agents/triggers/hourly.yaml": {
+			Data: []byte("id: hourly\ndescription: Hourly trigger\nsource:\n  interval: 1h\ntarget:\n  workflow: sync_docs\n"),
+		},
+		".agents/commands/deploy.yaml": {
+			Data: []byte("name: deploy\ndescription: Deploy command\npath: [deploy]\ntarget:\n  workflow: sync_docs\n"),
 		},
 	}
 
@@ -69,6 +78,16 @@ You are a coder.`),
 	require.Equal(t, "sync_docs", bundle.Workflows[0].Name)
 	require.Equal(t, "Sync documentation", bundle.Workflows[0].Description)
 	require.Equal(t, "agents:embedded:sync_docs#.agents/workflows/sync-docs.yaml", bundle.Workflows[0].ID)
+	require.Len(t, bundle.Actions, 1)
+	require.Equal(t, "echo", bundle.Actions[0].Name)
+	require.Equal(t, "builtin", bundle.Actions[0].Kind)
+	require.Len(t, bundle.Triggers, 1)
+	require.Equal(t, "hourly", bundle.Triggers[0].Name)
+	require.Equal(t, "1h", bundle.Triggers[0].Definition["source"].(map[string]any)["interval"])
+	require.Len(t, bundle.CommandResources, 1)
+	require.Equal(t, []string{"deploy"}, bundle.CommandResources[0].CommandPath)
+	require.Equal(t, resource.CommandTargetWorkflow, bundle.CommandResources[0].Target.Kind)
+	require.Equal(t, "sync_docs", bundle.CommandResources[0].Target.Workflow)
 }
 
 func TestLoadFSAcceptsClaudeStringToolList(t *testing.T) {

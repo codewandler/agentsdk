@@ -130,6 +130,59 @@ type WorkflowContribution struct {
 	Definition  map[string]any
 }
 
+type ActionContribution struct {
+	ID          string
+	Name        string
+	Description string
+	Kind        string
+	Source      SourceRef
+	Path        string
+	Config      map[string]any
+	Metadata    map[string]any
+}
+
+type TriggerContribution struct {
+	ID          string
+	Name        string
+	Description string
+	Source      SourceRef
+	Path        string
+	Definition  map[string]any
+	Metadata    map[string]any
+}
+
+type CommandTargetKind string
+
+const (
+	CommandTargetWorkflow CommandTargetKind = "workflow"
+	CommandTargetAction   CommandTargetKind = "action"
+	CommandTargetPrompt   CommandTargetKind = "prompt"
+)
+
+type CommandTarget struct {
+	Kind               CommandTargetKind
+	Workflow           string
+	Action             string
+	Prompt             string
+	Input              any
+	IncludeEvent       bool
+	WorkflowDefinition map[string]any
+}
+
+type CommandContribution struct {
+	ID          string
+	Name        string
+	Description string
+	Source      SourceRef
+	Path        string
+	CommandPath []string
+	InputSchema command.JSONSchema
+	Output      command.OutputDescriptor
+	Policy      command.Policy
+	Target      CommandTarget
+	Metadata    map[string]any
+}
+
 type HookContribution struct {
 	ID       string
 	Name     string
@@ -145,19 +198,22 @@ type Permission struct {
 }
 
 type ContributionBundle struct {
-	ID           string
-	Name         string
-	Source       SourceRef
-	AgentSpecs   []agent.Spec
-	Commands     []command.Command
-	Skills       []SkillContribution
-	SkillSources []skill.Source
-	DataSources  []DataSourceContribution
-	Workflows    []WorkflowContribution
-	Tools        []ToolContribution
-	Hooks        []HookContribution
-	Permissions  []Permission
-	Diagnostics  []Diagnostic
+	ID               string
+	Name             string
+	Source           SourceRef
+	AgentSpecs       []agent.Spec
+	Commands         []command.Command
+	Skills           []SkillContribution
+	SkillSources     []skill.Source
+	DataSources      []DataSourceContribution
+	Workflows        []WorkflowContribution
+	Actions          []ActionContribution
+	Triggers         []TriggerContribution
+	CommandResources []CommandContribution
+	Tools            []ToolContribution
+	Hooks            []HookContribution
+	Permissions      []Permission
+	Diagnostics      []Diagnostic
 }
 
 func (b *ContributionBundle) Append(other ContributionBundle) {
@@ -170,6 +226,9 @@ func (b *ContributionBundle) Append(other ContributionBundle) {
 	b.SkillSources = append(b.SkillSources, other.SkillSources...)
 	b.DataSources = append(b.DataSources, other.DataSources...)
 	b.Workflows = append(b.Workflows, other.Workflows...)
+	b.Actions = append(b.Actions, other.Actions...)
+	b.Triggers = append(b.Triggers, other.Triggers...)
+	b.CommandResources = append(b.CommandResources, other.CommandResources...)
 	b.Tools = append(b.Tools, other.Tools...)
 	b.Hooks = append(b.Hooks, other.Hooks...)
 	b.Permissions = append(b.Permissions, other.Permissions...)

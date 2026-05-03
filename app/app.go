@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
@@ -556,7 +557,7 @@ func datasourceFromContribution(c resource.DataSourceContribution) datasource.De
 }
 
 func workflowFromContribution(c resource.WorkflowContribution) workflow.Definition {
-	def := workflow.Definition{Name: c.Name, Description: c.Description}
+	def := workflow.Definition{Name: c.Name, Description: c.Description, Version: stringFromAny(c.Definition["version"])}
 	if rawSteps, ok := c.Definition["steps"]; ok {
 		def.Steps = workflowStepsFromContribution(rawSteps)
 	}
@@ -575,10 +576,17 @@ func workflowStepsFromContribution(raw any) []workflow.Step {
 			continue
 		}
 		step := workflow.Step{
-			ID:        stringFromAny(m["id"]),
-			Action:    workflowActionRefFromAny(m["action"]),
-			Input:     m["input"],
-			DependsOn: stringSliceFromAny(firstNonNil(m["depends_on"], m["dependsOn"])),
+			ID:             stringFromAny(m["id"]),
+			Action:         workflowActionRefFromAny(m["action"]),
+			Input:          m["input"],
+			InputMap:       stringMapFromAny(firstNonNil(m["input_map"], m["inputMap"])),
+			InputTemplate:  firstNonNil(m["input_template"], m["inputTemplate"]),
+			DependsOn:      stringSliceFromAny(firstNonNil(m["depends_on"], m["dependsOn"])),
+			When:           workflowConditionFromAny(m["when"]),
+			Retry:          workflowRetryFromAny(m["retry"]),
+			Timeout:        durationFromAny(m["timeout"]),
+			ErrorPolicy:    workflow.StepErrorPolicy(stringFromAny(firstNonNil(m["error_policy"], m["errorPolicy"]))),
+			IdempotencyKey: stringFromAny(firstNonNil(m["idempotency_key"], m["idempotencyKey"])),
 		}
 		steps = append(steps, step)
 	}
@@ -620,6 +628,71 @@ func stringSliceFromAny(raw any) []string {
 		return out
 	default:
 		return nil
+	}
+}
+
+func stringMapFromAny(raw any) map[string]string {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := map[string]string{}
+	for key, value := range m {
+		if s := stringFromAny(value); s != "" {
+			out[key] = s
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func workflowConditionFromAny(raw any) workflow.Condition {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return workflow.Condition{}
+	}
+	return workflow.Condition{
+		StepID: stringFromAny(firstNonNil(m["step_id"], m["stepID"], m["step"])),
+		Equals: m["equals"],
+		Exists: boolFromAny(m["exists"]),
+		Not:    boolFromAny(m["not"]),
+	}
+}
+
+func workflowRetryFromAny(raw any) workflow.RetryPolicy {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return workflow.RetryPolicy{}
+	}
+	return workflow.RetryPolicy{MaxAttempts: intFromAny(firstNonNil(m["max_attempts"], m["maxAttempts"])), Backoff: durationFromAny(m["backoff"])}
+}
+
+func durationFromAny(raw any) time.Duration {
+	s := stringFromAny(raw)
+	if s == "" {
+		return 0
+	}
+	d, _ := time.ParseDuration(s)
+	return d
+}
+
+func boolFromAny(raw any) bool {
+	b, _ := raw.(bool)
+	return b
+}
+
+func intFromAny(raw any) int {
+	switch v := raw.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
 	}
 }
 

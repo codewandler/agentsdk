@@ -1,0 +1,3 @@
+name: agent.turn
+description: Session-scoped agent turn action supplied by the harness
+kind: session

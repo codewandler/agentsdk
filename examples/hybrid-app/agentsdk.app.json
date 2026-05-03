@@ -1,0 +1,12 @@
+{
+  "default_agent": "operator",
+  "sources": [".agents"],
+  "plugins": [
+    {"name": "local_cli", "config": {"profile": "safe"}}
+  ],
+  "discovery": {
+    "include_global_user_resources": false,
+    "include_external_ecosystems": false,
+    "allow_remote": false
+  }
+}

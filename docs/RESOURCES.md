@@ -99,14 +99,17 @@ supported source APIs; explicit source APIs restrict both selection and runtime
 routing. Relative `evidence_path` values are resolved relative to the manifest
 directory.
 
-## Agentsdk Native Datasource and Workflow Resources
+## Agentsdk Native Declarative Resources
 
-Agentsdk discovers datasource and workflow YAML resources from native `.agents`
-layouts:
+Agentsdk discovers datasource, workflow, action, trigger, and structured command
+YAML resources from native `.agents` layouts:
 
 ```text
 .agents/datasources/*.yaml
 .agents/workflows/*.yaml
+.agents/actions/*.yaml
+.agents/triggers/*.yaml
+.agents/commands/*.yaml
 ```
 
 When a manifest source points directly at a resource root such as `.agents`, the
@@ -115,13 +118,21 @@ same resources are loaded from the corresponding plugin-root layout:
 ```text
 datasources/*.yaml
 workflows/*.yaml
+actions/*.yaml
+triggers/*.yaml
+commands/*.yaml
 ```
 
-These datasource and workflow YAML files are agentsdk-specific discovery
-resources. They are deliberately declarative-only at first: `agentsdk discover`
-loads and reports their name, description, kind/source metadata, and provenance,
-but workflow execution and datasource runtime behavior are wired in later
-milestones through the action/workflow/app registries.
+These YAML files are agentsdk-specific discovery resources. Workflow YAML is
+converted into executable workflow definitions when the referenced actions are
+available. Workflows can expose command and trigger projections with `expose`.
+Action YAML is declarative metadata for host/plugin-provided actions; it does
+not create executable actions by itself. Trigger YAML is converted by
+`agentsdk serve` into in-process interval trigger jobs and may declare inline
+workflow targets. Structured command YAML lives alongside Markdown commands and
+can target a workflow, action, prompt, or inline workflow. Datasource expansion
+remains deferred until daemon/triggers and a concrete datasource case study are
+ready.
 
 Initial datasource metadata keys:
 
@@ -142,13 +153,68 @@ Initial workflow metadata keys:
 ```yaml
 name: sync_docs
 description: Sync documentation
+version: v1
 steps:
   - id: fetch
     action: docs.fetch
+    depends_on: [prepare]
+    input_map:
+      query: input.query
+    retry:
+      max_attempts: 2
+      backoff: 1s
+    timeout: 30s
+    error_policy: continue
+    idempotency_key: sync-docs-fetch
 ```
 
-The loader preserves the full workflow YAML mapping as a declarative definition
-for future validation/execution layers.
+Initial action metadata keys:
+
+```yaml
+name: host.echo
+description: Host-provided echo action
+kind: host
+config:
+  namespace: examples
+metadata:
+  owner: example
+```
+
+Initial trigger metadata keys:
+
+```yaml
+id: hourly-summary
+description: Periodically summarize a session
+source:
+  interval: 1h
+  immediate: false
+target:
+  workflow: session_summary
+  input: Summarize the current session.
+session:
+  mode: trigger_owned
+policy:
+  overlap: skip_if_running
+```
+
+Initial structured command metadata keys:
+
+```yaml
+name: session-summary
+description: Run a workflow from a command path
+path: [session, summary]
+input_schema:
+  type: object
+  properties:
+    input:
+      type: string
+target:
+  workflow: session_summary
+  input: "{{ .input }}"
+policy:
+  user_callable: true
+  agent_callable: true
+```
 
 ## Project Instructions
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/capability"
+	"github.com/codewandler/agentsdk/command"
 	cmdmarkdown "github.com/codewandler/agentsdk/command/markdown"
 	md "github.com/codewandler/agentsdk/markdown"
 	"github.com/codewandler/agentsdk/resource"
@@ -232,6 +233,12 @@ func LoadFSWithSource(fsys fs.FS, root string, source resource.SourceRef) (resou
 			return resource.ContributionBundle{}, err
 		}
 		out.Commands = append(out.Commands, cmds...)
+		structured, err := loadCommandContributions(fsys, dir, source)
+		if err != nil {
+			return resource.ContributionBundle{}, err
+		}
+		out.CommandResources = append(out.CommandResources, structured.Commands...)
+		out.Workflows = append(out.Workflows, structured.Workflows...)
 	}
 	for _, dir := range []string{
 		path.Join(root, ".agents", "agents"),
@@ -263,7 +270,30 @@ func LoadFSWithSource(fsys fs.FS, root string, source resource.SourceRef) (resou
 		if err != nil {
 			return resource.ContributionBundle{}, err
 		}
-		out.Workflows = append(out.Workflows, workflows...)
+		out.Workflows = append(out.Workflows, workflows.Workflows...)
+		out.CommandResources = append(out.CommandResources, workflows.Commands...)
+		out.Triggers = append(out.Triggers, workflows.Triggers...)
+	}
+	for _, dir := range []string{
+		path.Join(root, ".agents", "actions"),
+		path.Join(root, "actions"),
+	} {
+		actions, err := loadActionContributions(fsys, dir, source)
+		if err != nil {
+			return resource.ContributionBundle{}, err
+		}
+		out.Actions = append(out.Actions, actions...)
+	}
+	for _, dir := range []string{
+		path.Join(root, ".agents", "triggers"),
+		path.Join(root, "triggers"),
+	} {
+		triggers, err := loadTriggerContributions(fsys, dir, source)
+		if err != nil {
+			return resource.ContributionBundle{}, err
+		}
+		out.Triggers = append(out.Triggers, triggers.Triggers...)
+		out.Workflows = append(out.Workflows, triggers.Workflows...)
 	}
 	for order, dir := range []string{
 		path.Join(root, ".agents", "skills"),
@@ -562,6 +592,58 @@ type workflowResourceFile struct {
 	Metadata    map[string]any `yaml:"metadata"`
 }
 
+type actionResourceFile struct {
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description"`
+	Kind        string         `yaml:"kind"`
+	Type        string         `yaml:"type"`
+	Config      map[string]any `yaml:"config"`
+	Metadata    map[string]any `yaml:"metadata"`
+}
+
+type triggerResourceFile struct {
+	ID          string         `yaml:"id"`
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description"`
+	Metadata    map[string]any `yaml:"metadata"`
+}
+
+type commandResourceFile struct {
+	Name        string                   `yaml:"name"`
+	Description string                   `yaml:"description"`
+	Path        []string                 `yaml:"path"`
+	InputSchema command.JSONSchema       `yaml:"input_schema"`
+	Output      command.OutputDescriptor `yaml:"output"`
+	Policy      commandPolicyResource    `yaml:"policy"`
+	Target      map[string]any           `yaml:"target"`
+	Metadata    map[string]any           `yaml:"metadata"`
+}
+
+type commandPolicyResource struct {
+	UserCallable  *bool `yaml:"user_callable"`
+	AgentCallable *bool `yaml:"agent_callable"`
+	Internal      *bool `yaml:"internal"`
+}
+
+func (p commandPolicyResource) commandPolicy() command.Policy {
+	out := command.UserPolicy()
+	if p.UserCallable != nil {
+		out.UserCallable = *p.UserCallable
+	}
+	if p.AgentCallable != nil {
+		out.AgentCallable = *p.AgentCallable
+	}
+	if p.Internal != nil {
+		out.Internal = *p.Internal
+	}
+	return out
+}
+
+type loadedCommandResources struct {
+	Commands  []resource.CommandContribution
+	Workflows []resource.WorkflowContribution
+}
+
 func loadDataSourceContributions(fsys fs.FS, dir string, source resource.SourceRef) ([]resource.DataSourceContribution, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
@@ -606,15 +688,21 @@ func loadDataSourceContributions(fsys fs.FS, dir string, source resource.SourceR
 	return out, nil
 }
 
-func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef) ([]resource.WorkflowContribution, error) {
+type loadedWorkflowResources struct {
+	Workflows []resource.WorkflowContribution
+	Commands  []resource.CommandContribution
+	Triggers  []resource.TriggerContribution
+}
+
+func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef) (loadedWorkflowResources, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return loadedWorkflowResources{}, nil
 		}
-		return nil, err
+		return loadedWorkflowResources{}, err
 	}
-	var out []resource.WorkflowContribution
+	var out loadedWorkflowResources
 	for _, entry := range entries {
 		if entry.IsDir() || !isYAMLFile(entry.Name()) {
 			continue
@@ -622,21 +710,21 @@ func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef
 		file := path.Join(dir, entry.Name())
 		data, err := fs.ReadFile(fsys, file)
 		if err != nil {
-			return nil, fmt.Errorf("read workflow %q: %w", file, err)
+			return loadedWorkflowResources{}, fmt.Errorf("read workflow %q: %w", file, err)
 		}
 		var spec workflowResourceFile
 		if err := yaml.Unmarshal(data, &spec); err != nil {
-			return nil, fmt.Errorf("parse workflow %q: %w", file, err)
+			return loadedWorkflowResources{}, fmt.Errorf("parse workflow %q: %w", file, err)
 		}
 		var definition map[string]any
 		if err := yaml.Unmarshal(data, &definition); err != nil {
-			return nil, fmt.Errorf("parse workflow definition %q: %w", file, err)
+			return loadedWorkflowResources{}, fmt.Errorf("parse workflow definition %q: %w", file, err)
 		}
 		name := strings.TrimSpace(spec.Name)
 		if name == "" {
 			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
 		}
-		out = append(out, resource.WorkflowContribution{
+		workflowContribution := resource.WorkflowContribution{
 			ID:          resource.QualifiedID(source, "workflow", name, qualifiedResourcePath(source, file)),
 			Name:        name,
 			Description: strings.TrimSpace(spec.Description),
@@ -644,7 +732,11 @@ func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef
 			Path:        file,
 			Metadata:    spec.Metadata,
 			Definition:  definition,
-		})
+		}
+		out.Workflows = append(out.Workflows, workflowContribution)
+		commands, triggers := workflowExposures(workflowContribution)
+		out.Commands = append(out.Commands, commands...)
+		out.Triggers = append(out.Triggers, triggers...)
 	}
 	return out, nil
 }
@@ -652,4 +744,373 @@ func loadWorkflowContributions(fsys fs.FS, dir string, source resource.SourceRef
 func isYAMLFile(name string) bool {
 	ext := strings.ToLower(path.Ext(name))
 	return ext == ".yaml" || ext == ".yml"
+}
+
+func loadActionContributions(fsys fs.FS, dir string, source resource.SourceRef) ([]resource.ActionContribution, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []resource.ActionContribution
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+			continue
+		}
+		file := path.Join(dir, entry.Name())
+		data, err := fs.ReadFile(fsys, file)
+		if err != nil {
+			return nil, fmt.Errorf("read action %q: %w", file, err)
+		}
+		var spec actionResourceFile
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return nil, fmt.Errorf("parse action %q: %w", file, err)
+		}
+		name := strings.TrimSpace(spec.Name)
+		if name == "" {
+			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		}
+		kind := strings.TrimSpace(spec.Kind)
+		if kind == "" {
+			kind = strings.TrimSpace(spec.Type)
+		}
+		out = append(out, resource.ActionContribution{
+			ID:          resource.QualifiedID(source, "action", name, qualifiedResourcePath(source, file)),
+			Name:        name,
+			Description: strings.TrimSpace(spec.Description),
+			Kind:        kind,
+			Source:      source,
+			Path:        file,
+			Config:      spec.Config,
+			Metadata:    spec.Metadata,
+		})
+	}
+	return out, nil
+}
+
+type loadedTriggerResources struct {
+	Triggers  []resource.TriggerContribution
+	Workflows []resource.WorkflowContribution
+}
+
+func loadTriggerContributions(fsys fs.FS, dir string, source resource.SourceRef) (loadedTriggerResources, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return loadedTriggerResources{}, nil
+		}
+		return loadedTriggerResources{}, err
+	}
+	var out loadedTriggerResources
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+			continue
+		}
+		file := path.Join(dir, entry.Name())
+		data, err := fs.ReadFile(fsys, file)
+		if err != nil {
+			return loadedTriggerResources{}, fmt.Errorf("read trigger %q: %w", file, err)
+		}
+		var spec triggerResourceFile
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return loadedTriggerResources{}, fmt.Errorf("parse trigger %q: %w", file, err)
+		}
+		var definition map[string]any
+		if err := yaml.Unmarshal(data, &definition); err != nil {
+			return loadedTriggerResources{}, fmt.Errorf("parse trigger definition %q: %w", file, err)
+		}
+		name := strings.TrimSpace(spec.ID)
+		if name == "" {
+			name = strings.TrimSpace(spec.Name)
+		}
+		if name == "" {
+			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		}
+		if inline := normalizeInlineWorkflowTarget(definition, name, file, source); inline != nil {
+			out.Workflows = append(out.Workflows, *inline)
+		}
+		out.Triggers = append(out.Triggers, resource.TriggerContribution{
+			ID:          resource.QualifiedID(source, "trigger", name, qualifiedResourcePath(source, file)),
+			Name:        name,
+			Description: strings.TrimSpace(spec.Description),
+			Source:      source,
+			Path:        file,
+			Definition:  definition,
+			Metadata:    spec.Metadata,
+		})
+	}
+	return out, nil
+}
+
+func loadCommandContributions(fsys fs.FS, dir string, source resource.SourceRef) (loadedCommandResources, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return loadedCommandResources{}, nil
+		}
+		return loadedCommandResources{}, err
+	}
+	var out loadedCommandResources
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+			continue
+		}
+		file := path.Join(dir, entry.Name())
+		data, err := fs.ReadFile(fsys, file)
+		if err != nil {
+			return loadedCommandResources{}, fmt.Errorf("read command %q: %w", file, err)
+		}
+		var spec commandResourceFile
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return loadedCommandResources{}, fmt.Errorf("parse command %q: %w", file, err)
+		}
+		name := strings.TrimSpace(spec.Name)
+		if name == "" {
+			name = strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		}
+		commandPath := cleanStringList(spec.Path)
+		if len(commandPath) == 0 {
+			commandPath = []string{name}
+		}
+		target, inlineWorkflow, err := commandTargetFromMap(spec.Target, name, file, source)
+		if err != nil {
+			return loadedCommandResources{}, fmt.Errorf("parse command target %q: %w", file, err)
+		}
+		out.Commands = append(out.Commands, resource.CommandContribution{
+			ID:          resource.QualifiedID(source, "command", name, qualifiedResourcePath(source, file)),
+			Name:        name,
+			Description: strings.TrimSpace(spec.Description),
+			Source:      source,
+			Path:        file,
+			CommandPath: commandPath,
+			InputSchema: spec.InputSchema,
+			Output:      spec.Output,
+			Policy:      spec.Policy.commandPolicy(),
+			Target:      target,
+			Metadata:    spec.Metadata,
+		})
+		if inlineWorkflow != nil {
+			out.Workflows = append(out.Workflows, *inlineWorkflow)
+		}
+	}
+	return out, nil
+}
+
+func commandTargetFromMap(targetDef map[string]any, ownerName string, file string, source resource.SourceRef) (resource.CommandTarget, *resource.WorkflowContribution, error) {
+	if len(targetDef) == 0 {
+		return resource.CommandTarget{}, nil, fmt.Errorf("target is required")
+	}
+	if raw, ok := targetDef["workflow"]; ok {
+		target := resource.CommandTarget{Kind: resource.CommandTargetWorkflow, Input: targetDef["input"], IncludeEvent: boolFromAny(targetDef["include_event"])}
+		switch v := raw.(type) {
+		case string:
+			target.Workflow = strings.TrimSpace(v)
+		case map[string]any:
+			workflowName := stringFromAny(v["name"])
+			if workflowName == "" {
+				workflowName = ownerName + "_workflow"
+			}
+			v["name"] = workflowName
+			target.Workflow = workflowName
+			target.WorkflowDefinition = cloneMap(v)
+			inline := workflowContributionFromDefinition(workflowName, file, source, v)
+			return target, &inline, nil
+		default:
+			return resource.CommandTarget{}, nil, fmt.Errorf("target.workflow must be a string or object")
+		}
+		if target.Workflow == "" {
+			return resource.CommandTarget{}, nil, fmt.Errorf("target.workflow is required")
+		}
+		return target, nil, nil
+	}
+	if actionName := stringFromAny(targetDef["action"]); actionName != "" {
+		return resource.CommandTarget{Kind: resource.CommandTargetAction, Action: actionName, Input: targetDef["input"]}, nil, nil
+	}
+	if prompt := stringFromAny(targetDef["prompt"]); prompt != "" {
+		return resource.CommandTarget{Kind: resource.CommandTargetPrompt, Prompt: prompt, Input: targetDef["input"]}, nil, nil
+	}
+	return resource.CommandTarget{}, nil, fmt.Errorf("target.workflow, target.action, or target.prompt is required")
+}
+
+func workflowContributionFromDefinition(name string, file string, source resource.SourceRef, definition map[string]any) resource.WorkflowContribution {
+	return resource.WorkflowContribution{
+		ID:          resource.QualifiedID(source, "workflow", name, qualifiedResourcePath(source, file)+"@inline-workflow"),
+		Name:        name,
+		Description: stringFromAny(definition["description"]),
+		Source:      source,
+		Path:        file,
+		Metadata:    mapFromAny(definition["metadata"]),
+		Definition:  cloneMap(definition),
+	}
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func normalizeInlineWorkflowTarget(definition map[string]any, ownerName string, file string, source resource.SourceRef) *resource.WorkflowContribution {
+	targetDef := mapFromAny(definition["target"])
+	raw, ok := targetDef["workflow"]
+	if !ok {
+		return nil
+	}
+	workflowDef, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	workflowName := stringFromAny(workflowDef["name"])
+	if workflowName == "" {
+		workflowName = ownerName + "_workflow"
+	}
+	workflowDef["name"] = workflowName
+	targetDef["workflow"] = workflowName
+	definition["target"] = targetDef
+	inline := workflowContributionFromDefinition(workflowName, file, source, workflowDef)
+	return &inline
+}
+
+func workflowExposures(workflow resource.WorkflowContribution) ([]resource.CommandContribution, []resource.TriggerContribution) {
+	expose := mapFromAny(workflow.Definition["expose"])
+	if len(expose) == 0 {
+		return nil, nil
+	}
+	var commands []resource.CommandContribution
+	for _, raw := range sliceFromAny(expose["commands"]) {
+		m := mapFromAny(raw)
+		if len(m) == 0 {
+			continue
+		}
+		name := stringFromAny(m["name"])
+		if name == "" {
+			name = workflow.Name
+		}
+		commandPath := stringSliceFromAny(m["path"])
+		if len(commandPath) == 0 {
+			commandPath = []string{name}
+		}
+		commands = append(commands, resource.CommandContribution{
+			ID:          resource.QualifiedID(workflow.Source, "command", name, qualifiedResourcePath(workflow.Source, workflow.Path)+"@expose.commands."+name),
+			Name:        name,
+			Description: firstNonEmpty(stringFromAny(m["description"]), workflow.Description),
+			Source:      workflow.Source,
+			Path:        workflow.Path,
+			CommandPath: commandPath,
+			Policy:      commandPolicyFromMap(mapFromAny(m["policy"])),
+			Target: resource.CommandTarget{
+				Kind:     resource.CommandTargetWorkflow,
+				Workflow: workflow.Name,
+				Input:    m["input"],
+			},
+			Metadata: mapFromAny(m["metadata"]),
+		})
+	}
+	var triggers []resource.TriggerContribution
+	for _, raw := range sliceFromAny(expose["triggers"]) {
+		m := cloneMap(mapFromAny(raw))
+		if len(m) == 0 {
+			continue
+		}
+		id := stringFromAny(m["id"])
+		if id == "" {
+			id = workflow.Name + "-trigger"
+		}
+		target := mapFromAny(m["target"])
+		if len(target) == 0 {
+			target = map[string]any{}
+		}
+		target["workflow"] = workflow.Name
+		if _, ok := target["input"]; !ok {
+			target["input"] = m["input"]
+		}
+		m["target"] = target
+		triggers = append(triggers, resource.TriggerContribution{
+			ID:          resource.QualifiedID(workflow.Source, "trigger", id, qualifiedResourcePath(workflow.Source, workflow.Path)+"@expose.triggers."+id),
+			Name:        id,
+			Description: stringFromAny(m["description"]),
+			Source:      workflow.Source,
+			Path:        workflow.Path,
+			Definition:  m,
+			Metadata:    mapFromAny(m["metadata"]),
+		})
+	}
+	return commands, triggers
+}
+
+func commandPolicyFromMap(m map[string]any) command.Policy {
+	return commandPolicyResource{
+		UserCallable:  boolPtrFromMap(m, "user_callable"),
+		AgentCallable: boolPtrFromMap(m, "agent_callable"),
+		Internal:      boolPtrFromMap(m, "internal"),
+	}.commandPolicy()
+}
+
+func boolPtrFromMap(m map[string]any, key string) *bool {
+	value, ok := m[key].(bool)
+	if !ok {
+		return nil
+	}
+	return &value
+}
+
+func mapFromAny(raw any) map[string]any {
+	m, _ := raw.(map[string]any)
+	if m == nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+func sliceFromAny(raw any) []any {
+	items, _ := raw.([]any)
+	return items
+}
+
+func stringFromAny(raw any) string {
+	s, _ := raw.(string)
+	return strings.TrimSpace(s)
+}
+
+func boolFromAny(raw any) bool {
+	b, _ := raw.(bool)
+	return b
+}
+
+func stringSliceFromAny(raw any) []string {
+	switch v := raw.(type) {
+	case []string:
+		return cleanStringList(v)
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s := stringFromAny(item); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		return []string{strings.TrimSpace(v)}
+	default:
+		return nil
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

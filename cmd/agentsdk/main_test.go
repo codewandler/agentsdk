@@ -86,6 +86,9 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	writeTestFile(t, filepath.Join(dir, ".agents", "skills", "go", "SKILL.md"), "---\nname: go\ndescription: Go skill\n---\n# Go")
 	writeTestFile(t, filepath.Join(dir, ".agents", "datasources", "docs.yaml"), "name: docs\ndescription: Documentation corpus\nkind: corpus\n")
 	writeTestFile(t, filepath.Join(dir, ".agents", "workflows", "sync-docs.yaml"), "name: sync_docs\ndescription: Sync documentation\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "actions", "echo.yaml"), "name: echo\ndescription: Echo action\nkind: builtin\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "triggers", "hourly.yaml"), "id: hourly\ndescription: Hourly trigger\nsource:\n  interval: 1h\ntarget:\n  workflow: sync_docs\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "commands", "deploy.yaml"), "name: deploy\ndescription: Deploy command\npath: [deploy]\ntarget:\n  workflow: sync_docs\n")
 	writeTestFile(t, filepath.Join(dir, "Makefile"), "test:\n\tgo test ./...\n")
 
 	cmd := rootCmd()
@@ -111,6 +114,15 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	require.Contains(t, text, "Workflows:")
 	require.Contains(t, text, "sync_docs")
 	require.Contains(t, text, "Sync documentation")
+	require.Contains(t, text, "Actions:")
+	require.Contains(t, text, "echo")
+	require.Contains(t, text, "Echo action")
+	require.Contains(t, text, "Triggers:")
+	require.Contains(t, text, "hourly")
+	require.Contains(t, text, "Hourly trigger")
+	require.Contains(t, text, "Structured commands:")
+	require.Contains(t, text, "/deploy")
+	require.Contains(t, text, "target=workflow:sync_docs")
 	require.Contains(t, text, "Disabled suggestions:")
 	require.Contains(t, text, "Makefile")
 }
@@ -118,6 +130,7 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 func TestDiscoverPrintsFirstWinsDiagnostics(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "reviewer.md"), "---\nname: reviewer\n---\nfirst")
+
 	writeTestFile(t, filepath.Join(dir, ".claude", "agents", "reviewer.md"), "---\nname: reviewer\n---\nsecond")
 
 	cmd := rootCmd()
@@ -131,6 +144,30 @@ func TestDiscoverPrintsFirstWinsDiagnostics(t *testing.T) {
 	require.Equal(t, 1, bytes.Count(out.Bytes(), []byte("  reviewer  ")))
 	require.Contains(t, text, "warning")
 	require.Contains(t, text, "already registered")
+}
+func TestDiscoverPrintsManifestPluginRefsWithConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"sources":[".agents"],"plugins":[{"name":"local_cli","config":{"mode":"safe"}}]}`)
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"discover", "--local", dir})
+	require.NoError(t, cmd.Execute())
+
+	require.Contains(t, out.String(), "Plugins:")
+	require.Contains(t, out.String(), "local_cli  config=true")
+}
+
+func TestManifestRejectsEmptyPluginRefs(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"plugins":[{"name":""}]}`)
+
+	cmd := rootCmd()
+	cmd.SetArgs([]string{"discover", "--local", dir})
+	require.ErrorContains(t, cmd.Execute(), "plugin name is required")
 }
 
 func TestDiscoverFormatsMultilineDescriptions(t *testing.T) {

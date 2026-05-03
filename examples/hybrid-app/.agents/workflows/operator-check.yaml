@@ -1,0 +1,23 @@
+name: operator_check
+description: Ask the agent for a lightweight operator check
+steps:
+  - id: ask
+    action: agent.turn
+expose:
+  commands:
+    - name: operator-check
+      path: [operator, check]
+      description: Run the operator check workflow.
+      input: Check configured resources and report concerns only.
+      policy:
+        user_callable: true
+        agent_callable: true
+  triggers:
+    - id: operator-check-hourly
+      description: Periodic hybrid operator check
+      source:
+        interval: 30m
+        immediate: false
+      session:
+        mode: trigger_owned
+      input: Check configured resources and report concerns only.

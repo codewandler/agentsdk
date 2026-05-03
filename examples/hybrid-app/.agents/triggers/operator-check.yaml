@@ -1,0 +1,10 @@
+id: operator-check
+description: Periodic hybrid operator check
+source:
+  interval: 30m
+  immediate: false
+target:
+  workflow: operator_check
+  input: Check configured resources and report concerns only.
+session:
+  mode: trigger_owned

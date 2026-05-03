@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/resource"
@@ -46,6 +47,22 @@ func (r *PluginRef) UnmarshalJSON(data []byte) error {
 	}
 	r.Name = shaped.Name
 	r.Config = shaped.Config
+	return nil
+}
+
+func (r PluginRef) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return fmt.Errorf("plugin name is required")
+	}
+	return nil
+}
+
+func (m AppManifest) Validate() error {
+	for i, ref := range m.Plugins {
+		if err := ref.Validate(); err != nil {
+			return fmt.Errorf("plugins[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -327,6 +344,9 @@ func readManifest(dir string) (string, AppManifest, bool, error) {
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			return "", AppManifest{}, false, fmt.Errorf("parse %s: %w", path, err)
 		}
+		if err := manifest.Validate(); err != nil {
+			return "", AppManifest{}, false, fmt.Errorf("validate %s: %w", path, err)
+		}
 		return path, manifest, true, nil
 	}
 	return "", AppManifest{}, false, nil
@@ -362,6 +382,9 @@ func bundleHasResources(bundle resource.ContributionBundle) bool {
 		len(bundle.SkillSources) > 0 ||
 		len(bundle.DataSources) > 0 ||
 		len(bundle.Workflows) > 0 ||
+		len(bundle.Actions) > 0 ||
+		len(bundle.Triggers) > 0 ||
+		len(bundle.CommandResources) > 0 ||
 		len(bundle.Tools) > 0 ||
 		len(bundle.Hooks) > 0 ||
 		len(bundle.Permissions) > 0 ||

@@ -1,0 +1,6 @@
+name: session_summary
+description: Ask the default agent for a session summary
+version: v1
+steps:
+  - id: summarize
+    action: agent.turn

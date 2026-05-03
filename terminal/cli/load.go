@@ -73,6 +73,7 @@ type Loaded struct {
 	Session   *harness.Session
 	AgentName string
 	Workspace string
+	Resources agentdir.Resolution
 	In        io.Reader
 	Out       io.Writer
 	Err       io.Writer
@@ -129,6 +130,7 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		Session:   loaded.Session,
 		AgentName: name,
 		Workspace: env.Workspace,
+		Resources: resolved,
 		In:        env.In,
 		Out:       env.Out,
 		Err:       env.Err,
