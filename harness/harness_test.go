@@ -181,10 +181,17 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 
 	session, err := NewService(application).DefaultSession()
 	require.NoError(t, err)
-	result := session.ExecuteWorkflow(ctx, "ask_flow", "answer through harness", app.WithWorkflowRunID("run_harness"))
+	var handled []action.Event
+	result := session.ExecuteWorkflow(ctx, "ask_flow", "answer through harness",
+		app.WithWorkflowRunID("run_harness"),
+		app.WithWorkflowEventHandler(func(_ action.Ctx, event action.Event) {
+			handled = append(handled, event)
+		}),
+	)
 
 	require.NoError(t, result.Error)
 	require.Equal(t, "workflow answer", result.Data.(workflow.Result).Data)
+	require.NotEmpty(t, handled)
 	requireHarnessRequestContainsText(t, client.RequestAt(0), "answer through harness")
 
 	state, ok, err := session.WorkflowRunState(ctx, "run_harness")

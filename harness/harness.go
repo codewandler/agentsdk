@@ -5,6 +5,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -151,7 +152,22 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	if s == nil || s.App == nil {
 		return action.Result{Error: fmt.Errorf("harness: app is required")}
 	}
-	return s.App.ExecuteWorkflow(ctx, workflowName, input, opts...)
+	execOpts, recorder := s.workflowExecutionOptions(opts)
+	result := s.App.ExecuteWorkflow(ctx, workflowName, input, execOpts...)
+	if recorder != nil {
+		result.Error = errors.Join(result.Error, recorder.Err())
+	}
+	return result
+}
+
+func (s *Session) workflowExecutionOptions(opts []app.WorkflowExecutionOption) ([]app.WorkflowExecutionOption, *workflow.ThreadRecorder) {
+	if s == nil || s.Agent == nil || s.Agent.LiveThread() == nil {
+		return opts, nil
+	}
+	recorder := &workflow.ThreadRecorder{Live: s.Agent.LiveThread()}
+	out := append([]app.WorkflowExecutionOption(nil), opts...)
+	out = append(out, app.WithWorkflowEventHandler(recorder.OnEvent))
+	return out, recorder
 }
 
 func (s *Session) WorkflowRunStore() (*workflow.ThreadRunStore, bool) {

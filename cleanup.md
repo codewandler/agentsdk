@@ -73,13 +73,13 @@
     - `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics while the local CLI plugin still owns the fallback spec.
     - `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
     - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy.
+  - Moved workflow thread recording out of `app.App` and into `harness.Session.ExecuteWorkflow`; app workflow helpers now stay registry/executor-focused while session live-thread persistence is owned by harness.
 
 - **Remaining cleanup candidates**
   - Revisit `agent.Instance` responsibilities and move outward only where the slice deletes or simplifies more than it adds:
     - session lifecycle
     - context provider lifecycle
     - capability registry/session ownership
-    - workflow recording
   - Revisit `terminal/cli.Load`:
     - continue moving shared resource/app/session setup toward harness loading helpers when it improves ownership boundaries
     - keep terminal as the channel boundary for CLI flags, terminal fallback policy, terminal UI adapters, debug output, and experiments
@@ -89,9 +89,9 @@
     - consider renderer registry only if it reduces code
     - do not add a registry if payload `Display(...)` is currently simpler
     - leave risk logging alone for now; it is experimental and needs separate design before migration
-  - Revisit `app.App` workflow helper seams:
+  - Revisit remaining `app.App` helper seams:
     - keep app as registry/composition host
-    - move lifecycle-heavy workflow/session ownership toward harness when there is a concrete replacement path
+    - collapse any transitional helper paths once newer harness/session wiring makes them redundant
 
 - **Guardrails for any next slice**
   - No new harness plugin system beside `app.Plugin`.

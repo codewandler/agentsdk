@@ -393,7 +393,18 @@ type workflowExecutionConfig struct {
 }
 
 func WithWorkflowEventHandler(handler workflow.EventHandler) WorkflowExecutionOption {
-	return func(c *workflowExecutionConfig) { c.OnEvent = handler }
+	return func(c *workflowExecutionConfig) {
+		if handler == nil {
+			return
+		}
+		previous := c.OnEvent
+		c.OnEvent = func(ctx action.Ctx, event action.Event) {
+			if previous != nil {
+				previous(ctx, event)
+			}
+			handler(ctx, event)
+		}
+	}
 }
 
 func WithWorkflowRunID(runID workflow.RunID) WorkflowExecutionOption {
@@ -412,28 +423,6 @@ func applyWorkflowExecutionOptions(opts []WorkflowExecutionOption) workflowExecu
 		}
 	}
 	return cfg
-}
-
-func (a *App) workflowExecutionOptions(opts []WorkflowExecutionOption) ([]WorkflowExecutionOption, *workflow.ThreadRecorder) {
-	if a == nil {
-		return opts, nil
-	}
-	inst, ok := a.DefaultAgent()
-	if !ok || inst == nil || inst.LiveThread() == nil {
-		return opts, nil
-	}
-	cfg := applyWorkflowExecutionOptions(opts)
-	recorder := &workflow.ThreadRecorder{Live: inst.LiveThread()}
-	combined := func(ctx action.Ctx, event action.Event) {
-		if cfg.OnEvent != nil {
-			cfg.OnEvent(ctx, event)
-		}
-		recorder.OnEvent(ctx, event)
-	}
-
-	out := append([]WorkflowExecutionOption(nil), opts...)
-	out = append(out, WithWorkflowEventHandler(combined))
-	return out, recorder
 }
 
 func (a *App) AgentTurnAction(agentName string, spec action.Spec) (action.Action, error) {
@@ -471,12 +460,7 @@ func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...Wo
 	if !ok {
 		return action.Result{Error: fmt.Errorf("app: workflow %q not found", name)}
 	}
-	execOpts, recorder := a.workflowExecutionOptions(opts)
-	result := a.WorkflowExecutor(execOpts...).Execute(ctx, def, input)
-	if recorder != nil {
-		result.Error = errors.Join(result.Error, recorder.Err())
-	}
-	return result
+	return a.WorkflowExecutor(opts...).Execute(ctx, def, input)
 }
 
 func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (action.Action, bool) {

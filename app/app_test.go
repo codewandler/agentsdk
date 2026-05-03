@@ -245,7 +245,7 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 	requireAppRequestContainsText(t, client.RequestAt(0), "say hi")
 }
-func TestWorkflowResourceCanUseDefaultAgentTurnActionAndRecordRun(t *testing.T) {
+func TestWorkflowResourceCanUseDefaultAgentTurnAction(t *testing.T) {
 	ctx := context.Background()
 	bundle, err := agentdir.LoadDir("../testdata/workflow-app")
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestWorkflowResourceCanUseDefaultAgentTurnActionAndRecordRun(t *testing.T) 
 		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
-	inst, err := app.InstantiateAgent("coder",
+	_, err = app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 		agent.WithSessionStoreDir(t.TempDir()),
@@ -277,16 +277,9 @@ func TestWorkflowResourceCanUseDefaultAgentTurnActionAndRecordRun(t *testing.T) 
 	require.Equal(t, "resource workflow response", result.Data.(workflow.Result).Data)
 	require.Len(t, client.Requests(), 1)
 	requireAppRequestContainsText(t, client.RequestAt(0), "answer from resource workflow")
-
-	store := threadjsonlstore.Open(filepath.Dir(inst.SessionStorePath()))
-	state, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(app.SessionID())}).State(ctx, "run_resource_workflow")
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, workflow.RunSucceeded, state.Status)
-	require.Equal(t, workflow.InlineValue("resource workflow response"), state.Output)
 }
 
-func TestAppExecuteWorkflowRecordsToDefaultAgentLiveThread(t *testing.T) {
+func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 	ctx := context.Background()
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
@@ -303,7 +296,7 @@ func TestAppExecuteWorkflowRecordsToDefaultAgentLiveThread(t *testing.T) {
 		agent.WithSessionStoreDir(t.TempDir()),
 	)
 	require.NoError(t, err)
-	require.NotEmpty(t, app.SessionID())
+	require.NotNil(t, inst.LiveThread())
 
 	var handled []action.Event
 	result := app.ExecuteWorkflow(ctx, "echo_flow", "hi",
@@ -316,11 +309,9 @@ func TestAppExecuteWorkflowRecordsToDefaultAgentLiveThread(t *testing.T) {
 	require.NotEmpty(t, handled)
 
 	store := threadjsonlstore.Open(filepath.Dir(inst.SessionStorePath()))
-	state, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(app.SessionID())}).State(ctx, "run_thread")
+	_, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(app.SessionID())}).State(ctx, "run_thread")
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, workflow.RunSucceeded, state.Status)
-	require.Equal(t, workflow.InlineValue("hi"), state.Output)
+	require.False(t, ok)
 }
 
 func TestAppWorkflowActionExposesRegisteredWorkflow(t *testing.T) {
