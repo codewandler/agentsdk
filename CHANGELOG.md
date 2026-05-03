@@ -429,7 +429,7 @@ match these entries as the project starts publishing releases.
 ### Added
 
 - Added `conversation.ProjectionPolicy` with the default replay/native-continuation projection moved behind an explicit policy hook.
-- Added `conversation.WithProjectionPolicy`, `conversation.WithMessageBudget`, `runtime.WithProjectionPolicy`, and `runtime.WithMessageBudget`.
+- Added `conversation.WithProjectionPolicy` and `conversation.WithMessageBudget`.
 - Added optional projection-time message budgeting, disabled by default.
 - Added `runnertest` helpers for fake unified clients, recorded requests, text streams, tool-call streams, reasoning streams, route events, error streams, and incomplete streams.
 
@@ -526,7 +526,6 @@ match these entries as the project starts publishing releases.
 ### Added
 
 - Added `runtime.WithToolContextFactory` and per-turn `WithTurnToolContextFactory` so consumers can derive tool contexts from each turn context without manually passing `WithTurnToolCtx`.
-- Added `runtime.WithRequestDefaults` for setting reusable request defaults in one option.
 
 ## [0.8.0] - 2026-04-24
 

@@ -146,23 +146,6 @@ func TestRunTurnUsesToolContextFactory(t *testing.T) {
 	require.Equal(t, "/factory", toolResult.Output)
 }
 
-func TestWithRequestDefaults(t *testing.T) {
-	client := &fakeClient{}
-	max := 123
-	agent, err := New(client, WithRequestDefaults(conversation.Request{
-		Model:           "default",
-		MaxOutputTokens: &max,
-		Stream:          true,
-	}))
-	require.NoError(t, err)
-
-	_, err = agent.RunTurn(context.Background(), "hi")
-	require.NoError(t, err)
-	require.Equal(t, "default", client.requests[0].Model)
-	require.Equal(t, 123, *client.requests[0].MaxOutputTokens)
-	require.True(t, client.requests[0].Stream)
-}
-
 func TestWithCacheDefaults(t *testing.T) {
 	client := &fakeClient{}
 	agent, err := New(client,

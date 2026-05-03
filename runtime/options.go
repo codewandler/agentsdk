@@ -77,20 +77,6 @@ func WithCachePolicy(policy unified.CachePolicy) Option {
 	}
 }
 
-func WithProjectionPolicy(policy conversation.ProjectionPolicy) Option {
-	return func(e *Engine) {
-		e.historyOptions = append(e.historyOptions, WithHistoryProjectionPolicy(policy))
-	}
-}
-
-func WithStream(stream bool) Option {
-	return func(e *Engine) { e.request.Stream = stream }
-}
-
-func WithRequestDefaults(req conversation.Request) Option {
-	return func(e *Engine) { e.request = cloneRequest(req) }
-}
-
 func WithMaxSteps(max int) Option {
 	return func(e *Engine) {
 		if max > 0 {
