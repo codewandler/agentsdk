@@ -17,18 +17,32 @@ import (
 // channel-specific policy and presentation adapters; harness owns the generic
 // app/agent/session wiring.
 type SessionLoadConfig struct {
+	App     AppLoadConfig
+	Agent   AgentLoadConfig
+	Session SessionOpenConfig
+
+	AppOptions   []app.Option
+	AgentOptions []agent.Option
+}
+
+type AppLoadConfig struct {
 	Output                     io.Writer
 	ResourceBundle             resource.ContributionBundle
 	DefaultAgent               string
 	Workspace                  string
 	IncludeGlobalUserResources bool
-	ResumeSession              string
 	Verbose                    bool
 	ToolTimeout                time.Duration
-	SessionStoreDir            string
+}
 
-	AppOptions   []app.Option
-	AgentOptions []agent.Option
+type AgentLoadConfig struct {
+	ModelPolicy      agent.ModelPolicy
+	ApplyModelPolicy bool
+}
+
+type SessionOpenConfig struct {
+	StoreDir string
+	Resume   string
 }
 
 type FallbackAgent struct {
@@ -108,29 +122,30 @@ func LoadSession(cfg SessionLoadConfig) (*LoadedSession, error) {
 
 func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	var opts []app.Option
-	if cfg.Output != nil {
-		opts = append(opts, app.WithOutput(cfg.Output), app.WithAgentOutput(cfg.Output))
+	appCfg := cfg.App
+	if appCfg.Output != nil {
+		opts = append(opts, app.WithOutput(appCfg.Output), app.WithAgentOutput(appCfg.Output))
 	}
-	if hasResourceBundle(cfg.ResourceBundle) {
-		opts = append(opts, app.WithResourceBundle(cfg.ResourceBundle))
+	if hasResourceBundle(appCfg.ResourceBundle) {
+		opts = append(opts, app.WithResourceBundle(appCfg.ResourceBundle))
 	}
-	if cfg.DefaultAgent != "" {
-		opts = append(opts, app.WithDefaultAgent(cfg.DefaultAgent))
+	if appCfg.DefaultAgent != "" {
+		opts = append(opts, app.WithDefaultAgent(appCfg.DefaultAgent))
 	}
-	if cfg.Workspace != "" {
+	if appCfg.Workspace != "" {
 		opts = append(opts,
-			app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: cfg.Workspace, IncludeGlobalUserResources: cfg.IncludeGlobalUserResources}),
-			app.WithAgentWorkspace(cfg.Workspace),
+			app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: appCfg.Workspace, IncludeGlobalUserResources: appCfg.IncludeGlobalUserResources}),
+			app.WithAgentWorkspace(appCfg.Workspace),
 		)
 	}
-	if cfg.Verbose {
+	if appCfg.Verbose {
 		opts = append(opts, app.WithAgentVerbose(true))
 	}
-	if cfg.ToolTimeout > 0 {
-		opts = append(opts, app.WithAgentToolTimeout(cfg.ToolTimeout))
+	if appCfg.ToolTimeout > 0 {
+		opts = append(opts, app.WithAgentToolTimeout(appCfg.ToolTimeout))
 	}
-	if cfg.SessionStoreDir != "" {
-		opts = append(opts, app.WithAgentSessionStoreDir(cfg.SessionStoreDir))
+	if cfg.Session.StoreDir != "" {
+		opts = append(opts, app.WithAgentSessionStoreDir(cfg.Session.StoreDir))
 	}
 	if len(cfg.AppOptions) > 0 {
 		opts = append(opts, cfg.AppOptions...)
@@ -150,8 +165,11 @@ func hasResourceBundle(bundle resource.ContributionBundle) bool {
 
 func sessionAgentOptions(cfg SessionLoadConfig) []agent.Option {
 	opts := append([]agent.Option(nil), cfg.AgentOptions...)
-	if cfg.ResumeSession != "" {
-		opts = append(opts, agent.WithResumeSession(cfg.ResumeSession))
+	if cfg.Agent.ApplyModelPolicy {
+		opts = append(opts, agent.WithModelPolicy(cfg.Agent.ModelPolicy))
+	}
+	if cfg.Session.Resume != "" {
+		opts = append(opts, agent.WithResumeSession(cfg.Session.Resume))
 	}
 	return opts
 }

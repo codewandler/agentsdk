@@ -13,7 +13,7 @@ import (
 
 func TestLoadSessionCreatesDefaultHarnessSession(t *testing.T) {
 	loaded, err := LoadSession(SessionLoadConfig{
-		DefaultAgent: "test",
+		App: AppLoadConfig{DefaultAgent: "test"},
 		AppOptions: []app.Option{
 			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
 		},
@@ -124,8 +124,8 @@ func TestEnsureFallbackAgentSkipsWhenDisabled(t *testing.T) {
 func TestLoadSessionAppliesResumeSession(t *testing.T) {
 	dir := t.TempDir()
 	first, err := LoadSession(SessionLoadConfig{
-		DefaultAgent:    "test",
-		SessionStoreDir: dir,
+		App:     AppLoadConfig{DefaultAgent: "test"},
+		Session: SessionOpenConfig{StoreDir: dir},
 		AppOptions: []app.Option{
 			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
 		},
@@ -135,9 +135,11 @@ func TestLoadSessionAppliesResumeSession(t *testing.T) {
 	require.NotEmpty(t, first.Agent.SessionStorePath())
 
 	resumed, err := LoadSession(SessionLoadConfig{
-		DefaultAgent:    "test",
-		SessionStoreDir: dir,
-		ResumeSession:   first.Agent.SessionStorePath(),
+		App: AppLoadConfig{DefaultAgent: "test"},
+		Session: SessionOpenConfig{
+			StoreDir: dir,
+			Resume:   first.Agent.SessionStorePath(),
+		},
 		AppOptions: []app.Option{
 			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
 		},
@@ -147,4 +149,24 @@ func TestLoadSessionAppliesResumeSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, first.Agent.SessionID(), resumed.Agent.SessionID())
 	require.Equal(t, first.Agent.SessionStorePath(), resumed.Agent.SessionStorePath())
+}
+
+func TestLoadSessionAppliesModelPolicy(t *testing.T) {
+	loaded, err := LoadSession(SessionLoadConfig{
+		App: AppLoadConfig{DefaultAgent: "test"},
+		Agent: AgentLoadConfig{
+			ModelPolicy: agent.ModelPolicy{
+				UseCase:      agent.ModelUseCaseAgenticCoding,
+				ApprovedOnly: true,
+			},
+			ApplyModelPolicy: true,
+		},
+		AppOptions: []app.Option{
+			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
+		},
+		AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())},
+	})
+
+	require.Nil(t, loaded)
+	require.ErrorContains(t, err, "approved-only model policy requires auto mux routing")
 }

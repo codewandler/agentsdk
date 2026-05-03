@@ -121,22 +121,30 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
-	agentOpts, err := agentOptions(cfg, env, modelPolicy, applyModelPolicy)
+	agentOpts, err := agentOptions(cfg, env)
 	if err != nil {
 		return nil, err
 	}
 	loaded, err := harness.LoadSession(harness.SessionLoadConfig{
-		Output:                     env.Out,
-		ResourceBundle:             resolved.Bundle,
-		DefaultAgent:               name,
-		Workspace:                  env.Workspace,
-		IncludeGlobalUserResources: env.Discovery.IncludeGlobalUserResources,
-		Verbose:                    cfg.Verbose,
-		ToolTimeout:                cfg.ToolTimeout,
-		SessionStoreDir:            env.SessionsDir,
-		ResumeSession:              env.ResumePath,
-		AppOptions:                 appOpts,
-		AgentOptions:               agentOpts,
+		App: harness.AppLoadConfig{
+			Output:                     env.Out,
+			ResourceBundle:             resolved.Bundle,
+			DefaultAgent:               name,
+			Workspace:                  env.Workspace,
+			IncludeGlobalUserResources: env.Discovery.IncludeGlobalUserResources,
+			Verbose:                    cfg.Verbose,
+			ToolTimeout:                cfg.ToolTimeout,
+		},
+		Agent: harness.AgentLoadConfig{
+			ModelPolicy:      modelPolicy,
+			ApplyModelPolicy: applyModelPolicy,
+		},
+		Session: harness.SessionOpenConfig{
+			StoreDir: env.SessionsDir,
+			Resume:   env.ResumePath,
+		},
+		AppOptions:   appOpts,
+		AgentOptions: agentOpts,
 	})
 	if err != nil {
 		return nil, err
@@ -247,7 +255,7 @@ func appOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config, e
 	return appOpts, nil
 }
 
-func agentOptions(cfg Config, env loadEnvironment, modelPolicy agent.ModelPolicy, applyModelPolicy bool) ([]agent.Option, error) {
+func agentOptions(cfg Config, env loadEnvironment) ([]agent.Option, error) {
 	instOpts := append([]agent.Option(nil), cfg.AgentOptions...)
 	if cfg.ApplySourceAPI {
 		sourceAPI, err := agent.ParseSourceAPI(cfg.SourceAPI)
@@ -255,9 +263,6 @@ func agentOptions(cfg Config, env loadEnvironment, modelPolicy agent.ModelPolicy
 			return nil, err
 		}
 		instOpts = append(instOpts, agent.WithSourceAPI(sourceAPI))
-	}
-	if applyModelPolicy {
-		instOpts = append(instOpts, agent.WithModelPolicy(modelPolicy))
 	}
 	if cfg.DebugMessage {
 		instOpts = append(instOpts, agent.WithRequestObserver(debugMessageObserver(env.Out)))
