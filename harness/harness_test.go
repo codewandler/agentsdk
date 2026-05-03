@@ -285,8 +285,8 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 	require.NoError(t, err)
 	var handled []action.Event
 	result := session.ExecuteWorkflow(ctx, "ask_flow", "answer through harness",
-		app.WithWorkflowRunID("run_harness"),
-		app.WithWorkflowEventHandler(func(_ action.Ctx, event action.Event) {
+		workflow.WithRunID("run_harness"),
+		workflow.WithEventHandler(func(_ action.Ctx, event action.Event) {
 			handled = append(handled, event)
 		}),
 	)

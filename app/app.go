@@ -266,48 +266,11 @@ func (a *App) Workflows() []workflow.Definition {
 	return out
 }
 
-type WorkflowExecutionOption func(*workflowExecutionConfig)
-
-type workflowExecutionConfig struct {
-	OnEvent workflow.EventHandler
-	RunID   workflow.RunID
+func (a *App) workflowExecutor(opts ...workflow.ExecuteOption) workflow.Executor {
+	return workflow.NewExecutor(workflow.RegistryResolver{Registry: a.actions}, opts...)
 }
 
-func WithWorkflowEventHandler(handler workflow.EventHandler) WorkflowExecutionOption {
-	return func(c *workflowExecutionConfig) {
-		if handler == nil {
-			return
-		}
-		previous := c.OnEvent
-		c.OnEvent = func(ctx action.Ctx, event action.Event) {
-			if previous != nil {
-				previous(ctx, event)
-			}
-			handler(ctx, event)
-		}
-	}
-}
-
-func WithWorkflowRunID(runID workflow.RunID) WorkflowExecutionOption {
-	return func(c *workflowExecutionConfig) { c.RunID = runID }
-}
-
-func applyWorkflowExecutionOptions(opts []WorkflowExecutionOption) workflowExecutionConfig {
-	var cfg workflowExecutionConfig
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
-	return cfg
-}
-
-func (a *App) workflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
-	cfg := applyWorkflowExecutionOptions(opts)
-	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.actions}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}
-}
-
-func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...WorkflowExecutionOption) action.Result {
+func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...workflow.ExecuteOption) action.Result {
 	if a == nil {
 		return action.Result{Error: fmt.Errorf("app: nil app")}
 	}
@@ -318,7 +281,7 @@ func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...Wo
 	return a.workflowExecutor(opts...).Execute(ctx, def, input)
 }
 
-func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (action.Action, bool) {
+func (a *App) WorkflowAction(name string, opts ...workflow.ExecuteOption) (action.Action, bool) {
 	def, ok := a.Workflow(name)
 	if !ok {
 		return nil, false

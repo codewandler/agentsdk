@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/workflow"
 )
@@ -119,7 +118,7 @@ func (h WorkflowCommandHandler) workflowStart(ctx context.Context, workflowName 
 		return command.NotFound("workflow", workflowName), nil
 	}
 	runID := workflow.NewRunID()
-	result := s.ExecuteWorkflow(ctx, workflowName, input, app.WithWorkflowRunID(runID))
+	result := s.ExecuteWorkflow(ctx, workflowName, input, workflow.WithRunID(runID))
 	if result.Error != nil {
 		return command.Display(WorkflowStartPayload{WorkflowName: workflowName, RunID: runID, Status: workflow.RunFailed, Error: result.Error.Error()}), nil
 	}

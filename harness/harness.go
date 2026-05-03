@@ -154,7 +154,7 @@ func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[s
 	return commands.ExecuteMap(ctx, path, input)
 }
 
-func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...app.WorkflowExecutionOption) action.Result {
+func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...workflow.ExecuteOption) action.Result {
 	if s == nil || s.App == nil {
 		return action.Result{Error: fmt.Errorf("harness: app is required")}
 	}
@@ -166,13 +166,13 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	return result
 }
 
-func (s *Session) workflowExecutionOptions(opts []app.WorkflowExecutionOption) ([]app.WorkflowExecutionOption, *workflow.ThreadRecorder) {
+func (s *Session) workflowExecutionOptions(opts []workflow.ExecuteOption) ([]workflow.ExecuteOption, *workflow.ThreadRecorder) {
 	if s == nil || s.Agent == nil || s.Agent.LiveThread() == nil {
 		return opts, nil
 	}
 	recorder := &workflow.ThreadRecorder{Live: s.Agent.LiveThread()}
-	out := append([]app.WorkflowExecutionOption(nil), opts...)
-	out = append(out, app.WithWorkflowEventHandler(recorder.OnEvent))
+	out := append([]workflow.ExecuteOption(nil), opts...)
+	out = append(out, workflow.WithEventHandler(recorder.OnEvent))
 	return out, recorder
 }
 

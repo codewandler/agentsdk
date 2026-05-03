@@ -141,8 +141,8 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 
 	var events []action.Event
 	result := app.ExecuteWorkflow(context.Background(), "echo_flow", "hi",
-		WithWorkflowRunID("run_fixed"),
-		WithWorkflowEventHandler(func(_ action.Ctx, event action.Event) {
+		workflow.WithRunID("run_fixed"),
+		workflow.WithEventHandler(func(_ action.Ctx, event action.Event) {
 			events = append(events, event)
 		}),
 	)
@@ -176,7 +176,7 @@ func TestAppWorkflowActionAcceptsExecutionOptions(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	wfAction, ok := app.WorkflowAction("echo_flow", WithWorkflowRunID("run_action"))
+	wfAction, ok := app.WorkflowAction("echo_flow", workflow.WithRunID("run_action"))
 	require.True(t, ok)
 	result := wfAction.Execute(context.Background(), "hi")
 	require.NoError(t, result.Error)
@@ -231,7 +231,7 @@ func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
 	require.Equal(t, "ask", def.Steps[0].ID)
 	require.Equal(t, "ask_agent", def.Steps[0].Action.Name)
 
-	result := app.ExecuteWorkflow(ctx, "ask_agent_flow", "answer from resource workflow", WithWorkflowRunID("run_resource_workflow"))
+	result := app.ExecuteWorkflow(ctx, "ask_agent_flow", "answer from resource workflow", workflow.WithRunID("run_resource_workflow"))
 	require.NoError(t, result.Error)
 	require.Equal(t, "resource workflow response", result.Data.(workflow.Result).Data)
 	require.Len(t, client.Requests(), 1)
@@ -258,8 +258,8 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 
 	var handled []action.Event
 	result := app.ExecuteWorkflow(ctx, "echo_flow", "hi",
-		WithWorkflowRunID("run_thread"),
-		WithWorkflowEventHandler(func(_ action.Ctx, event action.Event) {
+		workflow.WithRunID("run_thread"),
+		workflow.WithEventHandler(func(_ action.Ctx, event action.Event) {
 			handled = append(handled, event)
 		}),
 	)

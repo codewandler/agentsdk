@@ -145,6 +145,37 @@ type Executor struct {
 	Now      func() time.Time
 }
 
+type ExecuteOption func(*Executor)
+
+func NewExecutor(resolver Resolver, opts ...ExecuteOption) Executor {
+	executor := Executor{Resolver: resolver}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&executor)
+		}
+	}
+	return executor
+}
+
+func WithEventHandler(handler EventHandler) ExecuteOption {
+	return func(e *Executor) {
+		if handler == nil {
+			return
+		}
+		previous := e.OnEvent
+		e.OnEvent = func(ctx action.Ctx, event action.Event) {
+			if previous != nil {
+				previous(ctx, event)
+			}
+			handler(ctx, event)
+		}
+	}
+}
+
+func WithRunID(runID RunID) ExecuteOption {
+	return func(e *Executor) { e.RunID = runID }
+}
+
 // Execute runs def and returns a workflow result in action.Result.Data. Execution
 // stops at the first failed or unresolved step; partial step results are kept in
 // Result.StepResults.
