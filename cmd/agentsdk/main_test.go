@@ -19,6 +19,10 @@ func TestRootCommandRegistersRun(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, run)
 	require.Equal(t, "run", run.Name())
+	serve, _, err := cmd.Find([]string{"serve"})
+	require.NoError(t, err)
+	require.NotNil(t, serve)
+	require.Equal(t, "serve", serve.Name())
 	discover, _, err := cmd.Find([]string{"discover"})
 	require.NoError(t, err)
 	require.NotNil(t, discover)
@@ -32,6 +36,28 @@ func TestRootCommandRegistersRun(t *testing.T) {
 func TestRunRejectsUnknownFlag(t *testing.T) {
 	err := run([]string{"run", "./agent", "--bad"})
 	require.Error(t, err)
+}
+
+func TestServeStatusPrintsHarnessServiceSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
+	sessionsDir := filepath.Join(dir, "sessions")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"serve", dir, "--status", "--sessions-dir", sessionsDir, "--no-default-plugins"})
+
+	require.NoError(t, cmd.Execute())
+	text := out.String()
+	require.Contains(t, text, "agentsdk service")
+	require.Contains(t, text, "mode: harness.service")
+	require.Contains(t, text, "health: ok")
+	require.Contains(t, text, "sessions: "+sessionsDir)
+	require.Contains(t, text, "active_sessions: 1")
+	require.Contains(t, text, "agent=coder")
+	require.Contains(t, text, "thread_backed=true")
 }
 
 func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {

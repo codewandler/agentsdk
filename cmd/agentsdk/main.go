@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -15,6 +19,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/terminal/cli"
@@ -53,10 +58,101 @@ func rootCmd() *cobra.Command {
 		ResourceArg: true,
 		AgentFlag:   true,
 	}))
+	cmd.AddCommand(serveCmd())
 	cmd.AddCommand(discoverCmd())
 	cmd.AddCommand(modelsCmd())
 	cmd.AddCommand(toolCmd())
 	return cmd
+}
+
+func serveCmd() *cobra.Command {
+	var (
+		agentName        string
+		workspace        string
+		sessionsDir      string
+		sessionName      string
+		statusOnly       bool
+		noDefaultPlugins bool
+		pluginNames      []string
+	)
+	cmd := &cobra.Command{
+		Use:           "serve [path]",
+		Short:         "Run an agentsdk harness service host",
+		Long:          "Run agentsdk as a long-running harness service host. The service host owns process lifecycle and storage conventions while harness.Service remains the runtime/session owner.",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resourcePath := "."
+			if len(args) == 1 {
+				resourcePath = args[0]
+			}
+			if sessionsDir == "" {
+				sessionsDir = defaultServeSessionsDir(resourcePath)
+			}
+			loaded, err := cli.Load(cmd.Context(), cli.Config{
+				Resources:        cli.DirResources(resourcePath),
+				AgentName:        agentName,
+				Workspace:        workspace,
+				SessionsDir:      sessionsDir,
+				PluginNames:      pluginNames,
+				NoDefaultPlugins: noDefaultPlugins,
+				In:               cmd.InOrStdin(),
+				Out:              cmd.OutOrStdout(),
+				Err:              cmd.ErrOrStderr(),
+			})
+			if err != nil {
+				return err
+			}
+			host, err := daemon.New(daemon.Config{Service: loaded.Harness, SessionsDir: sessionsDir, ConfigPath: filepath.Join(resourcePath, "agentsdk.app.json")})
+			if err != nil {
+				return err
+			}
+			if sessionName != "" && loaded.Session != nil {
+				loaded.Session.Name = sessionName
+			}
+			printServeStatus(cmd.OutOrStdout(), host.Status())
+			if statusOnly {
+				return host.Shutdown(cmd.Context())
+			}
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+			defer stop()
+			<-ctx.Done()
+			if err := host.Shutdown(context.Background()); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "agentsdk service stopped")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&agentName, "agent", "", "Agent name to host")
+	cmd.Flags().StringVarP(&workspace, "workspace", "w", "", "Working directory (default: $PWD)")
+	cmd.Flags().StringVar(&sessionsDir, "sessions-dir", "", "Session storage directory (default: <path>/.agentsdk/sessions)")
+	cmd.Flags().StringVar(&sessionName, "session-name", "", "Registry name to report for the opened service session")
+	cmd.Flags().BoolVar(&statusOnly, "status", false, "Print service status and exit without waiting")
+	cmd.Flags().StringSliceVar(&pluginNames, "plugin", nil, "Activate named app plugin (repeatable)")
+	cmd.Flags().BoolVar(&noDefaultPlugins, "no-default-plugins", false, "Disable the built-in local_cli fallback plugin")
+	return cmd
+}
+
+func defaultServeSessionsDir(resourcePath string) string {
+	if strings.TrimSpace(resourcePath) == "" {
+		resourcePath = "."
+	}
+	return filepath.Join(resourcePath, ".agentsdk", "sessions")
+}
+
+func printServeStatus(out io.Writer, status daemon.Status) {
+	fmt.Fprintln(out, "agentsdk service")
+	fmt.Fprintf(out, "mode: %s\n", status.Mode)
+	fmt.Fprintf(out, "health: %s\n", status.Health)
+	if status.Storage.SessionsDir != "" {
+		fmt.Fprintf(out, "sessions: %s\n", status.Storage.SessionsDir)
+	}
+	fmt.Fprintf(out, "active_sessions: %d\n", status.ActiveSessions)
+	for _, session := range status.Sessions {
+		fmt.Fprintf(out, "- %s id=%s agent=%s thread_backed=%t\n", session.Name, session.SessionID, session.AgentName, session.ThreadBacked)
+	}
 }
 
 func toolCmd() *cobra.Command {

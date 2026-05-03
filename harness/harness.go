@@ -63,6 +63,15 @@ type SessionSummary struct {
 	Closed       bool
 }
 
+// ServiceStatus is a stable, side-effect-free snapshot for long-running hosts
+// such as daemon processes and HTTP/SSE control planes.
+type ServiceStatus struct {
+	Mode           string
+	Health         string
+	Closed         bool
+	ActiveSessions int
+	Sessions       []SessionSummary
+}
 type SessionEventType string
 
 const (
@@ -198,6 +207,38 @@ func (s *Service) Sessions() []SessionSummary {
 	return out
 }
 
+// Session returns an active session by registry name. The boolean is false when
+// the service is nil, closed, or the name is not currently registered.
+func (s *Service) Session(name string) (*Session, bool) {
+	if s == nil || strings.TrimSpace(name) == "" {
+		return nil, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, false
+	}
+	session, ok := s.sessions[name]
+	return session, ok
+}
+
+// Status returns a stable health/registry snapshot suitable for long-running
+// host control planes. It does not open, resume, or close sessions.
+func (s *Service) Status() ServiceStatus {
+	closed := s.isClosed()
+	sessions := s.Sessions()
+	health := "ok"
+	if closed {
+		health = "closed"
+	}
+	return ServiceStatus{
+		Mode:           "harness.service",
+		Health:         health,
+		Closed:         closed,
+		ActiveSessions: len(sessions),
+		Sessions:       sessions,
+	}
+}
 func (s *Service) Close() error {
 	if s == nil {
 		return nil

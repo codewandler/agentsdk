@@ -207,19 +207,19 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 11. Harness daemon/service mode
 
-- [ ] Use `agentsdk serve` as the daemon/service CLI command shape.
-- [ ] Define daemon as a harness deployment mode, not a separate product concept.
-- [ ] Add a slim daemon package wrapper above `harness.Service` for process/config/trigger ownership.
-- [ ] Keep `harness.Service` as the runtime/session owner; do not create a second app/runtime/plugin system.
-- [ ] Add stable service lifecycle API for long-running hosts.
-- [ ] Add session registry behavior suitable for daemon mode.
-- [ ] Add persisted session open/resume behavior for daemon-owned sessions.
-- [ ] Add graceful shutdown semantics.
-- [ ] Add health/status inspection API.
-- [ ] Add daemon/session storage path conventions.
-- [ ] Add daemon-readable config/resource loading conventions.
-- [ ] Add CLI smoke coverage for service-like harness lifecycle without starting an interactive REPL.
-- [ ] Document daemon/service conventions.
+- [x] Use `agentsdk serve` as the daemon/service CLI command shape.
+- [x] Define daemon as a harness deployment mode, not a separate product concept.
+- [x] Add a slim daemon package wrapper above `harness.Service` for process/config/trigger ownership.
+- [x] Keep `harness.Service` as the runtime/session owner; do not create a second app/runtime/plugin system.
+- [x] Add stable service lifecycle API for long-running hosts.
+- [x] Add session registry behavior suitable for daemon mode.
+- [x] Add persisted session open/resume behavior for daemon-owned sessions.
+- [x] Add graceful shutdown semantics.
+- [x] Add health/status inspection API.
+- [x] Add daemon/session storage path conventions.
+- [x] Add daemon-readable config/resource loading conventions.
+- [x] Add CLI smoke coverage for service-like harness lifecycle without starting an interactive REPL.
+- [x] Document daemon/service conventions.
 
 ## 12. Triggers and scheduling
 
