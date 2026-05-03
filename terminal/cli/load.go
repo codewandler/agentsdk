@@ -146,10 +146,11 @@ func harnessSessionLoadConfig(ctx context.Context, resolved agentdir.Resolution,
 		SourceAPI:        sourceAPI,
 		ApplySourceAPI:   applySourceAPI,
 	})
-	appOpts, err := appOptions(ctx, resolved, cfg, env)
+	plugins, err := loadPlugins(ctx, resolved, cfg)
 	if err != nil {
 		return harness.SessionLoadConfig{}, err
 	}
+	appOpts := appOptions(cfg, env)
 	agentOpts, err := agentOptions(cfg, env)
 	if err != nil {
 		return harness.SessionLoadConfig{}, err
@@ -169,6 +170,7 @@ func harnessSessionLoadConfig(ctx context.Context, resolved agentdir.Resolution,
 			StoreDir: env.SessionsDir,
 			Resume:   env.ResumePath,
 		},
+		Plugins:      plugins,
 		AppOptions:   appOpts,
 		AgentOptions: agentOpts,
 	}, nil
@@ -239,22 +241,17 @@ func sourceAPIOption(cfg Config) (adapt.ApiKind, bool, error) {
 	return sourceAPI, true, nil
 }
 
-func appOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config, env loadEnvironment) ([]app.Option, error) {
+func appOptions(cfg Config, env loadEnvironment) []app.Option {
 	appOpts := []app.Option{
 		app.WithAgentOptions(agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(env.Out))),
 	}
-	pluginOpts, err := pluginOptions(ctx, resolved, cfg)
-	if err != nil {
-		return nil, err
-	}
-	appOpts = append(appOpts, pluginOpts...)
 	// Risk gate: log-only mode — observes all tool calls, always approves.
 	// Write to stderr so TUI doesn't overwrite the output.
 	appOpts = append(appOpts, app.WithToolMiddlewares(
 		tool.HooksMiddleware(&riskLogMiddleware{out: os.Stderr}),
 	))
 	appOpts = append(appOpts, cfg.AppOptions...)
-	return appOpts, nil
+	return appOpts
 }
 
 func agentOptions(cfg Config, env loadEnvironment) ([]agent.Option, error) {
@@ -265,21 +262,13 @@ func agentOptions(cfg Config, env loadEnvironment) ([]agent.Option, error) {
 	return instOpts, nil
 }
 
-func pluginOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config) ([]app.Option, error) {
-	plugins, err := harness.ResolvePlugins(ctx, harness.PluginLoadConfig{
+func loadPlugins(ctx context.Context, resolved agentdir.Resolution, cfg Config) ([]app.Plugin, error) {
+	return harness.ResolvePlugins(ctx, harness.PluginLoadConfig{
 		Factory:  pluginFactory(cfg),
 		Defaults: defaultPluginRefs(cfg),
 		Manifest: resolved.ManifestPluginRefs(),
 		Explicit: pluginRefsFromNames(cfg.PluginNames),
 	})
-	if err != nil {
-		return nil, err
-	}
-	opts := make([]app.Option, 0, len(plugins))
-	for _, plugin := range plugins {
-		opts = append(opts, app.WithPlugin(plugin))
-	}
-	return opts, nil
 }
 
 func pluginFactory(cfg Config) app.PluginFactory {

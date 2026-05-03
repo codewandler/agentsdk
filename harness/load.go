@@ -22,6 +22,7 @@ type SessionLoadConfig struct {
 	App     AppLoadConfig
 	Agent   AgentLoadConfig
 	Session SessionOpenConfig
+	Plugins []app.Plugin
 
 	AppOptions   []app.Option
 	AgentOptions []agent.Option
@@ -242,6 +243,11 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	}
 	if cfg.Session.StoreDir != "" {
 		opts = append(opts, app.WithAgentSessionStoreDir(cfg.Session.StoreDir))
+	}
+	for _, plugin := range cfg.Plugins {
+		if plugin != nil {
+			opts = append(opts, app.WithPlugin(plugin))
+		}
 	}
 	if len(cfg.AppOptions) > 0 {
 		opts = append(opts, cfg.AppOptions...)

@@ -38,6 +38,19 @@ func TestLoadSessionReturnsAppCreationError(t *testing.T) {
 	require.Nil(t, loaded)
 	require.ErrorContains(t, err, "app: no default agent configured")
 }
+func TestLoadSessionAppliesPlugins(t *testing.T) {
+	loaded, err := LoadSession(SessionLoadConfig{
+		App: AppLoadConfig{DefaultAgent: "plugin-agent"},
+		Plugins: []app.Plugin{
+			agentSpecsPlugin{specs: []agent.Spec{{Name: "plugin-agent", System: "from plugin"}}},
+		},
+		AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, "plugin-agent", loaded.Agent.Spec().Name)
+}
 
 func TestPrepareResolvedAgentSelectsAndAppliesOverrides(t *testing.T) {
 	inference := agent.InferenceOptions{Model: "override/model", MaxTokens: 123}
@@ -304,3 +317,11 @@ func TestLoadSessionAppliesSourceAPI(t *testing.T) {
 	require.NotNil(t, loaded)
 	require.Equal(t, adapt.ApiOpenAIChatCompletions, got)
 }
+
+type agentSpecsPlugin struct {
+	specs []agent.Spec
+}
+
+func (p agentSpecsPlugin) Name() string { return "agent-specs" }
+
+func (p agentSpecsPlugin) AgentSpecs() []agent.Spec { return p.specs }
