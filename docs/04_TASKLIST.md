@@ -53,22 +53,22 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 3. Agent façade cleanup
 
-- [ ] Inspect `agent.Instance` responsibilities before changing code.
-- [ ] Classify model routing/policy responsibility.
-- [ ] Classify runtime construction responsibility.
-- [ ] Classify session/thread setup responsibility.
-- [ ] Classify skill repository/state responsibility.
-- [ ] Classify context provider setup responsibility.
-- [ ] Classify capability registry/session setup responsibility.
-- [ ] Classify usage tracking responsibility.
-- [ ] Classify writer output responsibility.
-- [ ] Classify event handling responsibility.
-- [ ] Move session/thread opening behind a narrower seam only if it deletes duplicated paths.
-- [ ] Move context provider lifecycle behind a helper only if it reduces ownership drift.
-- [ ] Move capability session setup closer to runtime/thread lifecycle if a clean seam appears.
-- [ ] Reduce direct JSONL store knowledge inside `agent` if a better owner is identified.
-- [ ] Keep `agent.Instance` as a façade over clearer internals rather than replacing it abruptly.
-- [ ] Re-check public `agent.Instance` accessors and delete only clearly stale surfaces.
+- [x] Inspect `agent.Instance` responsibilities before changing code.
+- [x] Classify model routing/policy responsibility.
+- [x] Classify runtime construction responsibility.
+- [x] Classify session/thread setup responsibility.
+- [x] Classify skill repository/state responsibility.
+- [x] Classify context provider setup responsibility.
+- [x] Classify capability registry/session setup responsibility.
+- [x] Classify usage tracking responsibility.
+- [x] Classify writer output responsibility.
+- [x] Classify event handling responsibility.
+- [x] Move session/thread opening behind a narrower seam only if it deletes duplicated paths.
+- [x] Move context provider lifecycle behind a helper only if it reduces ownership drift.
+- [x] Move capability session setup closer to runtime/thread lifecycle if a clean seam appears.
+- [x] Reduce direct JSONL store knowledge inside `agent` if a better owner is identified.
+- [x] Keep `agent.Instance` as a façade over clearer internals rather than replacing it abruptly.
+- [x] Re-check public `agent.Instance` accessors and delete only clearly stale surfaces.
 
 ## 4. Harness/session lifecycle
 

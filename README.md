@@ -461,6 +461,8 @@ Use these directly when `runtime.Agent` is too high level:
 
 - [`AGENTS.md`](AGENTS.md) — developer and AI agent notes, testing guidance, dependency process.
 - [`CHANGELOG.md`](CHANGELOG.md) — release history and migration notes.
+- [`docs/05_QUICKSTART.md`](docs/05_QUICKSTART.md) — refactored app/harness/CLI quickstart.
+- [`docs/06_AGENT_FACADE_AUDIT.md`](docs/06_AGENT_FACADE_AUDIT.md) — `agent.Instance` responsibility audit and extraction triggers.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
