@@ -161,10 +161,6 @@ type TurnConfig struct {
 	OnRequest        runner.RequestObserver
 }
 
-func WithTurnRequest(req conversation.Request) TurnOption {
-	return func(c *TurnConfig) { c.Request = req }
-}
-
 func WithTurnTools(tools []tool.Tool) TurnOption {
 	return func(c *TurnConfig) {
 		c.Tools = append([]tool.Tool(nil), tools...)
@@ -172,28 +168,12 @@ func WithTurnTools(tools []tool.Tool) TurnOption {
 	}
 }
 
-func WithTurnToolCtx(ctx tool.Ctx) TurnOption {
-	return func(c *TurnConfig) { c.ToolCtx = ctx }
-}
-
-func WithTurnToolContextFactory(factory func(context.Context) tool.Ctx) TurnOption {
-	return func(c *TurnConfig) { c.ToolCtxFactory = factory }
-}
-
 func WithTurnEventHandler(handler runner.EventHandler) TurnOption {
 	return func(c *TurnConfig) { c.OnEvent = handler }
 }
 
-func WithTurnRequestObserver(observer runner.RequestObserver) TurnOption {
-	return func(c *TurnConfig) { c.OnRequest = observer }
-}
-
 func WithTurnProviderIdentity(identity conversation.ProviderIdentity) TurnOption {
 	return func(c *TurnConfig) { c.ProviderIdentity = identity }
-}
-
-func WithTurnRequestPreparer(preparer runner.RequestPreparer) TurnOption {
-	return func(c *TurnConfig) { c.RequestPreparer = preparer }
 }
 
 func WithTurnMaxSteps(max int) TurnOption {

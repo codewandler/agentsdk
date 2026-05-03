@@ -26,17 +26,10 @@ type historyDefaults struct {
 	model           string
 	maxOutputTokens *int
 	temperature     *float64
-	topP            *float64
-	topK            *int
-	stop            []string
-	seed            *int64
-	responseFormat  *unified.ResponseFormat
 	reasoning       *unified.ReasoningConfig
-	safety          *unified.SafetyConfig
 	instructions    []unified.Instruction
 	tools           []unified.Tool
 	toolChoice      *unified.ToolChoice
-	user            string
 	cachePolicy     unified.CachePolicy
 	projection      conversation.ProjectionPolicy
 }
@@ -270,24 +263,21 @@ func (h *History) buildRequest(req conversation.Request, identity conversation.P
 		Model:           firstNonEmpty(req.Model, h.defaults.model),
 		MaxOutputTokens: firstIntPtr(req.MaxOutputTokens, h.defaults.maxOutputTokens),
 		Temperature:     firstFloatPtr(req.Temperature, h.defaults.temperature),
-		TopP:            firstFloatPtr(req.TopP, h.defaults.topP),
-		TopK:            firstIntPtr(req.TopK, h.defaults.topK),
-		Stop:            append([]string(nil), h.defaults.stop...),
-		Seed:            firstInt64Ptr(req.Seed, h.defaults.seed),
-		ResponseFormat:  firstResponseFormatPtr(req.ResponseFormat, h.defaults.responseFormat),
+		TopP:            req.TopP,
+		TopK:            req.TopK,
+		Stop:            append([]string(nil), req.Stop...),
+		Seed:            req.Seed,
+		ResponseFormat:  req.ResponseFormat,
 		Reasoning:       firstReasoningPtr(req.Reasoning, h.defaults.reasoning),
-		Safety:          firstSafetyPtr(req.Safety, h.defaults.safety),
+		Safety:          req.Safety,
 		Instructions:    append(append([]unified.Instruction(nil), h.defaults.instructions...), req.Instructions...),
 		Tools:           append([]unified.Tool(nil), h.defaults.tools...),
 		ToolChoice:      h.defaults.toolChoice,
 		Messages:        projection.Messages,
 		Stream:          req.Stream,
-		User:            firstNonEmpty(req.User, h.defaults.user),
+		User:            req.User,
 		CachePolicy:     firstCachePolicy(req.CachePolicy, h.defaults.cachePolicy),
 		Extensions:      projection.Extensions,
-	}
-	if len(req.Stop) > 0 {
-		out.Stop = append([]string(nil), req.Stop...)
 	}
 	if len(req.Tools) > 0 {
 		out.Tools = append([]unified.Tool(nil), req.Tools...)
@@ -443,28 +433,7 @@ func firstFloatPtr(a, b *float64) *float64 {
 	return b
 }
 
-func firstInt64Ptr(a, b *int64) *int64 {
-	if a != nil {
-		return a
-	}
-	return b
-}
-
-func firstResponseFormatPtr(a, b *unified.ResponseFormat) *unified.ResponseFormat {
-	if a != nil {
-		return a
-	}
-	return b
-}
-
 func firstReasoningPtr(a, b *unified.ReasoningConfig) *unified.ReasoningConfig {
-	if a != nil {
-		return a
-	}
-	return b
-}
-
-func firstSafetyPtr(a, b *unified.SafetyConfig) *unified.SafetyConfig {
 	if a != nil {
 		return a
 	}
