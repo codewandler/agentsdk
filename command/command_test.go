@@ -31,6 +31,18 @@ func TestRegistryExecutesAliases(t *testing.T) {
 	require.Equal(t, ResultExit, result.Kind)
 }
 
+func TestFlatCommandDescriptorNormalizesMetadata(t *testing.T) {
+	cmd := New(Descriptor{Name: "/review", Aliases: []string{"/rv"}, Description: "Review", ArgumentHint: "<topic>"}, nil)
+
+	desc := cmd.Descriptor()
+	require.Equal(t, "review", desc.Name)
+	require.Equal(t, []string{"review"}, desc.Path)
+	require.Equal(t, []string{"rv"}, desc.Aliases)
+	require.Equal(t, "Review", desc.Description)
+	require.Equal(t, "<topic>", desc.ArgumentHint)
+	require.True(t, desc.Executable)
+}
+
 func TestRegistryRejectsDuplicateAlias(t *testing.T) {
 	reg := NewRegistry()
 	require.NoError(t, reg.Register(New(Descriptor{Name: "one", Aliases: []string{"x"}}, nil)))
@@ -95,6 +107,70 @@ func TestCommandRunToolOnlyRunsAgentCallableCommands(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, blocked.IsError())
 	require.Contains(t, blocked.String(), "not callable")
+}
+
+func TestRegistryDescriptorsIncludeFlatCommandsAndTrees(t *testing.T) {
+	reg := NewRegistry()
+	tree, err := NewTree("workflow", Description("Workflow commands"), Alias("wf")).
+		Sub("runs", nil, Description("List runs"), Flag("status")).
+		Build()
+	require.NoError(t, err)
+	require.NoError(t, reg.Register(
+		New(Descriptor{Name: "flat", Description: "Flat command", Aliases: []string{"f"}}, nil),
+		tree,
+	))
+
+	descs := reg.Descriptors()
+	require.Len(t, descs, 2)
+	require.Equal(t, Descriptor{Name: "flat", Path: []string{"flat"}, Aliases: []string{"f"}, Description: "Flat command", Executable: true}, descs[0])
+	require.Equal(t, "workflow", descs[1].Name)
+	require.Equal(t, []string{"wf"}, descs[1].Aliases)
+	require.Len(t, descs[1].Subcommands, 1)
+	require.Equal(t, "runs", descs[1].Subcommands[0].Name)
+}
+
+func TestRegistryPreservesTreeCommandAndExecuteMapRoutesStructuredInput(t *testing.T) {
+	reg := NewRegistry()
+	var got Invocation
+	tree, err := NewTree("workflow", Alias("wf")).
+		Sub("runs", func(_ context.Context, inv Invocation) (Result, error) {
+			got = inv
+			return Text(inv.Flag("status")), nil
+		}, Flag("status").Enum("running", "succeeded", "failed")).
+		Build()
+	require.NoError(t, err)
+	require.NoError(t, reg.Register(tree))
+
+	registered, ok := reg.Get("workflow")
+	require.True(t, ok)
+	require.Same(t, tree, registered)
+
+	result, err := reg.ExecuteMap(context.Background(), []string{"wf", "runs"}, map[string]any{"status": "failed"})
+	require.NoError(t, err)
+	require.Equal(t, "failed", renderCommandResult(t, result))
+	require.Equal(t, []string{"workflow", "runs"}, got.Path)
+}
+
+func TestRegistryExecuteMapValidatesFlatCommandPathsAndInput(t *testing.T) {
+	reg := NewRegistry()
+	require.NoError(t, reg.Register(New(Descriptor{Name: "flat"}, func(context.Context, Params) (Result, error) {
+		return Text("ok"), nil
+	})))
+
+	result, err := reg.ExecuteMap(context.Background(), []string{"flat"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "ok", renderCommandResult(t, result))
+
+	_, err = reg.ExecuteMap(context.Background(), []string{"flat", "extra"}, nil)
+	var validation ValidationError
+	require.ErrorAs(t, err, &validation)
+	require.Equal(t, ValidationUnknownSubcommand, validation.Code)
+	require.Equal(t, "extra", validation.Field)
+
+	_, err = reg.ExecuteMap(context.Background(), []string{"flat"}, map[string]any{"name": "value"})
+	validation = ValidationError{}
+	require.ErrorAs(t, err, &validation)
+	require.Equal(t, ValidationInvalidSpec, validation.Code)
 }
 
 func TestRenderPayloadJSONRendersStructuredPayload(t *testing.T) {

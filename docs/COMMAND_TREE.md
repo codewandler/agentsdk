@@ -28,7 +28,7 @@ Terminal slash syntax should be one input projection over this tree, not the can
 
 ## Target shape
 
-The current API uses a fluent builder and keeps `Tree` compatible with the existing `command.Command` interface:
+The current API uses a fluent builder. `Tree` is a normal `command.Command`, and `command.Descriptor` is the single metadata model for both flat commands and command trees:
 
 ```go
 workflowTree, err := command.NewTree("workflow",
@@ -54,7 +54,7 @@ workflowTree, err := command.NewTree("workflow",
     Build()
 ```
 
-Construction errors are accumulated while building the tree and returned from `Build()`. There is no parallel legacy `AddSub`/`Spec` tree-construction API.
+Construction errors are accumulated while building the tree and returned from `Build()`. There is no parallel legacy `AddSub`/`Spec` tree-construction API, and there is no separate public `command.Spec` metadata type. Flat commands are created with `command.New(command.Descriptor{...}, handler)`, while trees derive descriptors from their node declarations.
 
 Handlers can receive validated typed inputs rather than raw slash-parser leftovers:
 
@@ -78,9 +78,14 @@ workflowTree, err := command.NewTree("workflow").
 
 Untyped `TreeHandler` functions that accept `command.Invocation` remain available for commands that need direct access to invocation metadata.
 
-The tree still implements the existing flat command contract:
+Both flat commands and trees implement the same descriptor-first command contract:
 
 ```go
+type Command interface {
+    Descriptor() command.Descriptor
+    Execute(context.Context, command.Params) (command.Result, error)
+}
+
 var _ command.Command = (*command.Tree)(nil)
 ```
 
@@ -137,6 +142,7 @@ A running harness can expose supported command shapes through descriptors:
 type Descriptor struct {
     Name         string
     Path         []string
+    Aliases      []string
     Description  string
     ArgumentHint string
     Policy       command.Policy
@@ -161,11 +167,18 @@ type InputFieldDescriptor struct {
     EnumValues  []string
 }
 
-func (t *Tree) Descriptor() Descriptor
+func (c Command) Descriptor() Descriptor
+func (r *Registry) Descriptors() []Descriptor
+func (r *Registry) ExecuteMap(ctx context.Context, path []string, input map[string]any) (Result, error)
+func (s *harness.Session) Commands() (*command.Registry, error)
 func (s *harness.Session) CommandDescriptors() []command.Descriptor
 func (s *harness.Session) CommandCatalog() []harness.CommandCatalogEntry
 ```
 
+
+`command.Registry` is the canonical root router. It indexes command roots by descriptor name and aliases, preserves the registered concrete command value (including `*command.Tree`), returns canonical descriptors through `Descriptors()`, and provides structured execution through `ExecuteMap(...)`. Harness sessions use one normal registry for control commands plus `/session` and `/workflow`; they do not maintain a separate tree lookup path.
+
+Structured registry execution routes by the first path element. Tree commands receive the full path and validate subcommands, args, and flags. Flat commands can execute only at their root path; extra path segments return `ValidationUnknownSubcommand`, and non-empty structured input returns `ValidationInvalidSpec` because flat commands do not declare arg/flag schemas.
 Example descriptor input for `/workflow runs`:
 
 ```json
