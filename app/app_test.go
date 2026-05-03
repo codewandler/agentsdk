@@ -108,6 +108,47 @@ func TestAppRegistersBundleDatasourceAndWorkflowContributions(t *testing.T) {
 	require.Equal(t, "Sync documentation", wf.Description)
 }
 
+func TestAppStoresResourceCommandContributionsAsMetadata(t *testing.T) {
+	bundle := resource.ContributionBundle{
+		CommandResources: []resource.CommandContribution{{
+			Name:        "session-summary",
+			CommandPath: []string{"session", "summary"},
+			InputSchema: command.JSONSchema{
+				Type: "object",
+				Properties: map[string]command.JSONSchema{
+					"input": {Type: "string"},
+				},
+			},
+			Target:   resource.CommandTarget{Kind: resource.CommandTargetWorkflow, Workflow: "summary", WorkflowDefinition: map[string]any{"steps": []any{"one"}}},
+			Metadata: map[string]any{"owner": "docs"},
+		}},
+	}
+	app, err := New(WithResourceBundle(bundle))
+	require.NoError(t, err)
+
+	resources := app.ResourceCommands()
+	require.Len(t, resources, 1)
+	require.Equal(t, []string{"session", "summary"}, resources[0].CommandPath)
+	require.Equal(t, "summary", resources[0].Target.Workflow)
+
+	// Structured command resources are declarative contributions. They are not
+	// registered as executable app commands until a session/channel projection
+	// explicitly binds their target.
+	_, ok := app.Commands().Get("session")
+	require.False(t, ok)
+
+	resources[0].CommandPath[0] = "mutated"
+	resources[0].InputSchema.Properties["input"] = command.JSONSchema{Type: "number"}
+	resources[0].Target.WorkflowDefinition["steps"] = []any{"changed"}
+	resources[0].Metadata["owner"] = "mutated"
+
+	again := app.ResourceCommands()
+	require.Equal(t, []string{"session", "summary"}, again[0].CommandPath)
+	require.Equal(t, "string", again[0].InputSchema.Properties["input"].Type)
+	require.Equal(t, []any{"one"}, again[0].Target.WorkflowDefinition["steps"])
+	require.Equal(t, "docs", again[0].Metadata["owner"])
+}
+
 func TestAppExecutesRegisteredWorkflow(t *testing.T) {
 	app, err := New(
 		WithActions(

@@ -41,6 +41,7 @@ type App struct {
 	datasources           *datasource.Registry
 	workflows             map[string]workflow.Definition
 	workflowOrder         []string
+	commandResources      []resource.CommandContribution
 	tools                 *tool.Catalog
 	defaultTools          []tool.Tool
 }
@@ -263,6 +264,22 @@ func (a *App) Workflows() []workflow.Definition {
 	out := make([]workflow.Definition, 0, len(a.workflowOrder))
 	for _, name := range a.workflowOrder {
 		out = append(out, a.workflows[name])
+	}
+	return out
+}
+
+// ResourceCommands returns declarative structured command resources contributed
+// by resource bundles. These are load-time contribution metadata retained for
+// harness/session/channel consumers, not executable app commands; session/channel
+// owners decide how to project targets such as workflows, prompts, or actions
+// into their execution surface.
+func (a *App) ResourceCommands() []resource.CommandContribution {
+	if a == nil || len(a.commandResources) == 0 {
+		return nil
+	}
+	out := make([]resource.CommandContribution, 0, len(a.commandResources))
+	for _, contribution := range a.commandResources {
+		out = append(out, cloneCommandContribution(contribution))
 	}
 	return out
 }
@@ -542,6 +559,9 @@ func (a *App) registerResourceBundle(bundle resource.ContributionBundle) error {
 			return err
 		}
 	}
+	for _, contribution := range bundle.CommandResources {
+		a.commandResources = append(a.commandResources, cloneCommandContribution(contribution))
+	}
 	a.skillSources = append(a.skillSources, bundle.SkillSources...)
 	a.diagnostics = append(a.diagnostics, bundle.Diagnostics...)
 	return nil
@@ -767,4 +787,59 @@ func (a *App) agentSkillSources(spec agent.Spec) []skill.Source {
 	sources := append([]skill.Source(nil), a.skillSources...)
 	sources = append(sources, spec.SkillSources...)
 	return sources
+}
+
+func cloneCommandContribution(c resource.CommandContribution) resource.CommandContribution {
+	c.CommandPath = append([]string(nil), c.CommandPath...)
+	c.InputSchema = cloneJSONSchema(c.InputSchema)
+	c.Output.MediaTypes = append([]string(nil), c.Output.MediaTypes...)
+	c.Output.Schema = cloneJSONSchema(c.Output.Schema)
+	c.Target.WorkflowDefinition = cloneAnyMap(c.Target.WorkflowDefinition)
+	c.Metadata = cloneAnyMap(c.Metadata)
+	return c
+}
+
+func cloneJSONSchema(schema command.JSONSchema) command.JSONSchema {
+	schema.Required = append([]string(nil), schema.Required...)
+	schema.Enum = append([]string(nil), schema.Enum...)
+	if schema.Items != nil {
+		items := cloneJSONSchema(*schema.Items)
+		schema.Items = &items
+	}
+	if len(schema.Properties) > 0 {
+		properties := make(map[string]command.JSONSchema, len(schema.Properties))
+		for name, child := range schema.Properties {
+			properties[name] = cloneJSONSchema(child)
+		}
+		schema.Properties = properties
+	}
+	return schema
+}
+
+func cloneAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = cloneAny(value)
+	}
+	return out
+}
+
+func cloneAny(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return cloneAnyMap(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = cloneAny(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), v...)
+	default:
+		return value
+	}
 }

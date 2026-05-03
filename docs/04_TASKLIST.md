@@ -262,16 +262,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 14. Plugin/contribution model
 
-- [ ] Keep one conceptual plugin/contribution model.
-- [ ] Do not add `harness.Plugin`.
-- [ ] Keep session projections as projections, not plugins.
-- [ ] Decide later whether app/session plugin facets should unify.
-- [ ] Add app-level contribution facet only if needed.
-- [ ] Add session-level contribution facet only if needed.
-- [ ] Add channel contribution facet only if needed.
-- [ ] Add trigger contribution facet only if needed.
-- [ ] Keep first-party plugins purpose-named.
-- [ ] Add new named plugins only for real use cases/environments.
+- [x] Keep one conceptual plugin/contribution model.
+- [x] Do not add `harness.Plugin`.
+- [x] Keep session projections as projections, not plugins.
+- [x] Decide later whether app/session plugin facets should unify.
+- [x] Add app-level contribution facet only if needed.
+- [x] Add session-level contribution facet only if needed.
+- [x] Add channel contribution facet only if needed.
+- [x] Add trigger contribution facet only if needed.
+- [x] Keep first-party plugins purpose-named.
+- [x] Add new named plugins only for real use cases/environments.
 
 ## 15. Terminal CLI polish
 

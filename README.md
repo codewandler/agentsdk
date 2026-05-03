@@ -474,6 +474,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/15_DAEMON_SERVICE_MODE.md`](docs/15_DAEMON_SERVICE_MODE.md) — `agentsdk serve`, daemon-as-harness-deployment ownership, storage/status conventions, and service-mode smoke coverage.
 - [`docs/16_TRIGGERS_SCHEDULING.md`](docs/16_TRIGGERS_SCHEDULING.md) — event-source/matcher/executor trigger model, interval source, daemon jobs, and scheduling conventions.
 - [`docs/17_RESOURCE_APP_MANIFESTS.md`](docs/17_RESOURCE_APP_MANIFESTS.md) — resource/app manifest follow-ups for workflows, actions, triggers, structured command resources, plugin refs, discover output, and examples.
+- [`docs/18_PLUGIN_CONTRIBUTION_MODEL.md`](docs/18_PLUGIN_CONTRIBUTION_MODEL.md) — one plugin/contribution model, session projection boundaries, and facet criteria.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
