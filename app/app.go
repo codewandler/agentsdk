@@ -729,13 +729,6 @@ func (a *App) Diagnostics() []resource.Diagnostic {
 	return append([]resource.Diagnostic(nil), a.diagnostics...)
 }
 
-func (a *App) ContextProviders() []agentcontext.Provider {
-	if a == nil {
-		return nil
-	}
-	return append([]agentcontext.Provider(nil), a.contextProviders...)
-}
-
 func (a *App) SkillSources() []skill.Source {
 	if a == nil {
 		return nil

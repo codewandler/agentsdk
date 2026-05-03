@@ -18,7 +18,7 @@ func TestTurnActionRunsAgentTurnAndReturnsAssistantText(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	act := inst.TurnAction(action.Spec{Name: "ask_agent", Description: "Ask agent"})
+	act := TurnAction(inst, action.Spec{Name: "ask_agent", Description: "Ask agent"})
 	result := act.Execute(context.Background(), "say hello")
 
 	require.NoError(t, result.Error)

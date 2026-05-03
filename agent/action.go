@@ -43,10 +43,6 @@ func TurnAction(inst *Instance, spec action.Spec) action.Action {
 }
 
 // TurnAction exposes this instance as an action.Action using the supplied spec.
-func (a *Instance) TurnAction(spec action.Spec) action.Action {
-	return TurnAction(a, spec)
-}
-
 // runTurnText runs an agent turn and returns the latest assistant text projected
 // from conversation history after the turn commits.
 func (a *Instance) runTurnText(ctx action.Ctx, turnID int, task string) (string, error) {

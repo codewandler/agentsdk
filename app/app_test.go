@@ -586,8 +586,8 @@ func TestPluginContextProvidersCollected(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Len(t, app.ContextProviders(), 1)
-	require.Equal(t, agentcontext.ProviderKey("test_ctx"), app.ContextProviders()[0].Key())
+	require.Len(t, app.contextProviders, 1)
+	require.Equal(t, agentcontext.ProviderKey("test_ctx"), app.contextProviders[0].Key())
 }
 
 func TestPluginContextProvidersMultiplePlugins(t *testing.T) {
@@ -602,9 +602,9 @@ func TestPluginContextProvidersMultiplePlugins(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Len(t, app.ContextProviders(), 2)
-	keys := make([]agentcontext.ProviderKey, len(app.ContextProviders()))
-	for i, p := range app.ContextProviders() {
+	require.Len(t, app.contextProviders, 2)
+	keys := make([]agentcontext.ProviderKey, len(app.contextProviders))
+	for i, p := range app.contextProviders {
 		keys[i] = p.Key()
 	}
 	require.Contains(t, keys, agentcontext.ProviderKey("alpha_ctx"))
@@ -647,7 +647,7 @@ func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
 		WithPlugin(testCommandsPlugin{name: "cmds"}),
 	)
 	require.NoError(t, err)
-	require.Empty(t, app.ContextProviders())
+	require.Empty(t, app.contextProviders)
 }
 
 // ── Multi-facet plugin integration test ───────────────────────────────────
@@ -715,8 +715,8 @@ func TestMultiFacetPluginRegistersToolsAndContextProviders(t *testing.T) {
 	require.NoError(t, err)
 
 	// Context providers should be collected.
-	require.Len(t, app.ContextProviders(), 1)
-	require.Equal(t, agentcontext.ProviderKey("multi_ctx"), app.ContextProviders()[0].Key())
+	require.Len(t, app.contextProviders, 1)
+	require.Equal(t, agentcontext.ProviderKey("multi_ctx"), app.contextProviders[0].Key())
 
 	// Tool should be registered in the catalog.
 	selected, err := app.ToolCatalog().Select([]string{"multi_tool"})
