@@ -152,10 +152,6 @@ func New(opts ...Option) (*Instance, error) {
 	return a, nil
 }
 
-func NewInstance(opts ...Option) (*Instance, error) {
-	return New(opts...)
-}
-
 func Must(opts ...Option) *Instance {
 	a, err := New(opts...)
 	if err != nil {
