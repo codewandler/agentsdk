@@ -15,7 +15,6 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
-	"github.com/codewandler/agentsdk/thread"
 	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/agentsdk/workflow"
@@ -196,18 +195,6 @@ func (s *Session) Info() SessionInfo {
 		}
 	}
 	return info
-}
-
-func (s *Session) AgentName() string {
-	return s.Info().AgentName
-}
-
-func (s *Session) ThreadID() (thread.ID, bool) {
-	info := s.Info()
-	if info.ThreadID == "" {
-		return "", false
-	}
-	return info.ThreadID, true
 }
 
 func (s *Session) ParamsSummary() string {

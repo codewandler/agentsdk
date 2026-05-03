@@ -57,10 +57,6 @@ func TestSessionInfoCommandReportsHarnessMetadata(t *testing.T) {
 	require.Equal(t, "coder", info.AgentName)
 	require.True(t, info.ThreadBacked)
 	require.NotEmpty(t, info.ThreadID)
-	threadID, ok := session.ThreadID()
-	require.True(t, ok)
-	require.Equal(t, info.ThreadID, threadID)
-	require.Equal(t, "coder", session.AgentName())
 
 	result, err := session.Send(context.Background(), "/session info")
 	require.NoError(t, err)
