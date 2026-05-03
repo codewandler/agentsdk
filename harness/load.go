@@ -10,6 +10,7 @@ import (
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
+	"github.com/codewandler/llmadapter/adapt"
 )
 
 // SessionLoadConfig describes the app and agent configuration needed to create
@@ -38,6 +39,8 @@ type AppLoadConfig struct {
 type AgentLoadConfig struct {
 	ModelPolicy      agent.ModelPolicy
 	ApplyModelPolicy bool
+	SourceAPI        adapt.ApiKind
+	ApplySourceAPI   bool
 }
 
 type SessionOpenConfig struct {
@@ -165,6 +168,9 @@ func hasResourceBundle(bundle resource.ContributionBundle) bool {
 
 func sessionAgentOptions(cfg SessionLoadConfig) []agent.Option {
 	opts := append([]agent.Option(nil), cfg.AgentOptions...)
+	if cfg.Agent.ApplySourceAPI {
+		opts = append(opts, agent.WithSourceAPI(cfg.Agent.SourceAPI))
+	}
 	if cfg.Agent.ApplyModelPolicy {
 		opts = append(opts, agent.WithModelPolicy(cfg.Agent.ModelPolicy))
 	}

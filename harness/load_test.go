@@ -8,6 +8,8 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
+	"github.com/codewandler/llmadapter/adapt"
+	"github.com/codewandler/llmadapter/adapterconfig"
 	"github.com/stretchr/testify/require"
 )
 
@@ -169,4 +171,26 @@ func TestLoadSessionAppliesModelPolicy(t *testing.T) {
 
 	require.Nil(t, loaded)
 	require.ErrorContains(t, err, "approved-only model policy requires auto mux routing")
+}
+
+func TestLoadSessionAppliesSourceAPI(t *testing.T) {
+	var got adapt.ApiKind
+	loaded, err := LoadSession(SessionLoadConfig{
+		App: AppLoadConfig{DefaultAgent: "test"},
+		Agent: AgentLoadConfig{
+			SourceAPI:      adapt.ApiOpenAIChatCompletions,
+			ApplySourceAPI: true,
+		},
+		AppOptions: []app.Option{
+			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
+		},
+		AgentOptions: []agent.Option{agent.WithAutoMux(func(opts adapterconfig.AutoOptions) (adapterconfig.AutoResult, error) {
+			got = opts.SourceAPI
+			return adapterconfig.AutoResult{Client: runnertest.NewClient()}, nil
+		})},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, adapt.ApiOpenAIChatCompletions, got)
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/terminal/ui"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/unified"
 	"gopkg.in/yaml.v3"
 )
@@ -117,6 +118,10 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
+	sourceAPI, applySourceAPI, err := sourceAPIOption(cfg)
+	if err != nil {
+		return nil, err
+	}
 	appOpts, err := appOptions(ctx, resolved, cfg, env)
 	if err != nil {
 		return nil, err
@@ -138,6 +143,8 @@ func Load(ctx context.Context, cfg Config) (*Loaded, error) {
 		Agent: harness.AgentLoadConfig{
 			ModelPolicy:      modelPolicy,
 			ApplyModelPolicy: applyModelPolicy,
+			SourceAPI:        sourceAPI,
+			ApplySourceAPI:   applySourceAPI,
 		},
 		Session: harness.SessionOpenConfig{
 			StoreDir: env.SessionsDir,
@@ -237,6 +244,17 @@ func selectModelPolicy(resolved agentdir.Resolution, cfg Config) (agent.ModelPol
 	return modelPolicy, applyModelPolicy, nil
 }
 
+func sourceAPIOption(cfg Config) (adapt.ApiKind, bool, error) {
+	if !cfg.ApplySourceAPI {
+		return "", false, nil
+	}
+	sourceAPI, err := agent.ParseSourceAPI(cfg.SourceAPI)
+	if err != nil {
+		return "", false, err
+	}
+	return sourceAPI, true, nil
+}
+
 func appOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config, env loadEnvironment) ([]app.Option, error) {
 	appOpts := []app.Option{
 		app.WithAgentOptions(agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(env.Out))),
@@ -257,13 +275,6 @@ func appOptions(ctx context.Context, resolved agentdir.Resolution, cfg Config, e
 
 func agentOptions(cfg Config, env loadEnvironment) ([]agent.Option, error) {
 	instOpts := append([]agent.Option(nil), cfg.AgentOptions...)
-	if cfg.ApplySourceAPI {
-		sourceAPI, err := agent.ParseSourceAPI(cfg.SourceAPI)
-		if err != nil {
-			return nil, err
-		}
-		instOpts = append(instOpts, agent.WithSourceAPI(sourceAPI))
-	}
 	if cfg.DebugMessage {
 		instOpts = append(instOpts, agent.WithRequestObserver(debugMessageObserver(env.Out)))
 	}

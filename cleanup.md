@@ -69,7 +69,7 @@
   - Deleted generic `tools/standard` and `plugins/standard`; local terminal composition now lives in `plugins/localcli`.
   - Added context-aware `app.PluginFactory` so hosts can resolve named plugin refs from `context.Context` plus config without introducing a separate profile system.
   - Moved reusable terminal session loading into harness:
-    - `harness.LoadSession` owns app/default-agent/service/session construction and applies grouped app/agent/session load settings, including model policy and resume-session paths.
+    - `harness.LoadSession` owns app/default-agent/service/session construction and applies grouped app/agent/session load settings, including source API, model policy, and resume-session paths.
     - `harness.EnsureFallbackAgent` owns fallback-agent injection mechanics while the local CLI plugin still owns the fallback spec.
     - `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
     - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy.
