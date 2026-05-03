@@ -221,7 +221,7 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	var opts []app.Option
 	appCfg := cfg.App
 	if appCfg.Output != nil {
-		opts = append(opts, app.WithOutput(appCfg.Output), app.WithAgentOutput(appCfg.Output))
+		opts = append(opts, app.WithOutput(appCfg.Output), app.WithAgentOptions(agent.WithOutput(appCfg.Output)))
 	}
 	if hasResourceBundle(appCfg.ResourceBundle) {
 		opts = append(opts, app.WithResourceBundle(appCfg.ResourceBundle))
@@ -232,17 +232,17 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	if appCfg.Workspace != "" {
 		opts = append(opts,
 			app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: appCfg.Workspace, IncludeGlobalUserResources: appCfg.IncludeGlobalUserResources}),
-			app.WithAgentWorkspace(appCfg.Workspace),
+			app.WithAgentOptions(agent.WithWorkspace(appCfg.Workspace)),
 		)
 	}
 	if appCfg.Verbose {
 		opts = append(opts, app.WithAgentOptions(agent.WithVerbose(true)))
 	}
 	if appCfg.ToolTimeout > 0 {
-		opts = append(opts, app.WithAgentToolTimeout(appCfg.ToolTimeout))
+		opts = append(opts, app.WithAgentOptions(agent.WithToolTimeout(appCfg.ToolTimeout)))
 	}
 	if cfg.Session.StoreDir != "" {
-		opts = append(opts, app.WithAgentSessionStoreDir(cfg.Session.StoreDir))
+		opts = append(opts, app.WithAgentOptions(agent.WithSessionStoreDir(cfg.Session.StoreDir)))
 	}
 	for _, plugin := range cfg.Plugins {
 		if plugin != nil {

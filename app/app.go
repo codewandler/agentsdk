@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
@@ -206,22 +205,6 @@ func WithDefaultSkillSourceDiscovery(discovery SkillSourceDiscovery) Option {
 
 func WithAgentOptions(opts ...agent.Option) Option {
 	return func(c *config) { c.agentOptions = append(c.agentOptions, opts...) }
-}
-
-func WithAgentWorkspace(dir string) Option {
-	return WithAgentOptions(agent.WithWorkspace(dir))
-}
-
-func WithAgentToolTimeout(timeout time.Duration) Option {
-	return WithAgentOptions(agent.WithToolTimeout(timeout))
-}
-
-func WithAgentSessionStoreDir(dir string) Option {
-	return WithAgentOptions(agent.WithSessionStoreDir(dir))
-}
-
-func WithAgentOutput(out io.Writer) Option {
-	return WithAgentOptions(agent.WithOutput(out))
 }
 
 // WithDefaultTools adds tools used by agents that do not explicitly select tools.

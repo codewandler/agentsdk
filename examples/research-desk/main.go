@@ -116,9 +116,9 @@ func newResearchApp() (*app.App, error) {
 		app.WithDefaultAgent(name),
 		app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: "."}),
 		app.WithPlugin(localcli.New()),
-		app.WithAgentWorkspace("."),
-		app.WithAgentOutput(os.Stdout),
 		app.WithAgentOptions(
+			agent.WithWorkspace("."),
+			agent.WithOutput(os.Stdout),
 			agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(os.Stdout)),
 			agent.WithModelPolicy(agent.ModelPolicy{
 				UseCase: agent.ModelUseCaseAgenticCoding,
