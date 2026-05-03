@@ -53,7 +53,7 @@ You are a coder.`),
 	require.Equal(t, []string{"review"}, bundle.AgentSpecs[0].Commands)
 	require.Contains(t, bundle.AgentSpecs[0].System, "You are a coder.")
 	require.Len(t, bundle.Commands, 1)
-	require.Equal(t, "review", bundle.Commands[0].Spec().Name)
+	require.Equal(t, "review", bundle.Commands[0].Descriptor().Name)
 	require.Len(t, bundle.SkillSources, 1)
 	require.Equal(t, ".agents/skills", bundle.SkillSources[0].Root)
 	require.Len(t, bundle.Skills, 1)

@@ -11,7 +11,7 @@ import (
 
 type CommandHelpPayload struct {
 	Descriptors []command.Descriptor
-	AppCommands []command.Spec
+	AppCommands []command.Descriptor
 }
 
 func (p CommandHelpPayload) Display(command.DisplayMode) (string, error) {

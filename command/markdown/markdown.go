@@ -29,7 +29,7 @@ type Frontmatter struct {
 
 // Command is a command backed by a Markdown prompt template.
 type Command struct {
-	spec command.Spec
+	spec command.Descriptor
 	body string
 }
 
@@ -46,7 +46,7 @@ func New(name string, content []byte) (*Command, error) {
 	if fm.Name == "" {
 		fm.Name = strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
 	}
-	spec := command.Spec{
+	spec := command.Descriptor{
 		Name:         fm.Name,
 		Aliases:      fm.Aliases,
 		Description:  fm.Description,
@@ -119,7 +119,7 @@ func LoadDir(dir string) ([]command.Command, error) {
 	return LoadFS(os.DirFS(dir), ".")
 }
 
-func (c *Command) Spec() command.Spec { return c.spec }
+func (c *Command) Descriptor() command.Descriptor { return c.spec }
 
 func (c *Command) Execute(_ context.Context, params command.Params) (command.Result, error) {
 	rendered := c.render(params)

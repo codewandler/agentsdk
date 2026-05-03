@@ -24,8 +24,8 @@ type fakeAgent struct {
 func newFakeAgent(out io.Writer) *fakeAgent {
 	reg := command.NewRegistry()
 	_ = reg.Register(
-		command.New(command.Spec{Name: "quit"}, func(context.Context, command.Params) (command.Result, error) { return command.Exit(), nil }),
-		command.New(command.Spec{Name: "new"}, func(context.Context, command.Params) (command.Result, error) { return command.Reset(), nil }),
+		command.New(command.Descriptor{Name: "quit"}, func(context.Context, command.Params) (command.Result, error) { return command.Exit(), nil }),
+		command.New(command.Descriptor{Name: "new"}, func(context.Context, command.Params) (command.Result, error) { return command.Reset(), nil }),
 	)
 	return &fakeAgent{out: out, reg: reg, tracker: usage.NewTracker(), session: "sess1"}
 }
@@ -72,7 +72,7 @@ func (a *fakeAgent) Out() io.Writer          { return a.out }
 func TestRunDispatchesMarkdownStyleCommandResult(t *testing.T) {
 	var out bytes.Buffer
 	a := newFakeAgent(&out)
-	require.NoError(t, a.reg.Register(command.New(command.Spec{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
+	require.NoError(t, a.reg.Register(command.New(command.Descriptor{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
 		return command.AgentTurn("expanded prompt"), nil
 	})))
 

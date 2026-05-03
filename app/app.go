@@ -634,11 +634,11 @@ func (a *App) AgentCommandView(name string) *command.Registry {
 		return view
 	}
 	for _, cmd := range a.commands.All() {
-		spec := cmd.Spec()
-		if !allowed[spec.Name] {
+		desc := cmd.Descriptor()
+		if !allowed[desc.Name] {
 			continue
 		}
-		if spec.AgentCallable() {
+		if desc.AgentCallable() {
 			_ = view.Register(cmd)
 		}
 	}

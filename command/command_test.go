@@ -21,7 +21,7 @@ func TestParseFlagsArgsAndQuotes(t *testing.T) {
 
 func TestRegistryExecutesAliases(t *testing.T) {
 	reg := NewRegistry()
-	err := reg.Register(New(Spec{Name: "quit", Aliases: []string{"q"}}, func(context.Context, Params) (Result, error) {
+	err := reg.Register(New(Descriptor{Name: "quit", Aliases: []string{"q"}}, func(context.Context, Params) (Result, error) {
 		return Exit(), nil
 	}))
 	require.NoError(t, err)
@@ -33,8 +33,8 @@ func TestRegistryExecutesAliases(t *testing.T) {
 
 func TestRegistryRejectsDuplicateAlias(t *testing.T) {
 	reg := NewRegistry()
-	require.NoError(t, reg.Register(New(Spec{Name: "one", Aliases: []string{"x"}}, nil)))
-	err := reg.Register(New(Spec{Name: "two", Aliases: []string{"x"}}, nil))
+	require.NoError(t, reg.Register(New(Descriptor{Name: "one", Aliases: []string{"x"}}, nil)))
+	err := reg.Register(New(Descriptor{Name: "two", Aliases: []string{"x"}}, nil))
 	var dup ErrDuplicate
 	require.ErrorAs(t, err, &dup)
 }
@@ -42,9 +42,9 @@ func TestRegistryRejectsDuplicateAlias(t *testing.T) {
 func TestHelpTextOnlyShowsUserCallableCommands(t *testing.T) {
 	reg := NewRegistry()
 	require.NoError(t, reg.Register(
-		New(Spec{Name: "visible"}, nil),
-		New(Spec{Name: "agent_only", Policy: Policy{AgentCallable: true}}, nil),
-		New(Spec{Name: "both", Policy: Policy{UserCallable: true, AgentCallable: true}}, nil),
+		New(Descriptor{Name: "visible"}, nil),
+		New(Descriptor{Name: "agent_only", Policy: Policy{AgentCallable: true}}, nil),
+		New(Descriptor{Name: "both", Policy: Policy{UserCallable: true, AgentCallable: true}}, nil),
 	))
 
 	help := reg.HelpText()
@@ -56,10 +56,10 @@ func TestHelpTextOnlyShowsUserCallableCommands(t *testing.T) {
 func TestRegistryExecuteUserOnlyRunsUserCallableCommands(t *testing.T) {
 	reg := NewRegistry()
 	require.NoError(t, reg.Register(
-		New(Spec{Name: "visible"}, func(context.Context, Params) (Result, error) {
+		New(Descriptor{Name: "visible"}, func(context.Context, Params) (Result, error) {
 			return Text("ok"), nil
 		}),
-		New(Spec{Name: "agent_only", Policy: Policy{AgentCallable: true}}, func(context.Context, Params) (Result, error) {
+		New(Descriptor{Name: "agent_only", Policy: Policy{AgentCallable: true}}, func(context.Context, Params) (Result, error) {
 			return Text("no"), nil
 		}),
 	))
@@ -77,10 +77,10 @@ func TestRegistryExecuteUserOnlyRunsUserCallableCommands(t *testing.T) {
 func TestCommandRunToolOnlyRunsAgentCallableCommands(t *testing.T) {
 	reg := NewRegistry()
 	require.NoError(t, reg.Register(
-		New(Spec{Name: "visible"}, func(context.Context, Params) (Result, error) {
+		New(Descriptor{Name: "visible"}, func(context.Context, Params) (Result, error) {
 			return Text("no"), nil
 		}),
-		New(Spec{Name: "agent_only", Policy: Policy{AgentCallable: true}}, func(context.Context, Params) (Result, error) {
+		New(Descriptor{Name: "agent_only", Policy: Policy{AgentCallable: true}}, func(context.Context, Params) (Result, error) {
 			return Text("ok"), nil
 		}),
 	))

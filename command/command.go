@@ -9,16 +9,6 @@ import (
 	"strings"
 )
 
-// Spec describes a slash command. Name and aliases do not include the leading
-// slash.
-type Spec struct {
-	Name         string
-	Aliases      []string
-	Description  string
-	ArgumentHint string
-	Policy       Policy
-}
-
 // Policy describes who may invoke a command.
 type Policy struct {
 	UserCallable  bool `json:"userCallable,omitempty"`
@@ -35,7 +25,7 @@ type Params struct {
 
 // Command is a named executable slash command.
 type Command interface {
-	Spec() Spec
+	Descriptor() Descriptor
 	Execute(context.Context, Params) (Result, error)
 }
 
@@ -43,16 +33,18 @@ type Command interface {
 type Handler func(context.Context, Params) (Result, error)
 
 type funcCommand struct {
-	spec Spec
+	desc Descriptor
 	fn   Handler
 }
 
 // New returns a command backed by fn.
-func New(spec Spec, fn Handler) Command {
-	return &funcCommand{spec: normalizeSpec(spec), fn: fn}
+func New(desc Descriptor, fn Handler) Command {
+	desc = normalizeDescriptor(desc)
+	desc.Executable = true
+	return &funcCommand{desc: desc, fn: fn}
 }
 
-func (c *funcCommand) Spec() Spec { return c.spec }
+func (c *funcCommand) Descriptor() Descriptor { return cloneDescriptor(c.desc) }
 
 func (c *funcCommand) Execute(ctx context.Context, params Params) (Result, error) {
 	if c.fn == nil {
@@ -256,14 +248,14 @@ func (r *Registry) Register(commands ...Command) error {
 		if cmd == nil {
 			continue
 		}
-		spec := normalizeSpec(cmd.Spec())
-		if spec.Name == "" {
+		desc := normalizeDescriptor(cmd.Descriptor())
+		if desc.Name == "" {
 			return fmt.Errorf("command: command name is required")
 		}
-		if _, exists := r.index[spec.Name]; exists {
-			return ErrDuplicate{Name: spec.Name}
+		if _, exists := r.index[desc.Name]; exists {
+			return ErrDuplicate{Name: desc.Name}
 		}
-		for _, alias := range spec.Aliases {
+		for _, alias := range desc.Aliases {
 			if alias == "" {
 				continue
 			}
@@ -271,14 +263,13 @@ func (r *Registry) Register(commands ...Command) error {
 				return ErrDuplicate{Name: alias}
 			}
 		}
-		wrapped := New(spec, cmd.Execute)
-		r.index[spec.Name] = wrapped
-		for _, alias := range spec.Aliases {
+		r.index[desc.Name] = cmd
+		for _, alias := range desc.Aliases {
 			if alias != "" {
-				r.index[alias] = wrapped
+				r.index[alias] = cmd
 			}
 		}
-		r.ordered = append(r.ordered, wrapped)
+		r.ordered = append(r.ordered, cmd)
 	}
 	return nil
 }
@@ -302,14 +293,65 @@ func (r *Registry) All() []Command {
 	return out
 }
 
+// Descriptors returns command descriptors in registration order.
+func (r *Registry) Descriptors() []Descriptor {
+	if r == nil {
+		return nil
+	}
+	out := make([]Descriptor, 0, len(r.ordered))
+	for _, cmd := range r.ordered {
+		if cmd != nil {
+			out = append(out, cmd.Descriptor())
+		}
+	}
+	return out
+}
+
+type mapExecutable interface {
+	ExecuteMap(context.Context, []string, map[string]any) (Result, error)
+}
+
+// ExecuteMap dispatches structured input by command path.
+func (r *Registry) ExecuteMap(ctx context.Context, path []string, input map[string]any) (Result, error) {
+	clean := cleanPath(path)
+	if len(clean) == 0 {
+		return Result{}, ValidationError{Code: ValidationInvalidSpec, Message: "command: command path is required"}
+	}
+	cmd, ok := r.Get(clean[0])
+	if !ok {
+		return Result{}, ErrUnknown{Name: clean[0]}
+	}
+	if exec, ok := cmd.(mapExecutable); ok {
+		return exec.ExecuteMap(ctx, clean, input)
+	}
+	if len(clean) > 1 {
+		return Result{}, ValidationError{Path: clean[:1], Code: ValidationUnknownSubcommand, Field: clean[1], Message: fmt.Sprintf("unknown subcommand %q", clean[1])}
+	}
+	if len(input) > 0 {
+		return Result{}, ValidationError{Path: clean, Code: ValidationInvalidSpec, Message: "command: structured input is not supported by this command"}
+	}
+	return cmd.Execute(ctx, Params{})
+}
+
+func cleanPath(path []string) []string {
+	clean := make([]string, 0, len(path))
+	for _, part := range path {
+		part = strings.TrimPrefix(strings.TrimSpace(part), "/")
+		if part != "" {
+			clean = append(clean, part)
+		}
+	}
+	return clean
+}
+
 // UserCommands returns commands visible/callable from user-facing interfaces.
 func (r *Registry) UserCommands() []Command {
-	return filterCommands(r.All(), func(spec Spec) bool { return spec.UserCallable() })
+	return filterCommands(r.All(), func(desc Descriptor) bool { return desc.UserCallable() })
 }
 
 // AgentCommands returns commands explicitly exposed for agent/tool invocation.
 func (r *Registry) AgentCommands() []Command {
-	return filterCommands(r.All(), func(spec Spec) bool { return spec.AgentCallable() })
+	return filterCommands(r.All(), func(desc Descriptor) bool { return desc.AgentCallable() })
 }
 
 // Execute parses line and dispatches to the matching command.
@@ -335,7 +377,7 @@ func (r *Registry) ExecuteUser(ctx context.Context, line string) (Result, error)
 	if !ok {
 		return Result{}, ErrUnknown{Name: name}
 	}
-	if !cmd.Spec().UserCallable() {
+	if !cmd.Descriptor().UserCallable() {
 		return Result{}, ErrNotCallable{Name: name, Caller: "user"}
 	}
 	return cmd.Execute(ctx, params)
@@ -351,7 +393,7 @@ func (r *Registry) ExecuteAgent(ctx context.Context, line string) (Result, error
 	if !ok {
 		return Result{}, ErrUnknown{Name: name}
 	}
-	if !cmd.Spec().AgentCallable() {
+	if !cmd.Descriptor().AgentCallable() {
 		return Result{}, ErrNotCallable{Name: name, Caller: "agent"}
 	}
 	return cmd.Execute(ctx, params)
@@ -364,52 +406,79 @@ func (r *Registry) HelpText() string {
 		return "No commands registered."
 	}
 	sort.SliceStable(cmds, func(i, j int) bool {
-		return cmds[i].Spec().Name < cmds[j].Spec().Name
+		return cmds[i].Descriptor().Name < cmds[j].Descriptor().Name
 	})
 	var b strings.Builder
 	b.WriteString("Commands:\n")
 	for _, cmd := range cmds {
-		spec := cmd.Spec()
-		if spec.Name == "" {
+		desc := cmd.Descriptor()
+		if desc.Name == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "/%s", spec.Name)
-		if spec.ArgumentHint != "" {
-			fmt.Fprintf(&b, " %s", spec.ArgumentHint)
+		fmt.Fprintf(&b, "/%s", desc.Name)
+		if desc.ArgumentHint != "" {
+			fmt.Fprintf(&b, " %s", desc.ArgumentHint)
 		}
-		if len(spec.Aliases) > 0 {
-			fmt.Fprintf(&b, " (aliases: %s)", strings.Join(spec.Aliases, ", "))
+		if len(desc.Aliases) > 0 {
+			fmt.Fprintf(&b, " (aliases: %s)", strings.Join(desc.Aliases, ", "))
 		}
-		if spec.Description != "" {
-			fmt.Fprintf(&b, " - %s", spec.Description)
+		if desc.Description != "" {
+			fmt.Fprintf(&b, " - %s", desc.Description)
 		}
 		b.WriteByte('\n')
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func normalizeSpec(spec Spec) Spec {
-	spec.Name = strings.TrimPrefix(strings.TrimSpace(spec.Name), "/")
-	for i, alias := range spec.Aliases {
-		spec.Aliases[i] = strings.TrimPrefix(strings.TrimSpace(alias), "/")
+func normalizeDescriptor(desc Descriptor) Descriptor {
+	desc.Name = strings.TrimPrefix(strings.TrimSpace(desc.Name), "/")
+	for i, alias := range desc.Aliases {
+		desc.Aliases[i] = strings.TrimPrefix(strings.TrimSpace(alias), "/")
 	}
-	return spec
+	if len(desc.Path) == 0 && desc.Name != "" {
+		desc.Path = []string{desc.Name}
+	}
+	if desc.Name != "" && len(desc.Path) > 0 {
+		desc.Path[0] = strings.TrimPrefix(strings.TrimSpace(desc.Path[0]), "/")
+	}
+	return desc
 }
 
-// UserCallable reports whether command should be available in user-facing UIs.
-func (s Spec) UserCallable() bool {
-	return !s.Policy.Internal && (s.Policy.UserCallable || (!s.Policy.AgentCallable && !s.Policy.Internal))
+func cloneDescriptor(desc Descriptor) Descriptor {
+	desc.Path = append([]string(nil), desc.Path...)
+	desc.Aliases = append([]string(nil), desc.Aliases...)
+	desc.Args = append([]ArgDescriptor(nil), desc.Args...)
+	desc.Flags = append([]FlagDescriptor(nil), desc.Flags...)
+	desc.Input.Fields = append([]InputFieldDescriptor(nil), desc.Input.Fields...)
+	desc.Subcommands = cloneDescriptors(desc.Subcommands)
+	return desc
 }
 
-// AgentCallable reports whether command may be invoked by an agent command tool.
-func (s Spec) AgentCallable() bool {
-	return !s.Policy.Internal && s.Policy.AgentCallable
+func cloneDescriptors(descs []Descriptor) []Descriptor {
+	if len(descs) == 0 {
+		return nil
+	}
+	out := make([]Descriptor, len(descs))
+	for i, desc := range descs {
+		out[i] = cloneDescriptor(desc)
+	}
+	return out
 }
 
-func filterCommands(commands []Command, keep func(Spec) bool) []Command {
+// UserCallable reports whether this command descriptor should be available in user-facing UIs.
+func (d Descriptor) UserCallable() bool {
+	return !d.Policy.Internal && (d.Policy.UserCallable || (!d.Policy.AgentCallable && !d.Policy.Internal))
+}
+
+// AgentCallable reports whether this command descriptor may be invoked by an agent command tool.
+func (d Descriptor) AgentCallable() bool {
+	return !d.Policy.Internal && d.Policy.AgentCallable
+}
+
+func filterCommands(commands []Command, keep func(Descriptor) bool) []Command {
 	var out []Command
 	for _, cmd := range commands {
-		if cmd != nil && keep(cmd.Spec()) {
+		if cmd != nil && keep(cmd.Descriptor()) {
 			out = append(out, cmd)
 		}
 	}

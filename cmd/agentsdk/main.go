@@ -433,8 +433,8 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 		fmt.Fprintln(out, "  none")
 	}
 	for _, cmd := range commands {
-		spec := cmd.Spec()
-		fmt.Fprintf(out, "  /%s  %s\n", spec.Name, displayDescription(spec.Description))
+		desc := cmd.Descriptor()
+		fmt.Fprintf(out, "  /%s  %s\n", desc.Name, displayDescription(desc.Description))
 	}
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Skills:")

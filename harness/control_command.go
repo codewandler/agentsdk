@@ -125,20 +125,15 @@ func (h controlCommandHandler) helpCommand(context.Context, command.Invocation) 
 	if s == nil {
 		return command.Display(CommandHelpPayload{}), nil
 	}
-	trees, err := s.commandTrees()
+	commands, err := s.Commands()
 	if err != nil {
 		return command.Result{}, err
 	}
-	payload := CommandHelpPayload{Descriptors: make([]command.Descriptor, 0, len(trees))}
-	for _, tree := range trees {
-		if tree != nil {
-			payload.Descriptors = append(payload.Descriptors, tree.Descriptor())
-		}
-	}
+	payload := CommandHelpPayload{Descriptors: commands.Descriptors()}
 	if s.App != nil && s.App.Commands() != nil {
 		for _, cmd := range s.App.Commands().UserCommands() {
 			if cmd != nil {
-				payload.AppCommands = append(payload.AppCommands, cmd.Spec())
+				payload.AppCommands = append(payload.AppCommands, cmd.Descriptor())
 			}
 		}
 	}

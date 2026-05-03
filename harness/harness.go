@@ -59,49 +59,18 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 		if err != nil {
 			return command.Result{}, err
 		}
-		if tree, ok, err := s.commandTree(name); err != nil {
+		commands, err := s.Commands()
+		if err != nil {
 			return command.Result{}, err
-		} else if ok {
-			return tree.Execute(ctx, params)
+		}
+		if cmd, ok := commands.Get(name); ok {
+			return cmd.Execute(ctx, params)
 		}
 	}
 	return s.App.Send(ctx, input)
 }
 
-func (s *Session) CommandDescriptors() []command.Descriptor {
-	trees, err := s.commandTrees()
-	if err != nil {
-		return nil
-	}
-	descriptors := make([]command.Descriptor, 0, len(trees))
-	for _, tree := range trees {
-		if tree != nil {
-			descriptors = append(descriptors, tree.Descriptor())
-		}
-	}
-	return descriptors
-}
-
-func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[string]any) (command.Result, error) {
-	if s == nil || s.App == nil {
-		return command.Result{}, fmt.Errorf("harness: app is required")
-	}
-	path = commandPath(path)
-	root, ok := commandRoot(path)
-	if !ok {
-		return command.Result{}, command.ValidationError{Code: command.ValidationInvalidSpec, Message: "harness: command path is required"}
-	}
-	tree, ok, err := s.commandTree(root)
-	if err != nil {
-		return command.Result{}, err
-	}
-	if !ok {
-		return command.Result{}, command.ErrUnknown{Name: root}
-	}
-	return tree.ExecuteMap(ctx, path, input)
-}
-
-func (s *Session) commandTrees() ([]*command.Tree, error) {
+func (s *Session) Commands() (*command.Registry, error) {
 	builders := []func(*Session) (*command.Tree, error){
 		NewHelpCommand,
 		NewAgentsCommand,
@@ -115,66 +84,36 @@ func (s *Session) commandTrees() ([]*command.Tree, error) {
 		NewWorkflowCommand,
 		NewSessionCommand,
 	}
-	trees := make([]*command.Tree, 0, len(builders))
+	registry := command.NewRegistry()
 	for _, build := range builders {
 		tree, err := build(s)
 		if err != nil {
 			return nil, err
 		}
-		trees = append(trees, tree)
+		if err := registry.Register(tree); err != nil {
+			return nil, err
+		}
 	}
-	return trees, nil
+	return registry, nil
 }
 
-func (s *Session) commandTree(name string) (*command.Tree, bool, error) {
-	name = strings.TrimPrefix(strings.TrimSpace(name), "/")
-	if name == "" {
-		return nil, false, nil
-	}
-	trees, err := s.commandTrees()
+func (s *Session) CommandDescriptors() []command.Descriptor {
+	commands, err := s.Commands()
 	if err != nil {
-		return nil, false, err
+		return nil
 	}
-	for _, tree := range trees {
-		if treeMatchesName(tree, name) {
-			return tree, true, nil
-		}
-	}
-	return nil, false, nil
+	return commands.Descriptors()
 }
 
-func treeMatchesName(tree *command.Tree, name string) bool {
-	if tree == nil {
-		return false
+func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[string]any) (command.Result, error) {
+	if s == nil || s.App == nil {
+		return command.Result{}, fmt.Errorf("harness: app is required")
 	}
-	spec := tree.Spec()
-	if spec.Name == name {
-		return true
+	commands, err := s.Commands()
+	if err != nil {
+		return command.Result{}, err
 	}
-	for _, alias := range spec.Aliases {
-		if alias == name {
-			return true
-		}
-	}
-	return false
-}
-
-func commandPath(path []string) []string {
-	clean := make([]string, 0, len(path))
-	for _, part := range path {
-		part = strings.TrimPrefix(strings.TrimSpace(part), "/")
-		if part != "" {
-			clean = append(clean, part)
-		}
-	}
-	return clean
-}
-
-func commandRoot(path []string) (string, bool) {
-	if len(path) == 0 {
-		return "", false
-	}
-	return path[0], true
+	return commands.ExecuteMap(ctx, path, input)
 }
 
 func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...app.WorkflowExecutionOption) action.Result {

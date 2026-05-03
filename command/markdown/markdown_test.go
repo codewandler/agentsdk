@@ -21,9 +21,9 @@ Focus: {{.Query}}
 Raw: {{.Raw}}
 `))
 	require.NoError(t, err)
-	require.Equal(t, "review", cmd.Spec().Name)
-	require.Equal(t, []string{"rv"}, cmd.Spec().Aliases)
-	require.Equal(t, "focus", cmd.Spec().ArgumentHint)
+	require.Equal(t, "review", cmd.Descriptor().Name)
+	require.Equal(t, []string{"rv"}, cmd.Descriptor().Aliases)
+	require.Equal(t, "focus", cmd.Descriptor().ArgumentHint)
 
 	result, err := cmd.Execute(context.Background(), command.Params{
 		Raw:   "security",
@@ -46,5 +46,5 @@ func TestLoadFSLoadsMarkdownCommands(t *testing.T) {
 	cmds, err := LoadFS(fsys, ".agents/commands")
 	require.NoError(t, err)
 	require.Len(t, cmds, 1)
-	require.Equal(t, "commit", cmds[0].Spec().Name)
+	require.Equal(t, "commit", cmds[0].Descriptor().Name)
 }

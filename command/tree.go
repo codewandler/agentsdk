@@ -25,12 +25,12 @@ type inputBindingKey struct {
 
 // Description sets command node description metadata.
 func Description(description string) NodeOption {
-	return nodeOptionFunc(func(n *treeNode) { n.spec.Description = strings.TrimSpace(description) })
+	return nodeOptionFunc(func(n *treeNode) { n.desc.Description = strings.TrimSpace(description) })
 }
 
 // ArgumentHint sets compact usage hint metadata for a command node.
 func ArgumentHint(hint string) NodeOption {
-	return nodeOptionFunc(func(n *treeNode) { n.spec.ArgumentHint = strings.TrimSpace(hint) })
+	return nodeOptionFunc(func(n *treeNode) { n.desc.ArgumentHint = strings.TrimSpace(hint) })
 }
 
 // Alias adds aliases for a command node.
@@ -39,7 +39,7 @@ func Alias(aliases ...string) NodeOption {
 		for _, alias := range aliases {
 			alias = strings.TrimPrefix(strings.TrimSpace(alias), "/")
 			if alias != "" {
-				n.spec.Aliases = append(n.spec.Aliases, alias)
+				n.desc.Aliases = append(n.desc.Aliases, alias)
 			}
 		}
 	})
@@ -47,7 +47,7 @@ func Alias(aliases ...string) NodeOption {
 
 // WithPolicy sets caller policy metadata for a command node.
 func WithPolicy(policy Policy) NodeOption {
-	return nodeOptionFunc(func(n *treeNode) { n.spec.Policy = policy })
+	return nodeOptionFunc(func(n *treeNode) { n.desc.Policy = policy })
 }
 
 // ArgSpec declares a positional argument accepted by a tree node.
@@ -139,6 +139,7 @@ type CommandInput struct {
 type Descriptor struct {
 	Name         string           `json:"name"`
 	Path         []string         `json:"path"`
+	Aliases      []string         `json:"aliases,omitempty"`
 	Description  string           `json:"description,omitempty"`
 	ArgumentHint string           `json:"argumentHint,omitempty"`
 	Policy       Policy           `json:"-"`
@@ -147,16 +148,6 @@ type Descriptor struct {
 	Input        InputDescriptor  `json:"input"`
 	Executable   bool             `json:"executable,omitempty"`
 	Subcommands  []Descriptor     `json:"subcommands,omitempty"`
-}
-
-// UserCallable reports whether this command descriptor should be available in user-facing UIs.
-func (d Descriptor) UserCallable() bool {
-	return Spec{Policy: d.Policy}.UserCallable()
-}
-
-// AgentCallable reports whether this command descriptor may be projected to agent/tool invocation.
-func (d Descriptor) AgentCallable() bool {
-	return Spec{Policy: d.Policy}.AgentCallable()
 }
 
 // ArgDescriptor describes one positional argument.
@@ -318,7 +309,7 @@ func descriptorNames(descs []Descriptor) []string {
 }
 
 type treeNode struct {
-	spec         Spec
+	desc         Descriptor
 	handler      TreeHandler
 	args         []ArgSpec
 	flags        []FlagSpec
@@ -337,20 +328,12 @@ type Tree struct {
 
 // NewTree creates a command tree rooted at name.
 func NewTree(name string, opts ...NodeOption) *Tree {
-	node := &treeNode{spec: Spec{Name: strings.TrimPrefix(strings.TrimSpace(name), "/")}, index: map[string]*treeNode{}}
+	node := &treeNode{desc: Descriptor{Name: strings.TrimPrefix(strings.TrimSpace(name), "/")}, index: map[string]*treeNode{}}
 	applyNodeOptions(node, opts...)
 	return &Tree{root: node}
 }
 
 var _ Command = (*Tree)(nil)
-
-// Spec returns the root command spec.
-func (t *Tree) Spec() Spec {
-	if t == nil || t.root == nil {
-		return Spec{}
-	}
-	return t.root.spec
-}
 
 // Handle sets the root handler.
 func (t *Tree) Handle(handler TreeHandler, opts ...NodeOption) *Tree {
@@ -458,6 +441,7 @@ func (t *Tree) ExecuteMap(ctx context.Context, path []string, input map[string]a
 // Descriptor returns descriptor metadata for the tree.
 func (t *Tree) Descriptor() Descriptor {
 	if t == nil || t.root == nil {
+
 		return Descriptor{}
 	}
 	return t.root.descriptor()
@@ -474,9 +458,9 @@ func addSubNode(parent *treeNode, name string, handler TreeHandler, opts ...Node
 	if _, exists := parent.index[name]; exists {
 		return nil, ErrDuplicate{Name: name}
 	}
-	node := &treeNode{spec: Spec{Name: name}, handler: handler, parent: parent, index: map[string]*treeNode{}}
+	node := &treeNode{desc: Descriptor{Name: name}, handler: handler, parent: parent, index: map[string]*treeNode{}}
 	applyNodeOptions(node, opts...)
-	for _, alias := range node.spec.Aliases {
+	for _, alias := range node.desc.Aliases {
 		if alias == "" {
 			continue
 		}
@@ -488,8 +472,8 @@ func addSubNode(parent *treeNode, name string, handler TreeHandler, opts ...Node
 		return nil, err
 	}
 	parent.children = append(parent.children, node)
-	parent.index[node.spec.Name] = node
-	for _, alias := range node.spec.Aliases {
+	parent.index[node.desc.Name] = node
+	for _, alias := range node.desc.Aliases {
 		if alias != "" {
 			parent.index[alias] = node
 		}
@@ -503,7 +487,7 @@ func applyNodeOptions(node *treeNode, opts ...NodeOption) {
 			opt.applyNodeOption(node)
 		}
 	}
-	node.spec = normalizeSpec(node.spec)
+	node.desc = normalizeDescriptor(node.desc)
 }
 
 func validateTree(node *treeNode) error {
@@ -576,7 +560,7 @@ func (t *Tree) resolveInputPath(path []string) (*treeNode, *ValidationError) {
 			clean = append(clean, part)
 		}
 	}
-	if len(clean) > 0 && clean[0] == t.root.spec.Name {
+	if len(clean) > 0 && (clean[0] == t.root.desc.Name || contains(t.root.desc.Aliases, clean[0])) {
 		clean = clean[1:]
 	}
 	node := t.root
@@ -736,7 +720,7 @@ func (n *treeNode) commandInputFromMap(path []string, input map[string]any) (Com
 }
 
 func (n *treeNode) descriptor() Descriptor {
-	desc := Descriptor{Name: n.spec.Name, Path: n.path(), Description: n.spec.Description, ArgumentHint: n.spec.ArgumentHint, Policy: n.spec.Policy, Executable: n.handler != nil}
+	desc := Descriptor{Name: n.desc.Name, Path: n.path(), Aliases: append([]string(nil), n.desc.Aliases...), Description: n.desc.Description, ArgumentHint: n.desc.ArgumentHint, Policy: n.desc.Policy, Executable: n.handler != nil}
 	hints := n.inputHintTypes()
 	for _, arg := range n.args {
 		desc.Args = append(desc.Args, ArgDescriptor{Name: arg.Name, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
@@ -783,8 +767,8 @@ func (n *treeNode) path() []string {
 	}
 	var rev []string
 	for cur := n; cur != nil; cur = cur.parent {
-		if cur.spec.Name != "" {
-			rev = append(rev, cur.spec.Name)
+		if cur.desc.Name != "" {
+			rev = append(rev, cur.desc.Name)
 		}
 	}
 	path := make([]string, len(rev))

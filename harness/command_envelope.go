@@ -44,7 +44,7 @@ func (s *Session) AgentCommandCatalog() []CommandCatalogEntry {
 // This is a trusted execution seam for SDK/API/action callers; agent-facing tool
 // adapters should use ExecuteAgentCommandEnvelope instead.
 func (s *Session) ExecuteCommandEnvelope(ctx context.Context, input CommandEnvelope) (command.Result, error) {
-	path := commandPath(input.Path)
+	path := envelopeCommandPath(input.Path)
 	if len(path) == 0 {
 		return command.Result{}, command.ValidationError{Code: command.ValidationInvalidSpec, Message: "harness: command envelope path is required"}
 	}
@@ -54,7 +54,7 @@ func (s *Session) ExecuteCommandEnvelope(ctx context.Context, input CommandEnvel
 // ExecuteAgentCommandEnvelope executes one agent-callable command through the generic
 // command envelope.
 func (s *Session) ExecuteAgentCommandEnvelope(ctx context.Context, input CommandEnvelope) (command.Result, error) {
-	path := commandPath(input.Path)
+	path := envelopeCommandPath(input.Path)
 	if len(path) == 0 {
 		return command.Result{}, command.ValidationError{Code: command.ValidationInvalidSpec, Message: "harness: command envelope path is required"}
 	}
@@ -83,4 +83,15 @@ func sameCommandPath(a []string, b []string) bool {
 		}
 	}
 	return true
+}
+
+func envelopeCommandPath(path []string) []string {
+	clean := make([]string, 0, len(path))
+	for _, part := range path {
+		part = strings.TrimPrefix(strings.TrimSpace(part), "/")
+		if part != "" {
+			clean = append(clean, part)
+		}
+	}
+	return clean
 }

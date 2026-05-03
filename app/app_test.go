@@ -37,7 +37,7 @@ func TestAppRegistersBundleResources(t *testing.T) {
 	bundle := resource.ContributionBundle{
 		AgentSpecs: []agent.Spec{{Name: "coder", System: "You code.", Commands: []string{"review"}}},
 		Commands: []command.Command{
-			command.New(command.Spec{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
+			command.New(command.Descriptor{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
 				return command.Text("review"), nil
 			}),
 		},
@@ -347,11 +347,11 @@ func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {
 
 func TestPluginDuplicateCommandFirstWinsWithDiagnostic(t *testing.T) {
 	app, err := New(
-		WithCommand(command.New(command.Spec{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
+		WithCommand(command.New(command.Descriptor{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
 			return command.Text("first"), nil
 		})),
 		WithPlugin(testCommandsPlugin{name: "plugin", commands: []command.Command{
-			command.New(command.Spec{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
+			command.New(command.Descriptor{Name: "review"}, func(context.Context, command.Params) (command.Result, error) {
 				return command.Text("second"), nil
 			}),
 		}}),
@@ -520,7 +520,7 @@ func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		WithCommand(command.New(command.Spec{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
+		WithCommand(command.New(command.Descriptor{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
 			return command.AgentTurn("expanded"), nil
 		})),
 		WithOutput(&bytes.Buffer{}),
@@ -537,7 +537,7 @@ func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {
 
 func TestAppSendRejectsAgentOnlyCommandsFromUserInput(t *testing.T) {
 	app, err := New(
-		WithCommand(command.New(command.Spec{
+		WithCommand(command.New(command.Descriptor{
 			Name:   "agent_only",
 			Policy: command.Policy{AgentCallable: true},
 		}, func(context.Context, command.Params) (command.Result, error) {
@@ -556,7 +556,7 @@ func TestAppSendRejectsAgentOnlyCommandsFromUserInput(t *testing.T) {
 func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder"}),
-		WithCommand(command.New(command.Spec{
+		WithCommand(command.New(command.Descriptor{
 			Name:   "review",
 			Policy: command.Policy{AgentCallable: true},
 		}, nil)),
@@ -567,7 +567,7 @@ func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 
 	app, err = New(
 		WithAgentSpec(agent.Spec{Name: "coder", Commands: []string{"review"}}),
-		WithCommand(command.New(command.Spec{
+		WithCommand(command.New(command.Descriptor{
 			Name:   "review",
 			Policy: command.Policy{AgentCallable: true},
 		}, nil)),
