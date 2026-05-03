@@ -252,7 +252,7 @@ A tool is not the core execution primitive. A tool is the LLM-facing way to give
 
 Technically, the target shape is that `tool.Tool` embeds or wraps `action.Action` and adds only what an LLM/provider needs: guidance, provider/tool-call projection, activation/visibility, and transcript-oriented rendering. Middleware, intent declaration, context, and base results belong in `action.*`.
 
-In the current code, `tool.Tool` owns metadata, schema, execution, intent, result, and middleware. The target direction is to factor those reusable parts into `action.Action`, then keep `tool.Tool` as the LLM-facing adapter over actions. Compatibility wrappers and aliases can preserve existing `tool.Tool`, `tool.Ctx`, `tool.Result`, `tool.Intent`, and middleware APIs while the internals migrate.
+In the current code, `tool.Tool` owns metadata, schema, execution, intent, result, and middleware. The target direction is to factor those reusable parts into `action.Action`, then keep `tool.Tool` as the LLM-facing adapter over actions. During pre-1.0 cleanup, avoid preserving parallel compatibility wrappers unless a real downstream need is explicit; migrate internals toward `action.*` by deleting/collapsing duplicated paths as slices become clear.
 
 Tools and actions are related but not identical:
 

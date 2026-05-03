@@ -518,13 +518,6 @@ func (a *App) RegisterAgentSpec(spec agent.Spec) error {
 	return nil
 }
 
-func (a *App) AgentCommandNames(name string) []string {
-	if a == nil {
-		return nil
-	}
-	return append([]string(nil), a.specCommands[name]...)
-}
-
 func (a *App) AgentSpec(name string) (agent.Spec, bool) {
 	if a == nil {
 		return agent.Spec{}, false

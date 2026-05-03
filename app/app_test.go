@@ -49,7 +49,7 @@ func TestAppRegistersBundleResources(t *testing.T) {
 	spec, ok := app.AgentSpec("coder")
 	require.True(t, ok)
 	require.Equal(t, "You code.", spec.System)
-	require.Equal(t, []string{"review"}, app.AgentCommandNames("coder"))
+	require.Equal(t, []string{"review"}, spec.Commands)
 	_, ok = app.Commands().Get("review")
 	require.True(t, ok)
 }
