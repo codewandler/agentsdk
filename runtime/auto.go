@@ -33,6 +33,8 @@ func defaultModelDBAliases() []adapterconfig.ModelDBAliasConfig {
 	return []adapterconfig.ModelDBAliasConfig{
 		{Name: "opus", ServiceID: "anthropic", WireModelID: "claude-opus-4-6"},
 		{Name: "opus", ServiceID: "openrouter", WireModelID: "anthropic/claude-opus-4.6"},
+		{Name: "qwen3-coder", ServiceID: "openrouter", WireModelID: "qwen/qwen3-coder"},
+		{Name: "qwen3-coder-next", ServiceID: "openrouter", WireModelID: "qwen/qwen3-coder-next"},
 	}
 }
 

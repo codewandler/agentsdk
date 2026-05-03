@@ -10,6 +10,20 @@ match these entries as the project starts publishing releases.
 
 ## [Unreleased]
 
+### Added
+
+- Added `agentsdk models --thinking` to filter compatibility-backed model
+  listings to rows with live reasoning evidence.
+
+### Changed
+
+- Updated llmadapter to `v1.0.0-rc.32` and modeldb to `v0.15.0`, refreshing
+  embedded agentic-coding evidence with Qwen, expanded OpenRouter, and Bedrock
+  Converse rows.
+- Added local modeldb aliases for OpenRouter `qwen3-coder` and
+  `qwen3-coder-next` so the refreshed compatibility evidence can resolve them
+  in auto model listings.
+
 ## [0.33.0] - 2026-05-03
 
 ### Added

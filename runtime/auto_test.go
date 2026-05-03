@@ -28,6 +28,16 @@ func TestDefaultAutoOptionsUsesRequestedModelIntent(t *testing.T) {
 		ServiceID:   "openrouter",
 		WireModelID: "anthropic/claude-opus-4.6",
 	})
+	require.Contains(t, opts.ModelDBAliases, adapterconfig.ModelDBAliasConfig{
+		Name:        "qwen3-coder",
+		ServiceID:   "openrouter",
+		WireModelID: "qwen/qwen3-coder",
+	})
+	require.Contains(t, opts.ModelDBAliases, adapterconfig.ModelDBAliasConfig{
+		Name:        "qwen3-coder-next",
+		ServiceID:   "openrouter",
+		WireModelID: "qwen/qwen3-coder-next",
+	})
 	require.Len(t, opts.Intents, 1)
 	require.Equal(t, "haiku", opts.Intents[0].Name)
 	require.Equal(t, adapt.ApiOpenAIResponses, opts.Intents[0].SourceAPI)

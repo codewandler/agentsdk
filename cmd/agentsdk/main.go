@@ -183,6 +183,7 @@ func modelsCmd() *cobra.Command {
 		allowDegraded  bool
 		allowUntested  bool
 		compatEvidence string
+		thinkingOnly   bool
 	)
 	cmd := &cobra.Command{
 		Use:           "models [model]",
@@ -211,7 +212,7 @@ func modelsCmd() *cobra.Command {
 				EvidencePath:  compatEvidence,
 			}
 			if len(args) == 0 {
-				return runModelsCatalog(cmd.OutOrStdout(), policy)
+				return runModelsCatalog(cmd.OutOrStdout(), policy, thinkingOnly)
 			}
 			model := args[0]
 			result, err := agentruntime.AutoMuxClient(model, sourceAPI, nil)
@@ -227,6 +228,9 @@ func modelsCmd() *cobra.Command {
 					AllowUntested: !approvedOnly || allowUntested,
 				})
 				if err == nil {
+					if thinkingOnly {
+						selections = thinkingModelSelections(selections)
+					}
 					return printApprovedModelSelections(cmd.OutOrStdout(), model, source, selections)
 				}
 				if approvedOnly {
@@ -248,18 +252,19 @@ func modelsCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&allowDegraded, "model-allow-degraded", false, "Allow degraded model compatibility evidence for approved-only output")
 	cmd.Flags().BoolVar(&allowUntested, "model-allow-untested", false, "Allow untested model compatibility evidence for approved-only output")
 	cmd.Flags().StringVar(&compatEvidence, "model-compat-evidence", "", "Model compatibility evidence JSON path")
+	cmd.Flags().BoolVar(&thinkingOnly, "thinking", false, "Only show models with live reasoning evidence")
 	cli.AnnotateFlagGroup(cmd, cli.GroupInference, "source-api")
-	cli.AnnotateFlagGroup(cmd, cli.GroupModelCompatibility, "model-use-case", "model-approved-only", "model-allow-degraded", "model-allow-untested", "model-compat-evidence")
+	cli.AnnotateFlagGroup(cmd, cli.GroupModelCompatibility, "model-use-case", "model-approved-only", "model-allow-degraded", "model-allow-untested", "model-compat-evidence", "thinking")
 	cli.InstallGroupedHelp(cmd)
 	return cmd
 }
 
-func runModelsCatalog(out discoveryWriter, policy agent.ModelPolicy) error {
+func runModelsCatalog(out discoveryWriter, policy agent.ModelPolicy, thinkingOnly bool) error {
 	evidence, evidenceSource, err := agent.LoadCompatibilityEvidence(policy)
 	if err != nil {
 		return err
 	}
-	models := evidenceModels(evidence)
+	models := evidenceModels(evidence, thinkingOnly)
 	opts := agentruntime.DefaultAutoOptions("", policy.SourceAPI)
 	opts.Intents = make([]adapterconfig.AutoIntent, 0, len(models))
 	for _, model := range models {
@@ -279,6 +284,9 @@ func runModelsCatalog(out discoveryWriter, policy agent.ModelPolicy) error {
 		})
 		if err != nil {
 			continue
+		}
+		if thinkingOnly {
+			got = thinkingModelSelections(got)
 		}
 		selections = append(selections, got...)
 	}
@@ -310,10 +318,13 @@ func inspectionModelNames(model string) []string {
 	return names
 }
 
-func evidenceModels(evidence adapterconfig.CompatibilityEvidence) []string {
+func evidenceModels(evidence adapterconfig.CompatibilityEvidence, thinkingOnly bool) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, row := range evidence.Rows {
+		if thinkingOnly && row.Reasoning != string(compatibility.EvidenceLive) {
+			continue
+		}
 		model := row.PublicModel
 		if model == "" {
 			model = row.NativeModel
@@ -325,6 +336,16 @@ func evidenceModels(evidence adapterconfig.CompatibilityEvidence) []string {
 		out = append(out, model)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func thinkingModelSelections(selections []adapterconfig.UseCaseModelSelection) []adapterconfig.UseCaseModelSelection {
+	out := selections[:0]
+	for _, selection := range selections {
+		if selection.Evidence.Reasoning == string(compatibility.EvidenceLive) {
+			out = append(out, selection)
+		}
+	}
 	return out
 }
 

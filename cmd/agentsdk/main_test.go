@@ -146,9 +146,35 @@ func TestEvidenceModelsDeduplicatesAndSorts(t *testing.T) {
 		{PublicModel: "haiku"},
 		{PublicModel: "sonnet"},
 		{NativeModel: "gpt-5.4"},
-	}})
+	}}, false)
 
 	require.Equal(t, []string{"gpt-5.4", "haiku", "sonnet"}, got)
+}
+
+func TestEvidenceModelsCanFilterThinkingRows(t *testing.T) {
+	got := evidenceModels(adapterconfig.CompatibilityEvidence{Rows: []adapterconfig.CompatibilityRowEvidence{
+		{PublicModel: "qwen3-coder", Reasoning: string(compatibility.EvidenceUnsupported)},
+		{PublicModel: "sonnet", Reasoning: string(compatibility.EvidenceLive)},
+		{PublicModel: "haiku", Reasoning: string(compatibility.EvidenceLive)},
+	}}, true)
+
+	require.Equal(t, []string{"haiku", "sonnet"}, got)
+}
+
+func TestThinkingModelSelectionsFiltersReasoningEvidence(t *testing.T) {
+	selections := thinkingModelSelections([]adapterconfig.UseCaseModelSelection{
+		{
+			Resolution: adapterconfig.ModelResolutionCandidate{PublicModel: "qwen3-coder"},
+			Evidence:   adapterconfig.CompatibilityRowEvidence{Reasoning: string(compatibility.EvidenceUnsupported)},
+		},
+		{
+			Resolution: adapterconfig.ModelResolutionCandidate{PublicModel: "sonnet"},
+			Evidence:   adapterconfig.CompatibilityRowEvidence{Reasoning: string(compatibility.EvidenceLive)},
+		},
+	})
+
+	require.Len(t, selections, 1)
+	require.Equal(t, "sonnet", selections[0].Resolution.PublicModel)
 }
 
 func TestModelsHelpUsesModelCompatibilityFlags(t *testing.T) {
@@ -163,6 +189,7 @@ func TestModelsHelpUsesModelCompatibilityFlags(t *testing.T) {
 	require.Contains(t, text, "Model Compatibility:")
 	require.Contains(t, text, "--model-use-case")
 	require.Contains(t, text, "--model-approved-only")
+	require.Contains(t, text, "--thinking")
 	require.NotContains(t, text, "--use-case")
 	require.NotContains(t, text, "--approved-only")
 }
