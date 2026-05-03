@@ -291,16 +291,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 16. HTTP/SSE / other channels
 
-- [ ] Define channel API over harness/session.
-- [ ] Use `Session.ExecuteCommand` for command execution.
-- [ ] Use structured `command.Result` rendering per channel.
-- [ ] Use structured event/displayable publication model once designed.
-- [ ] Add HTTP/SSE channel prototype.
-- [ ] Add JSON/machine-readable command execution endpoint.
-- [ ] Add session open/resume endpoints.
-- [ ] Add workflow start/status endpoints.
-- [ ] Add event stream endpoint.
-- [ ] Avoid duplicating terminal slash parsing as canonical API.
+- [x] Define channel API over harness/session.
+- [x] Use `Session.ExecuteCommand` for command execution.
+- [x] Use structured `command.Result` rendering per channel.
+- [x] Use structured event/displayable publication model once designed.
+- [x] Add HTTP/SSE channel prototype.
+- [x] Add JSON/machine-readable command execution endpoint.
+- [x] Add session open/resume endpoints.
+- [x] Add workflow start/status endpoints.
+- [x] Add event stream endpoint.
+- [x] Avoid duplicating terminal slash parsing as canonical API.
 
 ## 17. Context system follow-ups
 
