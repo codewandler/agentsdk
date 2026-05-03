@@ -322,9 +322,8 @@ func (a *App) Workflows() []workflow.Definition {
 type WorkflowExecutionOption func(*workflowExecutionConfig)
 
 type workflowExecutionConfig struct {
-	OnEvent  workflow.EventHandler
-	RunID    workflow.RunID
-	NewRunID func() workflow.RunID
+	OnEvent workflow.EventHandler
+	RunID   workflow.RunID
 }
 
 func WithWorkflowEventHandler(handler workflow.EventHandler) WorkflowExecutionOption {
@@ -344,10 +343,6 @@ func WithWorkflowEventHandler(handler workflow.EventHandler) WorkflowExecutionOp
 
 func WithWorkflowRunID(runID workflow.RunID) WorkflowExecutionOption {
 	return func(c *workflowExecutionConfig) { c.RunID = runID }
-}
-
-func WithWorkflowRunIDGenerator(fn func() workflow.RunID) WorkflowExecutionOption {
-	return func(c *workflowExecutionConfig) { c.NewRunID = fn }
 }
 
 func applyWorkflowExecutionOptions(opts []WorkflowExecutionOption) workflowExecutionConfig {
@@ -384,7 +379,7 @@ func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
 
 func (a *App) WorkflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
 	cfg := applyWorkflowExecutionOptions(opts)
-	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.ActionRegistry()}, OnEvent: cfg.OnEvent, RunID: cfg.RunID, NewRunID: cfg.NewRunID}
+	return workflow.Executor{Resolver: workflow.RegistryResolver{Registry: a.ActionRegistry()}, OnEvent: cfg.OnEvent, RunID: cfg.RunID}
 }
 
 func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...WorkflowExecutionOption) action.Result {
