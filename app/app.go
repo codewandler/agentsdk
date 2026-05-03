@@ -116,21 +116,21 @@ func New(opts ...Option) (*App, error) {
 	}
 	a.defaultTools = append([]tool.Tool(nil), defaultTools...)
 	if len(cfg.commands) > 0 {
-		if err := a.RegisterCommands(cfg.commands...); err != nil {
+		if err := a.registerCommands(cfg.commands...); err != nil {
 			return nil, err
 		}
 	}
 	if err := a.RegisterActions(cfg.actions...); err != nil {
 		return nil, err
 	}
-	if err := a.RegisterDataSources(cfg.datasources...); err != nil {
+	if err := a.registerDataSources(cfg.datasources...); err != nil {
 		return nil, err
 	}
-	if err := a.RegisterWorkflows(cfg.workflows...); err != nil {
+	if err := a.registerWorkflows(cfg.workflows...); err != nil {
 		return nil, err
 	}
 	for _, spec := range cfg.specs {
-		if err := a.RegisterAgentSpec(spec); err != nil {
+		if err := a.registerAgentSpec(spec); err != nil {
 			return nil, err
 		}
 	}
@@ -231,7 +231,7 @@ func (a *App) Commands() *command.Registry {
 	return a.commands
 }
 
-func (a *App) RegisterCommands(commands ...command.Command) error {
+func (a *App) registerCommands(commands ...command.Command) error {
 	if a.commands == nil {
 		a.commands = command.NewRegistry()
 	}
@@ -259,7 +259,7 @@ func (a *App) Actions() []action.Action {
 	return a.actions.All()
 }
 
-func (a *App) RegisterDataSources(defs ...datasource.Definition) error {
+func (a *App) registerDataSources(defs ...datasource.Definition) error {
 	if a.datasources == nil {
 		a.datasources = datasource.NewRegistry()
 	}
@@ -280,7 +280,7 @@ func (a *App) DataSources() []datasource.Definition {
 	return a.datasources.All()
 }
 
-func (a *App) RegisterWorkflows(defs ...workflow.Definition) error {
+func (a *App) registerWorkflows(defs ...workflow.Definition) error {
 	if a.workflows == nil {
 		a.workflows = map[string]workflow.Definition{}
 	}
@@ -450,7 +450,7 @@ func (a *App) Agent(name string) (*agent.Instance, bool) {
 	return inst, ok
 }
 
-func (a *App) RegisterAgentSpec(spec agent.Spec) error {
+func (a *App) registerAgentSpec(spec agent.Spec) error {
 	if spec.Name == "" {
 		return fmt.Errorf("app: agent spec name is required")
 	}
@@ -645,12 +645,12 @@ func (a *App) registerPlugin(plugin Plugin) error {
 		}
 	}
 	if dp, ok := plugin.(DataSourcesPlugin); ok {
-		if err := a.RegisterDataSources(dp.DataSources()...); err != nil {
+		if err := a.registerDataSources(dp.DataSources()...); err != nil {
 			return fmt.Errorf("app: register plugin %q datasources: %w", plugin.Name(), err)
 		}
 	}
 	if wp, ok := plugin.(WorkflowsPlugin); ok {
-		if err := a.RegisterWorkflows(wp.Workflows()...); err != nil {
+		if err := a.registerWorkflows(wp.Workflows()...); err != nil {
 			return fmt.Errorf("app: register plugin %q workflows: %w", plugin.Name(), err)
 		}
 	}
@@ -663,7 +663,7 @@ func (a *App) registerPlugin(plugin Plugin) error {
 	}
 	if ap, ok := plugin.(AgentSpecsPlugin); ok {
 		for _, spec := range ap.AgentSpecs() {
-			if err := a.RegisterAgentSpec(spec); err != nil {
+			if err := a.registerAgentSpec(spec); err != nil {
 				return fmt.Errorf("app: register plugin %q agent specs: %w", plugin.Name(), err)
 			}
 		}
@@ -710,17 +710,17 @@ func (a *App) registerResourceBundle(bundle resource.ContributionBundle) error {
 		}
 	}
 	for _, spec := range bundle.AgentSpecs {
-		if err := a.RegisterAgentSpec(spec); err != nil {
+		if err := a.registerAgentSpec(spec); err != nil {
 			return err
 		}
 	}
 	for _, contribution := range bundle.DataSources {
-		if err := a.RegisterDataSources(datasourceFromContribution(contribution)); err != nil {
+		if err := a.registerDataSources(datasourceFromContribution(contribution)); err != nil {
 			return err
 		}
 	}
 	for _, contribution := range bundle.Workflows {
-		if err := a.RegisterWorkflows(workflowFromContribution(contribution)); err != nil {
+		if err := a.registerWorkflows(workflowFromContribution(contribution)); err != nil {
 			return err
 		}
 	}
@@ -816,7 +816,7 @@ func firstNonNil(values ...any) any {
 }
 
 func (a *App) registerCommandFromSource(cmd command.Command, source resource.SourceRef) error {
-	if err := a.RegisterCommands(cmd); err != nil {
+	if err := a.registerCommands(cmd); err != nil {
 		var dup command.ErrDuplicate
 		if errors.As(err, &dup) {
 			a.diagnostics = append(a.diagnostics, resource.Warning(source, fmt.Sprintf("command %q ignored because the short name is already registered", dup.Name)))
