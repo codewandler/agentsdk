@@ -275,19 +275,19 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 15. Terminal CLI polish
 
-- [ ] Keep terminal as channel/presentation/CLI-policy boundary.
-- [ ] Reduce `terminal/cli.Load` further only if it deletes duplication.
-- [ ] Keep local CLI default plugin policy in terminal.
-- [ ] Keep debug/risk-log presentation in terminal for now.
-- [ ] Add CLI docs for `--plugin`.
-- [ ] Add CLI docs for `--no-default-plugins`.
-- [ ] Add CLI docs for manifest plugin refs.
-- [ ] Add CLI docs for source API/model policy flags.
-- [ ] Improve one-shot result rendering if dogfood finds gaps.
-- [ ] Improve REPL result rendering if dogfood finds gaps.
-- [ ] Add command help from descriptors.
-- [ ] Add discover/inspect UX for command descriptors.
-- [ ] Add workflow UX polish after async lifecycle exists.
+- [x] Keep terminal as channel/presentation/CLI-policy boundary.
+- [x] Reduce `terminal/cli.Load` further only if it deletes duplication.
+- [x] Keep local CLI default plugin policy in terminal.
+- [x] Keep debug/risk-log presentation in terminal for now.
+- [x] Add CLI docs for `--plugin`.
+- [x] Add CLI docs for `--no-default-plugins`.
+- [x] Add CLI docs for manifest plugin refs.
+- [x] Add CLI docs for source API/model policy flags.
+- [x] Improve one-shot result rendering if dogfood finds gaps.
+- [x] Improve REPL result rendering if dogfood finds gaps.
+- [x] Add command help from executable command catalog descriptors.
+- [x] Add discover/inspect UX for structured command resources and executable command descriptors.
+- [x] Add workflow UX polish after async lifecycle exists.
 
 ## 16. HTTP/SSE / other channels
 
