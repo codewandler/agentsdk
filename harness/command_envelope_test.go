@@ -30,7 +30,7 @@ func TestCommandEnvelopeSchemaUsesGenericEnvelope(t *testing.T) {
 func TestSessionAgentCommandCatalogExposesReadOnlyWorkflowCommands(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 
-	catalog := session.AgentCommandCatalog()
+	catalog := session.CommandCatalog(CommandCatalogAgentCallable())
 
 	require.Equal(t, []string{"list", "show"}, catalogNames(catalog))
 	show := requireCatalogPath(t, catalog, "workflow", "show")

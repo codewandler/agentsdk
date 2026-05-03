@@ -35,11 +35,6 @@ func CommandEnvelopeSchema() command.JSONSchema {
 	}
 }
 
-// AgentCommandCatalog returns the commands available through the command envelope.
-func (s *Session) AgentCommandCatalog() []CommandCatalogEntry {
-	return s.CommandCatalog(CommandCatalogAgentCallable())
-}
-
 // ExecuteCommandEnvelope executes one command through the generic command envelope.
 // This is a trusted execution seam for SDK/API/action callers; agent-facing tool
 // adapters should use ExecuteAgentCommandEnvelope instead.
@@ -65,7 +60,7 @@ func (s *Session) ExecuteAgentCommandEnvelope(ctx context.Context, input Command
 }
 
 func (s *Session) agentCallableCommandPath(path []string) bool {
-	for _, entry := range s.AgentCommandCatalog() {
+	for _, entry := range s.CommandCatalog(CommandCatalogAgentCallable()) {
 		if sameCommandPath(entry.Descriptor.Path, path) {
 			return true
 		}

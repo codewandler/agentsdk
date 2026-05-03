@@ -231,14 +231,14 @@ type CommandEnvelope struct {
 }
 
 schema := harness.CommandEnvelopeSchema()
-catalog := session.AgentCommandCatalog()
+catalog := session.CommandCatalog(harness.CommandCatalogAgentCallable())
 result, err := session.ExecuteAgentCommandEnvelope(ctx, harness.CommandEnvelope{
     Path:  []string{"workflow", "show"},
     Input: map[string]any{"name": "ask_flow"},
 })
 ```
 
-Exact per-command schemas are provided through `AgentCommandCatalog()` as context/discovery metadata, while the command tree remains responsible for execution-time validation. This keeps the future tool schema small and avoids one tool per command while still exposing the known command input schemas to the model.
+Exact per-command schemas are provided through `CommandCatalog(harness.CommandCatalogAgentCallable())` as context/discovery metadata, while the command tree remains responsible for execution-time validation. This keeps the future tool schema small and avoids one tool per command while still exposing the known command input schemas to the model.
 
 The envelope is tool/action neutral. Agent-facing adapters should call `ExecuteAgentCommandEnvelope`, which enforces `AgentCallable` policy. Trusted SDK and API callers can call `ExecuteCommandEnvelope` and apply their own policy boundary.
 
@@ -248,10 +248,10 @@ Harness sessions expose an LLM-facing tool adapter over the same envelope:
 tool := session.AgentCommandTool() // tool name: session_command
 ```
 
-Default harness sessions attach this command projection automatically, so `session_command` and the command catalog context provider are available to the next agent turn without manual registration. The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.AgentCommandCatalog()` and can be rendered as model context through:
+Default harness sessions attach this command projection automatically, so `session_command` and the command catalog context provider are available to the next agent turn without manual registration. The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.CommandCatalog(harness.CommandCatalogAgentCallable())` and can be rendered as model context through:
 
 ```go
-context := harness.FormatAgentCommandCatalog(session.AgentCommandCatalog())
+context := harness.FormatAgentCommandCatalog(session.CommandCatalog(harness.CommandCatalogAgentCallable()))
 provider := session.AgentCommandCatalogContextProvider()
 ```
 

@@ -88,7 +88,7 @@ func (p agentCommandCatalogProvider) GetContext(ctx context.Context, _ agentcont
 	if err := ctx.Err(); err != nil {
 		return agentcontext.ProviderContext{}, err
 	}
-	content := FormatAgentCommandCatalog(p.Session.AgentCommandCatalog())
+	content := FormatAgentCommandCatalog(p.Session.CommandCatalog(CommandCatalogAgentCallable()))
 	return agentcontext.ProviderContext{
 		Fragments: []agentcontext.ContextFragment{{
 			Key:         AgentCommandCatalogFragmentKey,

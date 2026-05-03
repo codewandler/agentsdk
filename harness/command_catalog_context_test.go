@@ -13,7 +13,7 @@ import (
 func TestFormatAgentCommandCatalogRendersToolContext(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 
-	text := FormatAgentCommandCatalog(session.AgentCommandCatalog())
+	text := FormatAgentCommandCatalog(session.CommandCatalog(CommandCatalogAgentCallable()))
 
 	require.Contains(t, text, "session_command")
 	require.Contains(t, text, "workflow list: List workflows")
