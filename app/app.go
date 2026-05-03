@@ -31,7 +31,6 @@ type App struct {
 	agents                map[string]*agent.Instance
 	specs                 map[string]agent.Spec
 	specCommands          map[string][]string
-	protected             map[string]bool
 	diagnostics           []resource.Diagnostic
 	defaultAgent          string
 	plugins               map[string]Plugin
@@ -71,7 +70,6 @@ type config struct {
 	tools           []tool.Tool
 	defaultTools    []tool.Tool
 	catalogTools    []tool.Tool
-	noBuiltins      bool
 	toolMiddlewares []tool.Middleware
 }
 
@@ -98,7 +96,6 @@ func New(opts ...Option) (*App, error) {
 		agents:       map[string]*agent.Instance{},
 		specs:        map[string]agent.Spec{},
 		specCommands: map[string][]string{},
-		protected:    map[string]bool{},
 		defaultAgent: cfg.defaultAgent,
 		plugins:      map[string]Plugin{},
 		skillSources: discoveredSources,
@@ -132,15 +129,6 @@ func New(opts ...Option) (*App, error) {
 	if len(a.agents) == 1 && a.defaultAgent == "" {
 		for name := range a.agents {
 			a.defaultAgent = name
-		}
-	}
-	if !cfg.noBuiltins {
-		// Built-ins are protected app-control commands. Resource commands that
-		// collide with them fail registration instead of overriding them.
-		builtins := a.builtins()
-		a.protectCommands(builtins...)
-		if err := a.RegisterCommands(builtins...); err != nil {
-			return nil, err
 		}
 	}
 	if len(cfg.commands) > 0 {
@@ -269,10 +257,6 @@ func WithDataSources(defs ...datasource.Definition) Option {
 
 func WithWorkflows(defs ...workflow.Definition) Option {
 	return func(c *config) { c.workflows = append(c.workflows, defs...) }
-}
-
-func WithoutBuiltins() Option {
-	return func(c *config) { c.noBuiltins = true }
 }
 
 // WithToolMiddlewares adds middlewares that will be applied to all tools
@@ -677,6 +661,12 @@ func (a *App) AgentSpecs() []agent.Spec {
 	return out
 }
 
+func (a *App) DefaultAgentName() string {
+	if a == nil {
+		return ""
+	}
+	return a.defaultAgent
+}
 func (a *App) DefaultAgent() (*agent.Instance, bool) {
 	if a == nil || a.defaultAgent == "" {
 		return nil, false
@@ -890,9 +880,6 @@ func (a *App) registerCommandFromSource(cmd command.Command, source resource.Sou
 	if err := a.RegisterCommands(cmd); err != nil {
 		var dup command.ErrDuplicate
 		if errors.As(err, &dup) {
-			if a.isProtectedCommand(dup.Name) {
-				return err
-			}
 			a.diagnostics = append(a.diagnostics, resource.Warning(source, fmt.Sprintf("command %q ignored because the short name is already registered", dup.Name)))
 			return nil
 		}
@@ -920,33 +907,6 @@ func (a *App) SkillSources() []skill.Source {
 		return nil
 	}
 	return append([]skill.Source(nil), a.skillSources...)
-}
-
-func (a *App) protectCommands(commands ...command.Command) {
-	if a.protected == nil {
-		a.protected = map[string]bool{}
-	}
-	for _, cmd := range commands {
-		if cmd == nil {
-			continue
-		}
-		spec := cmd.Spec()
-		if spec.Name != "" {
-			a.protected[spec.Name] = true
-		}
-		for _, alias := range spec.Aliases {
-			if alias != "" {
-				a.protected[alias] = true
-			}
-		}
-	}
-}
-
-func (a *App) isProtectedCommand(name string) bool {
-	if a == nil || a.protected == nil {
-		return false
-	}
-	return a.protected[strings.TrimPrefix(strings.TrimSpace(name), "/")]
 }
 
 // ApplyToolMiddlewares applies collected middleware plugins to the tool catalog.
@@ -1078,181 +1038,4 @@ func (a *App) Tracker() *usage.Tracker {
 		return inst.Tracker()
 	}
 	return nil
-}
-
-func (a *App) builtins() []command.Command {
-	return []command.Command{
-		command.New(command.Spec{Name: "help", Aliases: []string{"?"}, Description: "Show available commands"}, func(context.Context, command.Params) (command.Result, error) {
-			return command.Text(a.commands.HelpText()), nil
-		}),
-		command.New(command.Spec{Name: "agents", Description: "Show available agents"}, func(context.Context, command.Params) (command.Result, error) {
-			return command.Text(a.agentsHelpText()), nil
-		}),
-		command.New(command.Spec{Name: "new", Aliases: []string{"reset"}, Description: "Start a new session"}, func(context.Context, command.Params) (command.Result, error) {
-			return command.Reset(), nil
-		}),
-		command.New(command.Spec{Name: "quit", Aliases: []string{"q", "exit"}, Description: "Exit the app"}, func(context.Context, command.Params) (command.Result, error) {
-			return command.Exit(), nil
-		}),
-		command.New(command.Spec{Name: "turn", Description: "Run a prompt as an agent turn", ArgumentHint: "[text]"}, func(_ context.Context, params command.Params) (command.Result, error) {
-			if params.Raw == "" {
-				return command.Text("usage: /turn <text>"), nil
-			}
-			return command.AgentTurn(params.Raw), nil
-		}),
-		command.New(command.Spec{Name: "session", Description: "Show session id and usage"}, func(context.Context, command.Params) (command.Result, error) {
-			if inst, ok := a.DefaultAgent(); ok {
-				record := inst.Tracker().Aggregate()
-				return command.Text(fmt.Sprintf("session: %s\ninput=%d output=%d", inst.SessionID(), record.Usage.InputTokens(), record.Usage.OutputTokens())), nil
-			}
-			return command.Text("session: none"), nil
-		}),
-		command.New(command.Spec{Name: "context", Description: "Show last context render state"}, func(context.Context, command.Params) (command.Result, error) {
-			if inst, ok := a.DefaultAgent(); ok {
-				state := inst.ContextState()
-				if state != "context: no render state" {
-					return command.Text(state), nil
-				}
-			}
-			if a.defaultAgent == "" {
-				return command.Text("context: no default agent"), nil
-			}
-			return command.Text(fmt.Sprintf("context: no render state yet for agent %q\nrun a turn first to capture provider context", a.defaultAgent)), nil
-		}),
-		command.New(command.Spec{Name: "skills", Description: "List discovered skills and activation status"}, func(context.Context, command.Params) (command.Result, error) {
-			if inst, ok := a.DefaultAgent(); ok {
-				return command.Text(renderSkillsForAgent(inst)), nil
-			}
-			if a.defaultAgent == "" {
-				return command.Text("skills: no default agent"), nil
-			}
-			spec, ok := a.AgentSpec(a.defaultAgent)
-			if !ok {
-				return command.Text("skills: no default agent"), nil
-			}
-			repo, err := skill.NewRepository(a.agentSkillSources(spec), spec.Skills)
-			if err != nil {
-				return command.Text(fmt.Sprintf("skills: %v", err)), nil
-			}
-			state, err := skill.NewActivationState(repo, repo.LoadedNames())
-			if err != nil {
-				return command.Text(fmt.Sprintf("skills: %v", err)), nil
-			}
-			return command.Text(renderSkillState(state)), nil
-		}),
-		command.New(command.Spec{Name: "skill", Description: "Activate a skill on the current agent", ArgumentHint: "<name>"}, func(_ context.Context, params command.Params) (command.Result, error) {
-			name := strings.TrimSpace(params.Raw)
-			if name == "" {
-				return command.Text("usage: /skill <name>"), nil
-			}
-			inst, ok := a.DefaultAgent()
-			if !ok {
-				return command.Text("skill: no current agent"), nil
-			}
-			before := skill.StatusInactive
-			if state := inst.SkillActivationState(); state != nil {
-				before = state.Status(name)
-			}
-			status, err := inst.ActivateSkill(name)
-			if err != nil {
-				return command.Text("skill: " + err.Error()), nil
-			}
-			if before == skill.StatusBase || status == skill.StatusBase {
-				return command.Text(fmt.Sprintf("skill: %q already active (base)", name)), nil
-			}
-			if before == skill.StatusDynamic {
-				return command.Text(fmt.Sprintf("skill: %q already active (dynamic)", name)), nil
-			}
-			return command.Text(fmt.Sprintf("skill: activated %q", name)), nil
-		}),
-		command.New(command.Spec{Name: "compact", Description: "Summarize and compact conversation history"}, func(ctx context.Context, _ command.Params) (command.Result, error) {
-			inst, ok := a.DefaultAgent()
-			if !ok {
-				return command.Text("compact: no current agent"), nil
-			}
-			result, err := inst.Compact(ctx)
-			if err != nil {
-				if errors.Is(err, agent.ErrNothingToCompact) {
-					return command.Text("compact: conversation too short to compact"), nil
-				}
-				return command.Text(fmt.Sprintf("compact: %v", err)), nil
-			}
-			saved := result.TokensBefore - result.TokensAfter
-			return command.Text(fmt.Sprintf(
-				"Compacted: replaced %d messages with summary\nEstimated tokens: before=%d after=%d (saved ~%d)",
-				result.ReplacedCount, result.TokensBefore, result.TokensAfter, saved,
-			)), nil
-		}),
-	}
-}
-
-func (a *App) agentsHelpText() string {
-	specs := a.AgentSpecs()
-	if len(specs) == 0 {
-		return "No agents registered."
-	}
-	var b strings.Builder
-	b.WriteString("Agents:\n")
-	for _, spec := range specs {
-		marker := " "
-		if spec.Name == a.defaultAgent {
-			marker = "*"
-		}
-		fmt.Fprintf(&b, "%s %s", marker, spec.Name)
-		if spec.Description != "" {
-			fmt.Fprintf(&b, " - %s", spec.Description)
-		}
-		b.WriteByte('\n')
-	}
-	return b.String()
-}
-
-func renderSkillsForAgent(inst *agent.Instance) string {
-	if inst == nil {
-		return "skills: no current agent"
-	}
-	state := inst.SkillActivationState()
-	if state == nil {
-		return "skills: unavailable"
-	}
-	return renderSkillState(state)
-}
-
-func renderSkillState(state *skill.ActivationState) string {
-	if state == nil || state.Repository() == nil {
-		return "skills: unavailable"
-	}
-	var b strings.Builder
-	b.WriteString("skills:\n")
-	for _, item := range state.Repository().List() {
-		marker := "[available]"
-		switch state.Status(item.Name) {
-		case skill.StatusBase:
-			marker = "[active:base]"
-		case skill.StatusDynamic:
-			marker = "[active:dynamic]"
-		}
-		fmt.Fprintf(&b, "- %s %s", item.Name, marker)
-		if item.Description != "" {
-			fmt.Fprintf(&b, " — %s", item.Description)
-		}
-		b.WriteByte('\n')
-		for _, ref := range item.References {
-			refMarker := "[available]"
-			for _, active := range state.ActiveReferences(item.Name) {
-				if active.Path == ref.Path {
-					refMarker = "[active]"
-					break
-				}
-			}
-			fmt.Fprintf(&b, "  - %s %s\n", ref.Path, refMarker)
-		}
-	}
-	if diagnostics := state.Diagnostics(); len(diagnostics) > 0 {
-		b.WriteString("warnings:\n")
-		for _, diagnostic := range diagnostics {
-			fmt.Fprintf(&b, "- %s\n", diagnostic)
-		}
-	}
-	return strings.TrimRight(b.String(), "\n")
 }

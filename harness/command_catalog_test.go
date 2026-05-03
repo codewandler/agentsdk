@@ -22,7 +22,7 @@ func TestCommandCatalogFiltersByPolicy(t *testing.T) {
 	}
 
 	all := commandCatalogFromDescriptors(descriptors)
-	require.Equal(t, []string{"visible", "agent", "both", "internal"}, catalogNames(all))
+	require.Equal(t, []string{"visible", "agent", "both"}, catalogNames(all))
 
 	agent := commandCatalogFromDescriptors(descriptors, CommandCatalogAgentCallable())
 	require.Equal(t, []string{"agent", "both"}, catalogNames(agent))

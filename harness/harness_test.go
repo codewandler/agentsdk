@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/codewandler/agentsdk/action"
@@ -13,6 +15,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/runnertest"
+	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/workflow"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
@@ -76,6 +79,116 @@ func TestSessionInfoCommandReportsHarnessMetadata(t *testing.T) {
 	require.Contains(t, text, "/session info")
 }
 
+func TestSessionControlCommands(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	application, err := app.New(
+		app.WithAgentSpec(agent.Spec{
+			Name:        "coder",
+			Description: "Writes code",
+			Inference:   agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+		}),
+		app.WithDefaultAgent("coder"),
+		app.WithOutput(&bytes.Buffer{}),
+	)
+	require.NoError(t, err)
+	inst, err := application.InstantiateDefaultAgent(agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	session := &Session{App: application, Agent: inst}
+
+	result, err := session.Send(context.Background(), "/help")
+	require.NoError(t, err)
+	text := renderCommandResult(t, result)
+	require.Contains(t, text, "/agents - Show available agents")
+	require.Contains(t, text, "/workflow list - List workflows")
+	require.Contains(t, text, "/session info - Show session metadata")
+
+	result, err = session.Send(context.Background(), "/agents")
+	require.NoError(t, err)
+	text = renderCommandResult(t, result)
+	require.Contains(t, text, "Agents:")
+	require.Contains(t, text, "* coder - Writes code")
+
+	result, err = session.Send(context.Background(), "/context")
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, result), "context: no render state yet for agent \"coder\"")
+
+	result, err = session.Send(context.Background(), "/turn hello")
+	require.NoError(t, err)
+	require.Equal(t, command.ResultHandled, result.Kind)
+	require.Len(t, client.Requests(), 1)
+}
+
+func TestSessionSkillCommandReportsAlreadyActiveDynamicSkill(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	application, err := app.New(app.WithAgentSpec(agent.Spec{
+		Name:      "coder",
+		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+		SkillSources: []skill.Source{skill.FSSource("skills", "skills", fstest.MapFS{
+			"skills/architecture/SKILL.md": {Data: []byte("---\nname: architecture\ndescription: Architecture\n---\n# Architecture")},
+		}, "skills", skill.SourceEmbedded, 0)},
+	}))
+	require.NoError(t, err)
+	inst, err := application.InstantiateDefaultAgent(agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	_, err = inst.ActivateSkill("architecture")
+	require.NoError(t, err)
+	session := &Session{App: application, Agent: inst}
+
+	result, err := session.Send(context.Background(), "/skill architecture")
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, result), "already active (dynamic)")
+}
+
+func TestSessionCompactCommand(t *testing.T) {
+	client := runnertest.NewClient(
+		runnertest.TextStream("resp1"),
+		runnertest.TextStream("resp2"),
+		runnertest.TextStream("resp3"),
+		runnertest.TextStream("Summary."),
+	)
+	application, err := app.New(app.WithAgentSpec(agent.Spec{
+		Name:      "coder",
+		System:    "You code.",
+		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+	}), app.WithOutput(&bytes.Buffer{}))
+	require.NoError(t, err)
+	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	session := &Session{App: application, Agent: inst}
+
+	ctx := context.Background()
+	_, err = session.Send(ctx, "old1")
+	require.NoError(t, err)
+	_, err = session.Send(ctx, "old2")
+	require.NoError(t, err)
+	_, err = session.Send(ctx, "recent")
+	require.NoError(t, err)
+
+	result, err := session.Send(ctx, "/compact")
+	require.NoError(t, err)
+	require.Equal(t, command.ResultDisplay, result.Kind)
+	require.Contains(t, renderCommandResult(t, result), "Compacted")
+}
+
+func TestSessionCompactCommandTooShort(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("resp"))
+	application, err := app.New(app.WithAgentSpec(agent.Spec{
+		Name:      "coder",
+		System:    "You code.",
+		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+	}), app.WithOutput(&bytes.Buffer{}))
+	require.NoError(t, err)
+	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	session := &Session{App: application, Agent: inst}
+
+	_, err = session.Send(context.Background(), "hello")
+	require.NoError(t, err)
+	result, err := session.Send(context.Background(), "/compact")
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, result), "too short")
+}
+
 func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
@@ -89,16 +202,15 @@ func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
 	require.NoError(t, err)
 
 	descriptors := session.CommandDescriptors()
-	require.Len(t, descriptors, 2)
-	require.Equal(t, "workflow", descriptors[0].Name)
-	require.Equal(t, []string{"workflow"}, descriptors[0].Path)
-	require.Equal(t, []string{"workflow", "list"}, descriptors[0].Subcommands[0].Path)
-	require.Equal(t, "session", descriptors[1].Name)
-	require.Equal(t, []string{"session", "info"}, descriptors[1].Subcommands[0].Path)
-	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[2].Input.Fields[0].Type)
-	require.Equal(t, command.InputTypeArray, descriptors[0].Subcommands[2].Input.Fields[1].Type)
-	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[3].Input.Fields[0].Type)
-	require.Equal(t, command.InputTypeString, descriptors[0].Subcommands[3].Input.Fields[1].Type)
+	workflowDescriptor := requireDescriptorPath(t, descriptors, "workflow")
+	sessionDescriptor := requireDescriptorPath(t, descriptors, "session")
+	require.Equal(t, []string{"workflow"}, workflowDescriptor.Path)
+	require.Equal(t, []string{"workflow", "list"}, workflowDescriptor.Subcommands[0].Path)
+	require.Equal(t, []string{"session", "info"}, sessionDescriptor.Subcommands[0].Path)
+	require.Equal(t, command.InputTypeString, workflowDescriptor.Subcommands[2].Input.Fields[0].Type)
+	require.Equal(t, command.InputTypeArray, workflowDescriptor.Subcommands[2].Input.Fields[1].Type)
+	require.Equal(t, command.InputTypeString, workflowDescriptor.Subcommands[3].Input.Fields[0].Type)
+	require.Equal(t, command.InputTypeString, workflowDescriptor.Subcommands[3].Input.Fields[1].Type)
 
 	result, err := session.ExecuteCommand(context.Background(), []string{"/workflow", "list"}, nil)
 	require.NoError(t, err)
@@ -636,6 +748,7 @@ func requireHarnessRequestContainsText(t *testing.T, req unified.Request, want s
 	for _, msg := range req.Messages {
 		for _, part := range msg.Content {
 			if text, ok := part.(unified.TextPart); ok && strings.Contains(text.Text, want) {
+
 				return
 			}
 		}
@@ -648,6 +761,32 @@ func requireHarnessRequestContainsText(t *testing.T, req unified.Request, want s
 		}
 	}
 	t.Fatalf("request does not contain %q", want)
+}
+
+func requireDescriptorPath(t *testing.T, descriptors []command.Descriptor, path ...string) command.Descriptor {
+	t.Helper()
+	for _, desc := range descriptors {
+		if slices.Equal(desc.Path, path) {
+			return desc
+		}
+		if found, ok := findDescriptorPath(desc.Subcommands, path...); ok {
+			return found
+		}
+	}
+	t.Fatalf("descriptor path %v not found", path)
+	return command.Descriptor{}
+}
+
+func findDescriptorPath(descriptors []command.Descriptor, path ...string) (command.Descriptor, bool) {
+	for _, desc := range descriptors {
+		if slices.Equal(desc.Path, path) {
+			return desc, true
+		}
+		if found, ok := findDescriptorPath(desc.Subcommands, path...); ok {
+			return found, true
+		}
+	}
+	return command.Descriptor{}, false
 }
 
 func renderCommandResult(t *testing.T, result command.Result) string {

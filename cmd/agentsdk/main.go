@@ -101,7 +101,7 @@ func toolSchemaCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			imported, err := app.New(app.WithResourceBundle(resolved.Bundle), app.WithoutBuiltins())
+			imported, err := app.New(app.WithResourceBundle(resolved.Bundle))
 			if err != nil {
 				return err
 			}
@@ -401,7 +401,7 @@ type discoveryWriter interface {
 }
 
 func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
-	imported, err := app.New(app.WithResourceBundle(resolved.Bundle), app.WithoutBuiltins())
+	imported, err := app.New(app.WithResourceBundle(resolved.Bundle))
 	if err != nil {
 		return err
 	}

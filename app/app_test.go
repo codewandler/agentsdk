@@ -370,7 +370,7 @@ func TestAppOwnsMarkdownCommandDispatch(t *testing.T) {
 	}
 	bundle, err := agentdir.LoadFS(fsys, ".")
 	require.NoError(t, err)
-	app, err := New(WithResourceBundle(bundle), WithoutBuiltins())
+	app, err := New(WithResourceBundle(bundle))
 	require.NoError(t, err)
 
 	result, err := app.Commands().Execute(context.Background(), "/review security")
@@ -398,10 +398,10 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 	require.Equal(t, command.ResultHandled, result.Kind)
 	require.Len(t, client.Requests(), 1)
 
-	contextResult, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, contextResult), "provider: environment")
-	require.Contains(t, renderCommandResult(t, contextResult), "provider: time")
+	inst, ok := app.DefaultAgent()
+	require.True(t, ok)
+	require.Contains(t, inst.ContextState(), "provider: environment")
+	require.Contains(t, inst.ContextState(), "provider: time")
 }
 
 func TestAppExplicitSpecCanSelectOptionalLocalCLITools(t *testing.T) {
@@ -514,104 +514,6 @@ func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 
 	require.Equal(t, 1, app.Tracker().AggregateTurn("1").Usage.Tokens.Count(unified.TokenKindInputNew))
 	require.Equal(t, 2, app.Tracker().AggregateTurn("2").Usage.Tokens.Count(unified.TokenKindInputNew))
-}
-
-func TestAppProtectedBuiltinsCannotBeOverridden(t *testing.T) {
-	_, err := New(WithCommand(command.New(command.Spec{Name: "help"}, nil)))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already registered")
-}
-
-func TestAppHelpListsAgentsCommand(t *testing.T) {
-	app, err := New(WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/help")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, result), "/agents")
-	require.Contains(t, renderCommandResult(t, result), "Show available agents")
-	require.Contains(t, renderCommandResult(t, result), "/context")
-	require.Contains(t, renderCommandResult(t, result), "Show last context render state")
-}
-
-func TestAppContextBuiltinHandlesNoDefaultAgent(t *testing.T) {
-	app, err := New(WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultDisplay, result.Kind)
-	require.Equal(t, "context: no default agent", renderCommandResult(t, result))
-}
-
-func TestAppContextBuiltinExplainsWhenDefaultAgentHasNoRenderState(t *testing.T) {
-	client := runnertest.NewClient(runnertest.TextStream("ok"))
-	app, err := New(WithAgentSpec(agent.Spec{
-		Name:      "main",
-		System:    "You code.",
-		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-
-	_, err = app.InstantiateDefaultAgent(
-		agent.WithClient(client),
-		agent.WithWorkspace(t.TempDir()),
-	)
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultDisplay, result.Kind)
-	require.Contains(t, renderCommandResult(t, result), "context: no render state yet for agent \"main\"")
-	require.Contains(t, renderCommandResult(t, result), "run a turn first to capture provider context")
-}
-
-func TestAppAgentsBuiltinListsRegisteredAgents(t *testing.T) {
-	app, err := New(
-		WithAgentSpec(agent.Spec{Name: "reviewer", Description: "Reviews changes"}),
-		WithAgentSpec(agent.Spec{Name: "main", Description: "Default assistant"}),
-		WithDefaultAgent("main"),
-		WithOutput(&bytes.Buffer{}),
-	)
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/agents")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultDisplay, result.Kind)
-	require.Contains(t, renderCommandResult(t, result), "Agents:")
-	require.Contains(t, renderCommandResult(t, result), "* main - Default assistant")
-	require.Contains(t, renderCommandResult(t, result), "  reviewer - Reviews changes")
-}
-
-func TestAppAgentsBuiltinHandlesNoAgents(t *testing.T) {
-	app, err := New(WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/agents")
-	require.NoError(t, err)
-	require.Equal(t, "No agents registered.", renderCommandResult(t, result))
-}
-
-func TestAppResourceBundleCannotOverrideProtectedBuiltins(t *testing.T) {
-	_, err := New(
-		WithResourceBundle(resource.ContributionBundle{
-			Commands: []command.Command{command.New(command.Spec{Name: "help"}, nil)},
-		}),
-		WithOutput(&bytes.Buffer{}),
-	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already registered")
-}
-
-func TestAppPluginCannotOverrideProtectedBuiltins(t *testing.T) {
-	_, err := New(
-		WithPlugin(testCommandsPlugin{name: "plugin", commands: []command.Command{
-			command.New(command.Spec{Name: "exit"}, nil),
-		}}),
-		WithOutput(&bytes.Buffer{}),
-	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already registered")
 }
 
 func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {
@@ -738,31 +640,6 @@ func (p testCommandsPlugin) Commands() []command.Command {
 	return append([]command.Command(nil), p.commands...)
 }
 
-func TestAppSkillBuiltinReportsAlreadyActiveDynamicSkill(t *testing.T) {
-	client := runnertest.NewClient(runnertest.TextStream("ok"))
-	app, err := New(WithAgentSpec(agent.Spec{
-		Name:      "main",
-		System:    "You code.",
-		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-		SkillSources: []skill.Source{skill.FSSource("skills", "skills", fstest.MapFS{
-			"skills/architecture/SKILL.md": {Data: []byte("---\nname: architecture\ndescription: Architecture\n---\n# Architecture")},
-		}, "skills", skill.SourceEmbedded, 0)},
-	}), WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-
-	inst, err := app.InstantiateDefaultAgent(
-		agent.WithClient(client),
-		agent.WithWorkspace(t.TempDir()),
-	)
-	require.NoError(t, err)
-	_, err = inst.ActivateSkill("architecture")
-	require.NoError(t, err)
-
-	result, err := app.Commands().Execute(context.Background(), "/skill architecture")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, result), "already active (dynamic)")
-}
-
 // ── ContextProvidersPlugin tests ─────────────────────────────────────────────
 
 type testContextProvidersPlugin struct {
@@ -848,9 +725,9 @@ func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
 	require.NoError(t, err)
 
 	// The context state should mention the plugin provider key.
-	result, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, result), "plugin_git")
+	inst, ok := app.DefaultAgent()
+	require.True(t, ok)
+	require.Contains(t, inst.ContextState(), "plugin_git")
 }
 
 func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
@@ -979,9 +856,9 @@ func TestAgentContextPluginForwardedToAgent(t *testing.T) {
 	_, err = app.Send(context.Background(), "hello")
 	require.NoError(t, err)
 
-	result, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, result), "test_skills")
+	inst, ok := app.DefaultAgent()
+	require.True(t, ok)
+	require.Contains(t, inst.ContextState(), "test_skills")
 }
 
 func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
@@ -1010,67 +887,9 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 	_, err = app.Send(context.Background(), "hello")
 	require.NoError(t, err)
 
-	result, err := app.Commands().Execute(context.Background(), "/context")
-	require.NoError(t, err)
-	require.Contains(t, renderCommandResult(t, result), "test_skills")
-}
-
-func TestAppCompactCommandReturnsResult(t *testing.T) {
-	client := runnertest.NewClient(
-		runnertest.TextStream("resp1"),
-		runnertest.TextStream("resp2"),
-		runnertest.TextStream("resp3"),
-		runnertest.TextStream("Summary."),
-	)
-	app, err := New(WithAgentSpec(agent.Spec{
-		Name:      "coder",
-		System:    "You code.",
-		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder",
-		agent.WithClient(client),
-		agent.WithWorkspace(t.TempDir()),
-	)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = app.Send(ctx, "old1")
-	require.NoError(t, err)
-	_, err = app.Send(ctx, "old2")
-	require.NoError(t, err)
-	_, err = app.Send(ctx, "recent")
-	require.NoError(t, err)
-
-	result, err := app.Send(ctx, "/compact")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultDisplay, result.Kind)
-	require.Contains(t, renderCommandResult(t, result), "Compacted")
-	require.Contains(t, renderCommandResult(t, result), "replaced")
-}
-
-func TestAppCompactCommandTooShort(t *testing.T) {
-	client := runnertest.NewClient(runnertest.TextStream("resp"))
-	app, err := New(WithAgentSpec(agent.Spec{
-		Name:      "coder",
-		System:    "You code.",
-		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), WithOutput(&bytes.Buffer{}))
-	require.NoError(t, err)
-	_, err = app.InstantiateAgent("coder",
-		agent.WithClient(client),
-		agent.WithWorkspace(t.TempDir()),
-	)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = app.Send(ctx, "hello")
-	require.NoError(t, err)
-
-	result, err := app.Send(ctx, "/compact")
-	require.NoError(t, err)
-	require.Equal(t, command.ResultDisplay, result.Kind)
-	require.Contains(t, renderCommandResult(t, result), "too short")
+	inst, ok := app.DefaultAgent()
+	require.True(t, ok)
+	require.Contains(t, inst.ContextState(), "test_skills")
 }
 
 func requireAppRequestContainsText(t *testing.T, req unified.Request, want string) {

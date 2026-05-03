@@ -30,6 +30,9 @@ type CommandCatalogEntry struct {
 	InputSchema command.JSONSchema `json:"inputSchema"`
 }
 
+// Internal control commands are omitted from catalogs; they remain directly
+// executable through session slash-command routing but are not projected to
+// descriptor-backed API/tool catalogs.
 // CommandCatalog returns a flattened catalog of executable commands exposed by
 // the session. Non-executable namespace nodes are omitted, but executable parent
 // nodes with subcommands would be included.
@@ -67,6 +70,9 @@ func appendCommandCatalogEntries(out *[]CommandCatalogEntry, desc command.Descri
 }
 
 func commandCatalogKeeps(desc command.Descriptor, opts commandCatalogOptions) bool {
+	if desc.Policy.Internal {
+		return false
+	}
 	if opts.agentCallableOnly && !desc.AgentCallable() {
 		return false
 	}

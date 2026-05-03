@@ -102,15 +102,28 @@ func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[s
 }
 
 func (s *Session) commandTrees() ([]*command.Tree, error) {
-	workflowTree, err := NewWorkflowCommand(s)
-	if err != nil {
-		return nil, err
+	builders := []func(*Session) (*command.Tree, error){
+		NewHelpCommand,
+		NewAgentsCommand,
+		NewNewCommand,
+		NewQuitCommand,
+		NewTurnCommand,
+		NewContextCommand,
+		NewSkillsCommand,
+		NewSkillCommand,
+		NewCompactCommand,
+		NewWorkflowCommand,
+		NewSessionCommand,
 	}
-	sessionTree, err := NewSessionCommand(s)
-	if err != nil {
-		return nil, err
+	trees := make([]*command.Tree, 0, len(builders))
+	for _, build := range builders {
+		tree, err := build(s)
+		if err != nil {
+			return nil, err
+		}
+		trees = append(trees, tree)
 	}
-	return []*command.Tree{workflowTree, sessionTree}, nil
+	return trees, nil
 }
 
 func (s *Session) commandTree(name string) (*command.Tree, bool, error) {
@@ -123,11 +136,27 @@ func (s *Session) commandTree(name string) (*command.Tree, bool, error) {
 		return nil, false, err
 	}
 	for _, tree := range trees {
-		if tree != nil && tree.Spec().Name == name {
+		if treeMatchesName(tree, name) {
 			return tree, true, nil
 		}
 	}
 	return nil, false, nil
+}
+
+func treeMatchesName(tree *command.Tree, name string) bool {
+	if tree == nil {
+		return false
+	}
+	spec := tree.Spec()
+	if spec.Name == name {
+		return true
+	}
+	for _, alias := range spec.Aliases {
+		if alias == name {
+			return true
+		}
+	}
+	return false
 }
 
 func commandPath(path []string) []string {
