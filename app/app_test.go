@@ -277,7 +277,7 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 	require.NotEmpty(t, handled)
 
 	store := threadjsonlstore.Open(filepath.Dir(inst.SessionStorePath()))
-	_, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(app.SessionID())}).State(ctx, "run_thread")
+	_, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(inst.SessionID())}).State(ctx, "run_thread")
 	require.NoError(t, err)
 	require.False(t, ok)
 }
@@ -512,8 +512,10 @@ func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 	_, err = app.Send(context.Background(), "second")
 	require.NoError(t, err)
 
-	require.Equal(t, 1, app.Tracker().AggregateTurn("1").Usage.Tokens.Count(unified.TokenKindInputNew))
-	require.Equal(t, 2, app.Tracker().AggregateTurn("2").Usage.Tokens.Count(unified.TokenKindInputNew))
+	inst, ok := app.DefaultAgent()
+	require.True(t, ok)
+	require.Equal(t, 1, inst.Tracker().AggregateTurn("1").Usage.Tokens.Count(unified.TokenKindInputNew))
+	require.Equal(t, 2, inst.Tracker().AggregateTurn("2").Usage.Tokens.Count(unified.TokenKindInputNew))
 }
 
 func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {

@@ -148,8 +148,8 @@ func (h controlCommandHandler) agentsCommand(context.Context, command.Invocation
 }
 
 func (h controlCommandHandler) newCommand(context.Context, command.Invocation) (command.Result, error) {
-	if h.Session != nil && h.Session.App != nil {
-		h.Session.App.Reset()
+	if h.Session != nil && h.Session.Agent != nil {
+		h.Session.Agent.Reset()
 	}
 	return command.Reset(), nil
 }

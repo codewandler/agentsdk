@@ -26,7 +26,6 @@ func Run(ctx context.Context, cfg Config) error {
 	in := loaded.In
 	out := loaded.Out
 	errOut := loaded.Err
-	application := loaded.App
 
 	if strings.TrimSpace(cfg.Task) != "" {
 		runCtx, stopSignals := signal.NotifyContext(ctx, os.Interrupt)
@@ -46,7 +45,7 @@ func Run(ctx context.Context, cfg Config) error {
 			err = renderErr
 		}
 		fmt.Fprintln(out)
-		ui.PrintSessionUsage(out, application.SessionID(), application.Tracker().Aggregate())
+		ui.PrintSessionUsage(out, loaded.Session.SessionID(), loaded.Session.Tracker().Aggregate())
 		if errors.Is(err, agent.ErrMaxStepsReached) {
 			fmt.Fprintf(errOut, "Warning: %v\n", err)
 			return nil

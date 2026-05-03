@@ -18,7 +18,6 @@ import (
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/tool"
-	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/agentsdk/workflow"
 )
 
@@ -931,42 +930,4 @@ func (a *App) agentSkillSources(spec agent.Spec) []skill.Source {
 func (a *App) nextTurnID() int {
 	a.turnID++
 	return a.turnID
-}
-
-// Methods below let terminal/repl use App directly.
-
-func (a *App) RunTurn(ctx context.Context, turnID int, task string) error {
-	inst, ok := a.DefaultAgent()
-	if !ok {
-		return fmt.Errorf("app: no default agent configured")
-	}
-	return inst.RunTurn(ctx, turnID, task)
-}
-
-func (a *App) Reset() {
-	if inst, ok := a.DefaultAgent(); ok {
-		inst.Reset()
-	}
-	a.turnID = 0
-}
-
-func (a *App) ParamsSummary() string {
-	if inst, ok := a.DefaultAgent(); ok {
-		return inst.ParamsSummary()
-	}
-	return ""
-}
-
-func (a *App) SessionID() string {
-	if inst, ok := a.DefaultAgent(); ok {
-		return inst.SessionID()
-	}
-	return ""
-}
-
-func (a *App) Tracker() *usage.Tracker {
-	if inst, ok := a.DefaultAgent(); ok {
-		return inst.Tracker()
-	}
-	return nil
 }

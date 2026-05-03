@@ -178,16 +178,11 @@ func (s *Session) Info() SessionInfo {
 	if s == nil {
 		return info
 	}
-	if s.App != nil {
-		info.SessionID = s.App.SessionID()
-		info.ParamsSummary = s.App.ParamsSummary()
-	}
 	if s.Agent != nil {
 		spec := s.Agent.Spec()
 		info.AgentName = spec.Name
-		if info.SessionID == "" {
-			info.SessionID = s.Agent.SessionID()
-		}
+		info.SessionID = s.Agent.SessionID()
+		info.ParamsSummary = s.Agent.ParamsSummary()
 		if live := s.Agent.LiveThread(); live != nil {
 			info.ThreadID = live.ID()
 			info.BranchID = live.BranchID()
@@ -198,10 +193,10 @@ func (s *Session) Info() SessionInfo {
 }
 
 func (s *Session) ParamsSummary() string {
-	if s == nil || s.App == nil {
+	if s == nil || s.Agent == nil {
 		return ""
 	}
-	return s.App.ParamsSummary()
+	return s.Agent.ParamsSummary()
 }
 
 func (s *Session) SessionID() string {
@@ -209,15 +204,15 @@ func (s *Session) SessionID() string {
 }
 
 func (s *Session) Tracker() *usage.Tracker {
-	if s == nil || s.App == nil {
+	if s == nil || s.Agent == nil {
 		return nil
 	}
-	return s.App.Tracker()
+	return s.Agent.Tracker()
 }
 
 func (s *Session) Out() io.Writer {
-	if s == nil || s.App == nil {
+	if s == nil || s.Agent == nil {
 		return io.Discard
 	}
-	return s.App.Out()
+	return s.Agent.Out()
 }
