@@ -46,18 +46,11 @@ func ExtractIntent(t Tool, ctx Ctx, input json.RawMessage) Intent {
 	} else {
 		intent = opaqueToolIntent(target)
 	}
-	if intent.Tool == "" && target != nil {
-		intent.Tool = target.Name()
+	name := ""
+	if target != nil {
+		name = target.Name()
 	}
-	if intent.Action == "" {
-		intent.Action = intent.Tool
-	}
-	if intent.Class == "" && intent.ToolClass != "" {
-		intent.Class = intent.ToolClass
-	}
-	if intent.ToolClass == "" && intent.Class != "" {
-		intent.ToolClass = intent.Class
-	}
+	intent = intent.Normalize(name)
 
 	// 2. Collect middleware layers (outermost-first via Unwrap walk).
 	var layers []*hookedTool

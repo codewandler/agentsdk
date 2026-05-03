@@ -65,6 +65,19 @@ func TestNewTypedInvalidInputReturnsResultError(t *testing.T) {
 	require.Equal(t, reflect.TypeOf(""), invalid.Actual)
 }
 
+func TestResultContracts(t *testing.T) {
+	ok := OK("done", "event")
+	require.Equal(t, StatusOK, ok.Status)
+	require.False(t, ok.IsError())
+	require.NoError(t, ok.Err())
+	require.Equal(t, []Event{"event"}, ok.Events)
+
+	failed := Failed(nil)
+	require.Equal(t, StatusError, failed.Status)
+	require.True(t, failed.IsError())
+	require.EqualError(t, failed.Err(), "action failed")
+}
+
 func TestTypeDecodeJSONValidatesWhenSchemaPresent(t *testing.T) {
 	typ := TypeOf[typedInput]()
 	require.NotNil(t, typ.Schema)
@@ -234,6 +247,22 @@ func TestExtractIntentOpaqueFallback(t *testing.T) {
 	require.Equal(t, "unknown", intent.Class)
 	require.True(t, intent.Opaque)
 	require.Equal(t, "low", intent.Confidence)
+}
+
+func TestIntentNormalizeMirrorsActionAndToolFields(t *testing.T) {
+	intent := Intent{Class: "filesystem_read"}.Normalize("read_file")
+	require.Equal(t, "read_file", intent.Action)
+	require.Equal(t, "read_file", intent.Tool)
+	require.Equal(t, "filesystem_read", intent.Class)
+	require.Equal(t, "filesystem_read", intent.ToolClass)
+	require.Equal(t, "low", intent.Confidence)
+
+	legacy := Intent{Tool: "legacy_tool", ToolClass: "network_access", Confidence: "high"}.Normalize("")
+	require.Equal(t, "legacy_tool", legacy.Action)
+	require.Equal(t, "legacy_tool", legacy.Tool)
+	require.Equal(t, "network_access", legacy.Class)
+	require.Equal(t, "network_access", legacy.ToolClass)
+	require.Equal(t, "high", legacy.Confidence)
 }
 
 type intentAction struct{ Action }

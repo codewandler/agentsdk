@@ -21,6 +21,7 @@ type Event = any
 
 // Result is the execution outcome of an Action.
 type Result struct {
+	Status Status
 	Data   any
 	Error  error
 	Events []Event
@@ -76,16 +77,16 @@ func NewTyped[I, O any](spec Spec, fn func(Ctx, I) (O, error)) Action {
 	return New(spec, func(ctx Ctx, input any) Result {
 		var zero O
 		if fn == nil {
-			return Result{Data: zero}
+			return OK(zero)
 		}
 		in, err := CastInput[I](input)
 		if err != nil {
-			return Result{Error: err}
+			return Failed(err)
 		}
 		out, err := fn(ctx, in)
 		if err != nil {
-			return Result{Error: err}
+			return Failed(err)
 		}
-		return Result{Data: out}
+		return OK(out)
 	})
 }

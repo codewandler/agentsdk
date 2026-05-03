@@ -78,6 +78,39 @@ type IntentProvider interface {
 	DeclareIntent(ctx Ctx, input any) (Intent, error)
 }
 
+// Normalize returns an intent with compatibility fields and defaults populated.
+//
+// actionName is used when neither Action nor Tool is set. Tool is mirrored from
+// Action for migration compatibility, and ToolClass is mirrored from Class. This
+// keeps action-native policy code and legacy tool policy code reading the same
+// semantic intent without duplicating extraction logic.
+func (i Intent) Normalize(actionName string) Intent {
+	if i.Action == "" {
+		if i.Tool != "" {
+			i.Action = i.Tool
+		} else {
+			i.Action = actionName
+		}
+	}
+	if i.Tool == "" {
+		i.Tool = i.Action
+	}
+	if i.Class == "" {
+		if i.ToolClass != "" {
+			i.Class = i.ToolClass
+		} else {
+			i.Class = "unknown"
+		}
+	}
+	if i.ToolClass == "" {
+		i.ToolClass = i.Class
+	}
+	if i.Confidence == "" {
+		i.Confidence = "low"
+	}
+	return i
+}
+
 // ExtractIntent returns an action's declared intent and lets action middleware
 // layers amend it from inside out.
 func ExtractIntent(a Action, ctx Ctx, input any) Intent {
@@ -92,12 +125,11 @@ func ExtractIntent(a Action, ctx Ctx, input any) Intent {
 	} else {
 		intent = opaqueIntent(target)
 	}
-	if intent.Action == "" && target != nil {
-		intent.Action = target.Spec().Name
+	name := ""
+	if target != nil {
+		name = target.Spec().Name
 	}
-	if intent.Class == "" && intent.ToolClass != "" {
-		intent.Class = intent.ToolClass
-	}
+	intent = intent.Normalize(name)
 
 	layers := hookLayers(a)
 	for _, layer := range layers {
@@ -111,5 +143,5 @@ func opaqueIntent(a Action) Intent {
 	if a != nil {
 		name = a.Spec().Name
 	}
-	return Intent{Action: name, Class: "unknown", Opaque: true, Confidence: "low"}
+	return Intent{Action: name, Tool: name, Class: "unknown", ToolClass: "unknown", Opaque: true, Confidence: "low"}
 }

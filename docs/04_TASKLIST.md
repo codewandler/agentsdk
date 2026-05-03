@@ -190,20 +190,20 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 10. Action/tool convergence
 
-- [ ] Keep `action.Action` as typed execution primitive.
-- [ ] Adapt existing tools to actions where useful.
-- [ ] Add action-backed constructors for first-party tools where useful.
-- [ ] Keep `tool.Tool` as LLM-facing projection.
-- [ ] Avoid duplicating action concepts in tool APIs.
-- [ ] Decide how far `tool.Ctx` should alias/adapt to action concepts.
-- [ ] Decide how far `tool.Result` should alias/adapt to action concepts.
-- [ ] Decide how far `tool.Intent` should alias/adapt to action concepts.
-- [ ] Improve action intent model.
-- [ ] Improve action middleware model.
-- [ ] Add action result contracts.
-- [ ] Add action JSON schema projection where needed.
-- [ ] Add action-to-command adapters only where they reduce boilerplate.
-- [ ] Add action-to-tool adapters only where they are safe and explicit.
+- [x] Keep `action.Action` as typed execution primitive.
+- [x] Adapt existing tools to actions where useful.
+- [x] Add action-backed constructors for first-party tools where useful.
+- [x] Keep `tool.Tool` as LLM-facing projection.
+- [x] Avoid duplicating action concepts in tool APIs.
+- [x] Decide how far `tool.Ctx` should alias/adapt to action concepts.
+- [x] Decide how far `tool.Result` should alias/adapt to action concepts.
+- [x] Decide how far `tool.Intent` should alias/adapt to action concepts.
+- [x] Improve action intent model.
+- [x] Improve action middleware model.
+- [x] Add action result contracts.
+- [x] Add action JSON schema projection where needed.
+- [x] Add action-to-command adapters only where they reduce boilerplate.
+- [x] Add action-to-tool adapters only where they are safe and explicit.
 
 ## 11. Datasource work
 

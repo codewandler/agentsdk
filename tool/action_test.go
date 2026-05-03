@@ -73,6 +73,17 @@ func TestFromActionPreservesToolResultData(t *testing.T) {
 	require.Equal(t, "denied", res.String())
 }
 
+func TestFromActionMapsExplicitFailedStatusToToolErrorResult(t *testing.T) {
+	a := action.New(action.Spec{Name: "fail_status"}, func(action.Ctx, any) action.Result {
+		return action.Failed(nil)
+	})
+
+	res, err := FromAction(a).Execute(minimalCtx{Context: context.Background()}, nil)
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Equal(t, "action failed", res.String())
+}
+
 func TestToActionAdaptsLegacyTool(t *testing.T) {
 	tl := New("echo", "echo text", func(_ Ctx, p struct {
 		Text string `json:"text" jsonschema:"required"`

@@ -206,7 +206,7 @@ Tasks:
    Output action.Type
    Intent declaration
    action.Ctx
-   action.Result: Data any, Error error, Events []action.Event where action.Event is an alias for any
+   action.Result: Status, Data any, Error error, Events []action.Event where action.Event is an alias for any
    Result contract
    Middleware chain
    ```

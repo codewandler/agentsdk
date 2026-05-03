@@ -153,8 +153,8 @@ func decodeActionInput(typ action.Type, input json.RawMessage) (any, error) {
 }
 
 func defaultActionResultMapper(res action.Result) (Result, error) {
-	if res.Error != nil {
-		return Error(res.Error.Error()), nil
+	if err := res.Err(); err != nil {
+		return Error(err.Error()), nil
 	}
 	if res.Data == nil {
 		return Text(""), nil
@@ -181,7 +181,7 @@ func defaultActionResultMapper(res action.Result) (Result, error) {
 func ToAction(t Tool) action.Action {
 	if t == nil {
 		return action.New(action.Spec{}, func(action.Ctx, any) action.Result {
-			return action.Result{Error: fmt.Errorf("tool: nil tool")}
+			return action.Failed(fmt.Errorf("tool: nil tool"))
 		})
 	}
 	return action.New(action.Spec{
@@ -192,17 +192,17 @@ func ToAction(t Tool) action.Action {
 	}, func(ctx action.Ctx, input any) action.Result {
 		toolCtx, ok := ctx.(Ctx)
 		if !ok {
-			return action.Result{Error: fmt.Errorf("tool action %q requires tool.Ctx", t.Name())}
+			return action.Failed(fmt.Errorf("tool action %q requires tool.Ctx", t.Name()))
 		}
 		raw, err := encodeToolActionInput(input)
 		if err != nil {
-			return action.Result{Error: err}
+			return action.Failed(err)
 		}
 		res, err := t.Execute(toolCtx, raw)
 		if err != nil {
-			return action.Result{Error: err}
+			return action.Failed(err)
 		}
-		return action.Result{Data: res}
+		return action.OK(res)
 	})
 }
 

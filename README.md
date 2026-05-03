@@ -469,6 +469,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/10_COMMAND_RENDERING_CLEANUP.md`](docs/10_COMMAND_RENDERING_CLEANUP.md) — command result/rendering audit, generic payload decisions, and rendering coverage.
 - [`docs/11_WORKFLOW_LIFECYCLE.md`](docs/11_WORKFLOW_LIFECYCLE.md) — async workflow lifecycle, run metadata, validation, and command UX decisions.
 - [`docs/12_WORKFLOW_EXECUTION_SEMANTICS.md`](docs/12_WORKFLOW_EXECUTION_SEMANTICS.md) — workflow DAG scheduling, parallelism, retry/timeout/error policy, mapping, and replay constraints.
+- [`docs/13_ACTION_TOOL_CONVERGENCE.md`](docs/13_ACTION_TOOL_CONVERGENCE.md) — `action.Action` / `tool.Tool` boundaries, adapter policy, intent normalization, and action result contracts.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
