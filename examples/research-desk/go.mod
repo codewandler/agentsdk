@@ -22,9 +22,9 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000 // indirect
-	github.com/codewandler/llmadapter v1.0.0-rc.14 // indirect
+	github.com/codewandler/llmadapter v1.0.0-rc.30 // indirect
 	github.com/codewandler/markdown v0.46.2 // indirect
-	github.com/codewandler/modeldb v0.13.2 // indirect
+	github.com/codewandler/modeldb v0.14.4 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/emiago/diago v0.28.0 // indirect
 	github.com/emiago/dtls/v3 v3.0.0-20260122183559-8b8d23e359c0 // indirect

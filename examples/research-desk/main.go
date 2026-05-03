@@ -11,6 +11,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/harness"
 	"github.com/codewandler/agentsdk/plugins/localcli"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
@@ -81,7 +82,11 @@ func replCmd() *cobra.Command {
 			if _, err := application.InstantiateDefaultAgent(); err != nil {
 				return err
 			}
-			return repl.Run(cmd.Context(), application, os.Stdin, repl.WithPrompt("research> "))
+			session, err := harness.NewService(application).DefaultSession()
+			if err != nil {
+				return err
+			}
+			return repl.Run(cmd.Context(), session, os.Stdin, repl.WithPrompt("research> "))
 		},
 	}
 }
@@ -94,7 +99,11 @@ func runOneShot(ctx context.Context, task string) error {
 	if _, err := application.InstantiateDefaultAgent(); err != nil {
 		return err
 	}
-	_, err = application.Send(ctx, task)
+	session, err := harness.NewService(application).DefaultSession()
+	if err != nil {
+		return err
+	}
+	_, err = session.Send(ctx, task)
 	if errors.Is(err, agent.ErrMaxStepsReached) {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 		return nil

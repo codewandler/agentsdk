@@ -244,7 +244,7 @@ Evolution:
 - `resource.ContributionBundle` includes datasource and workflow contributions.
 - `app.Plugin` includes datasource/workflow/action facets and capability-factory facets so concrete capabilities such as planner are contributed by named plugins instead of hidden defaults in `agent`.
 - `app.App` registers datasources/workflows/actions the same way it registers commands/tools/skills today.
-- `app.App` is the registry/executor composition host. Workflow thread recording and command-triggered workflow entry points now live in `harness.Session`, so app does not need terminal/session-state command shims.
+- `app.App` is the registry/executor composition host. User input dispatch, command-result application, workflow thread recording, and command-triggered workflow entry points now live in `harness.Session`, so app does not need terminal/session-state command shims.
 
 
 ### Plugin and session projection invariant
@@ -658,7 +658,7 @@ harness.Service
   supports multiple channels/triggers
 ```
 
-The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, session-scoped workflow browsing, and default session projections. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.CommandDescriptors`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths. Terminal one-shot mode renders returned `command.Result` values at the terminal boundary rather than discarding them.
+The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, session-scoped workflow browsing, default session projections, and command-result application. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.CommandDescriptors`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths. Terminal one-shot mode renders returned `command.Result` values at the terminal boundary rather than discarding them.
 
 Harness loading now owns the reusable setup that used to sit in `terminal/cli.Load`: selecting and preparing the default agent from resolved resources, applying generic agent-spec overrides, resolving model-policy/source-API load settings, resolving default/manifest/explicit plugin refs through `app.PluginFactory`, applying loaded plugins, translating grouped session/app configuration into `app.Option` values, instantiating the default agent, creating the service, and opening the default session. Terminal remains responsible for terminal-only policy such as CLI flag interpretation, local CLI fallback/default-plugin policy, terminal event handlers, debug-message output, fallback spec selection, and risk-log presentation.
 
@@ -749,7 +749,7 @@ Recommendation: evolve in place. Add missing seams, then move code behind those 
 
 ### Harness vs app.App
 
-`app.App` already composes agents, resources, commands, plugins, tools, skill sources, actions, datasources, and workflows. It is currently best understood as the composition root / registry host, not the final process runtime.
+`app.App` already composes agents, resources, commands, plugins, tools, skill sources, actions, datasources, and workflows. It is best understood as the composition root / registry host, not a channel target or final process runtime.
 
 Recommendation: harness hosts `app.App` first and reuses its registries. Lifecycle-heavy responsibilities such as multi-session management, channel routing, trigger dispatch, and durable workflow execution should move to harness/session APIs over time. Keep `app.App` from becoming a permanent god object by splitting responsibilities deliberately when harness lands.
 

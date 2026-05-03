@@ -25,8 +25,9 @@ type Service struct {
 }
 
 type Session struct {
-	App   *app.App
-	Agent *agent.Instance
+	App    *app.App
+	Agent  *agent.Instance
+	turnID int
 }
 
 func NewService(app *app.App) *Service {
@@ -53,6 +54,9 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 		return command.Result{}, fmt.Errorf("harness: app is required")
 	}
 	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return command.Handled(), nil
+	}
 	if strings.HasPrefix(trimmed, "/") {
 		name, params, err := command.Parse(trimmed)
 		if err != nil {
@@ -63,10 +67,53 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 			return command.Result{}, err
 		}
 		if cmd, ok := commands.Get(name); ok {
-			return cmd.Execute(ctx, params)
+			result, err := cmd.Execute(ctx, params)
+			if err != nil {
+				return command.Result{}, err
+			}
+			return s.applyResult(ctx, result, 0)
+		}
+		if s.App.Commands() != nil {
+			result, err := s.App.Commands().ExecuteUser(ctx, trimmed)
+			if err != nil {
+				return command.Result{}, err
+			}
+			return s.applyResult(ctx, result, 0)
 		}
 	}
-	return s.App.Send(ctx, input)
+	return s.runAgentTurn(ctx, trimmed, 0)
+}
+
+func (s *Session) applyResult(ctx context.Context, result command.Result, turnID int) (command.Result, error) {
+	switch result.Kind {
+	case command.ResultAgentTurn:
+		input, ok := command.AgentTurnInput(result)
+		if !ok || strings.TrimSpace(input) == "" {
+			return command.Handled(), nil
+		}
+		return s.runAgentTurn(ctx, input, turnID)
+	case command.ResultReset:
+		if s != nil && s.Agent != nil {
+			s.Agent.Reset()
+		}
+		if s != nil {
+			s.turnID = 0
+		}
+		return command.Handled(), nil
+	default:
+		return result, nil
+	}
+}
+
+func (s *Session) runAgentTurn(ctx context.Context, input string, turnID int) (command.Result, error) {
+	if s == nil || s.Agent == nil {
+		return command.Result{}, fmt.Errorf("harness: no agent configured")
+	}
+	if turnID <= 0 {
+		s.turnID++
+		turnID = s.turnID
+	}
+	return command.Handled(), s.Agent.RunTurn(ctx, turnID, input)
 }
 
 func (s *Session) Commands() (*command.Registry, error) {
