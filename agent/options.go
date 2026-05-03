@@ -76,10 +76,6 @@ func WithSpec(spec Spec) Option {
 	}
 }
 
-func WithSkillRepository(repo *skill.Repository) Option {
-	return func(a *Instance) { a.skillRepo = repo }
-}
-
 func WithMaxSteps(max int) Option {
 	return func(a *Instance) { a.maxSteps = max }
 }

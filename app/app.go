@@ -408,14 +408,10 @@ func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instan
 	if view := a.agentCommandView(name); len(view.AgentCommands()) > 0 {
 		tools = append(tools, command.Tool(view))
 	}
-	repo, err := skill.NewRepository(a.agentSkillSources(spec), spec.Skills)
-	if err != nil {
-		return nil, err
-	}
+	spec.SkillSources = a.agentSkillSources(spec)
 	base := []agent.Option{
 		agent.WithSpec(spec),
 		agent.WithTools(tools),
-		agent.WithSkillRepository(repo),
 	}
 	if len(a.contextProviders) > 0 {
 		base = append(base, agent.WithContextProviders(a.contextProviders...))
