@@ -50,6 +50,28 @@ func TestTreePassesVariadicArgsAndFlags(t *testing.T) {
 	require.Equal(t, "succeeded", got.Flag("status"))
 }
 
+func TestTreeAllowsBareBoolFlags(t *testing.T) {
+	type input struct {
+		Async bool `command:"flag=async"`
+	}
+	var got Invocation
+	tree, err := NewTree("workflow").
+		Sub("start", func(_ context.Context, inv Invocation) (Result, error) {
+			got = inv
+			return Text(inv.Flag("async")), nil
+		}, TypedInput[input](), Arg("name").Required(), Flag("async")).
+		Build()
+	require.NoError(t, err)
+
+	_, params, err := Parse("/workflow start slow_flow --async")
+	require.NoError(t, err)
+	result, err := tree.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.Equal(t, "true", renderCommandResult(t, result))
+	require.Equal(t, "true", got.Flag("async"))
+}
+
 func TestTreeValidationReturnsStructuredHelpPayload(t *testing.T) {
 	tree, err := NewTree("workflow").
 		Sub("runs", func(context.Context, Invocation) (Result, error) {

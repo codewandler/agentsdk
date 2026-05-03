@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
@@ -139,6 +141,52 @@ func TestE2EWorkflowStartRunsAndResumeSessionLookup(t *testing.T) {
 	require.Contains(t, runOut.String(), "output: hello from e2e")
 }
 
+func TestE2EAsyncWorkflowCompletesInLongLivedCLIRepl(t *testing.T) {
+	workspace := t.TempDir()
+	sessionsDir := filepath.Join(workspace, "sessions")
+	resources := EmbeddedResources(e2eSlowWorkflowBundle(), ".agents")
+	appOptions := []app.Option{app.WithActions(action.New(action.Spec{Name: "slow.e2e"}, func(ctx action.Ctx, input any) action.Result {
+		select {
+		case <-ctx.Done():
+			return action.Result{Error: ctx.Err()}
+		case <-time.After(100 * time.Millisecond):
+			return action.Result{Data: input}
+		}
+	}))}
+	in, writer := io.Pipe()
+	var out bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer writer.Close()
+		_, _ = io.WriteString(writer, "/workflow start slow_flow hello --async\n")
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(writer, "/workflow runs\n")
+		time.Sleep(200 * time.Millisecond)
+		_, _ = io.WriteString(writer, "/workflow runs\n")
+		_, _ = io.WriteString(writer, "/quit\n")
+	}()
+
+	err := Run(t.Context(), Config{
+		Resources:        resources,
+		Workspace:        workspace,
+		SessionsDir:      sessionsDir,
+		AgentOptions:     []agent.Option{agent.WithClient(runnertest.NewClient())},
+		AppOptions:       appOptions,
+		NoDefaultPlugins: true,
+		In:               in,
+		Out:              &out,
+		Err:              &bytes.Buffer{},
+	})
+	<-done
+	require.NoError(t, err)
+	text := out.String()
+	require.Contains(t, text, "workflow started: slow_flow")
+	require.Contains(t, text, "status: queued")
+	require.Contains(t, text, "slow_flow")
+	require.Contains(t, text, "succeeded")
+}
+
 func TestE2EAppManifestPluginRefsLoad(t *testing.T) {
 	workspace := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "agentsdk.app.json"), []byte(`{"sources":[".agents"],"plugins":["manifest_plugin"]}`), 0o644))
@@ -167,6 +215,17 @@ description: Echo through an explicit app action
 steps:
   - id: echo
     action: echo.e2e
+`)}
+	return bundle
+}
+
+func e2eSlowWorkflowBundle() fstest.MapFS {
+	bundle := testBundle()
+	bundle[".agents/workflows/slow.yaml"] = &fstest.MapFile{Data: []byte(`name: slow_flow
+description: Slow async workflow
+steps:
+  - id: slow
+    action: slow.e2e
 `)}
 	return bundle
 }

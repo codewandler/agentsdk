@@ -597,6 +597,7 @@ func (t *Tree) resolveInputPath(path []string) (*treeNode, *ValidationError) {
 func (n *treeNode) invocation(params Params, positional []string) (Invocation, *ValidationError) {
 	inv := Invocation{Path: n.path(), Raw: params.Raw, Args: map[string][]string{}, Flags: map[string]string{}}
 	flagsByName := map[string]FlagSpec{}
+	flagTypes := n.inputHintTypes()
 	for _, flag := range n.flags {
 		flagsByName[flag.Name] = flag
 	}
@@ -606,7 +607,7 @@ func (n *treeNode) invocation(params Params, positional []string) (Invocation, *
 			err := ValidationError{Path: inv.Path, Code: ValidationUnknownFlag, Field: name, Message: fmt.Sprintf("unknown flag --%s", name)}
 			return Invocation{}, &err
 		}
-		if value == "" || value == "true" {
+		if value == "" || (value == "true" && flagTypes[inputBindingKey{source: InputSourceFlag, name: name}] != InputTypeBool) {
 			err := ValidationError{Path: inv.Path, Code: ValidationMissingFlag, Field: name, Message: fmt.Sprintf("missing value for --%s", name)}
 			return Invocation{}, &err
 		}

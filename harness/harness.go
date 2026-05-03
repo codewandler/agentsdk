@@ -359,7 +359,10 @@ func (s *Session) StartWorkflowWithRunID(ctx context.Context, runID workflow.Run
 	if store, ok := s.WorkflowRunStore(); ok {
 		_ = store.Append(ctx, runID, workflow.Queued{RunID: runID, WorkflowName: workflowName, Metadata: s.WorkflowRunMetadata("command", []string{"workflow", "start"}), Input: workflow.InlineValue(input)})
 	}
-	runCtx, cancel := context.WithCancel(ctx)
+	// Async workflow runs must outlive the command/REPL line context that started
+	// them. Cancellation is owned by Session.CancelWorkflow and service/session
+	// shutdown rather than by the short-lived caller context.
+	runCtx, cancel := context.WithCancel(context.Background())
 	s.mu.Lock()
 	if s.workflowCancels == nil {
 		s.workflowCancels = map[workflow.RunID]context.CancelFunc{}
