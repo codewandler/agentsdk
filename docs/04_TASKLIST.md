@@ -40,16 +40,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 2. End-to-end tests
 
-- [ ] Add an end-to-end test for local CLI plugin + harness load.
-- [ ] Add an end-to-end test for one-shot terminal command rendering.
-- [ ] Add an end-to-end test for `/workflow start` then `/workflow runs`.
-- [ ] Add an end-to-end test for default command projection attachment.
-- [ ] Add an end-to-end test for `session_command` execution from an agent/tool path.
-- [ ] Add an end-to-end test for non-agent-callable command rejection.
-- [ ] Add an end-to-end test for app manifest plugin refs.
-- [ ] Add an end-to-end test for `--no-default-plugins`.
-- [ ] Add an end-to-end test for resource-defined workflows using explicit actions.
-- [ ] Add an end-to-end test for resumed sessions preserving workflow run lookup.
+- [x] Add an end-to-end test for local CLI plugin + harness load.
+- [x] Add an end-to-end test for one-shot terminal command rendering.
+- [x] Add an end-to-end test for `/workflow start` then `/workflow runs`.
+- [x] Add an end-to-end test for default command projection attachment.
+- [x] Add an end-to-end test for `session_command` execution from an agent/tool path.
+- [x] Add an end-to-end test for non-agent-callable command rejection.
+- [x] Add an end-to-end test for app manifest plugin refs.
+- [x] Add an end-to-end test for `--no-default-plugins`.
+- [x] Add an end-to-end test for resource-defined workflows using explicit actions.
+- [x] Add an end-to-end test for resumed sessions preserving workflow run lookup.
 
 ## 3. Agent façade cleanup
 
