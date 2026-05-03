@@ -146,12 +146,12 @@ func New(opts ...Option) (*App, error) {
 		}
 	}
 	for _, bundle := range cfg.bundles {
-		if err := a.RegisterResourceBundle(bundle); err != nil {
+		if err := a.registerResourceBundle(bundle); err != nil {
 			return nil, err
 		}
 	}
 	for _, plugin := range cfg.plugins {
-		if err := a.RegisterPlugin(plugin); err != nil {
+		if err := a.registerPlugin(plugin); err != nil {
 			return nil, err
 		}
 	}
@@ -650,7 +650,7 @@ func (a *App) AgentNames() []string {
 	return names
 }
 
-func (a *App) RegisterPlugin(plugin Plugin) error {
+func (a *App) registerPlugin(plugin Plugin) error {
 	if plugin == nil {
 		return nil
 	}
@@ -728,7 +728,7 @@ func (a *App) RegisterPlugin(plugin Plugin) error {
 	return nil
 }
 
-func (a *App) RegisterResourceBundle(bundle resource.ContributionBundle) error {
+func (a *App) registerResourceBundle(bundle resource.ContributionBundle) error {
 	for _, cmd := range bundle.Commands {
 		if err := a.registerCommandFromSource(cmd, bundle.Source); err != nil {
 			return err
