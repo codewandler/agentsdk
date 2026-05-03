@@ -250,11 +250,7 @@ projection := session.AgentCommandProjection()
 // projection.ContextProviders includes the agent command catalog provider.
 ```
 
-Default harness sessions attach this command projection automatically, so `session_command` and the command catalog context provider are available to the next agent turn without manual registration. The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.CommandCatalog(harness.CommandCatalogAgentCallable())` and can be rendered as model context through:
-
-```go
-context := harness.FormatAgentCommandCatalog(session.CommandCatalog(harness.CommandCatalogAgentCallable()))
-```
+Default harness sessions attach this command projection automatically, so `session_command` and the command catalog context provider are available to the next agent turn without manual registration. The tool schema is the generic `CommandEnvelope` schema. Exact command paths and input shapes still come from `session.CommandCatalog(harness.CommandCatalogAgentCallable())` and are rendered into model context by the projection's provider.
 
 The provider emits a stable `agent_command_catalog/session_command` context fragment explaining the `session_command` tool and its currently agent-callable command paths. Tool execution calls `ExecuteAgentCommandEnvelope`, so non-agent-callable commands are rejected before command execution.
 

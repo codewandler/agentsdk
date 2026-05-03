@@ -16,9 +16,9 @@ const (
 	AgentCommandCatalogFragmentKey agentcontext.FragmentKey = "agent_command_catalog/session_command"
 )
 
-// FormatAgentCommandCatalog renders agent-callable session commands as compact
+// formatAgentCommandCatalog renders agent-callable session commands as compact
 // model context for the generic session_command tool.
-func FormatAgentCommandCatalog(catalog []CommandCatalogEntry) string {
+func formatAgentCommandCatalog(catalog []CommandCatalogEntry) string {
 	if len(catalog) == 0 {
 		return "No agent-callable session commands are available."
 	}
@@ -86,7 +86,7 @@ func (p agentCommandCatalogProvider) GetContext(ctx context.Context, _ agentcont
 	if err := ctx.Err(); err != nil {
 		return agentcontext.ProviderContext{}, err
 	}
-	content := FormatAgentCommandCatalog(p.Session.CommandCatalog(CommandCatalogAgentCallable()))
+	content := formatAgentCommandCatalog(p.Session.CommandCatalog(CommandCatalogAgentCallable()))
 	return agentcontext.ProviderContext{
 		Fragments: []agentcontext.ContextFragment{{
 			Key:         AgentCommandCatalogFragmentKey,

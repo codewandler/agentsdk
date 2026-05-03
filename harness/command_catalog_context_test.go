@@ -13,7 +13,7 @@ import (
 func TestFormatAgentCommandCatalogRendersToolContext(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 
-	text := FormatAgentCommandCatalog(session.CommandCatalog(CommandCatalogAgentCallable()))
+	text := formatAgentCommandCatalog(session.CommandCatalog(CommandCatalogAgentCallable()))
 
 	require.Contains(t, text, "session_command")
 	require.Contains(t, text, "workflow list: List workflows")
@@ -23,14 +23,14 @@ func TestFormatAgentCommandCatalogRendersToolContext(t *testing.T) {
 }
 
 func TestFormatAgentCommandCatalogRendersEmptyCatalog(t *testing.T) {
-	text := FormatAgentCommandCatalog(nil)
+	text := formatAgentCommandCatalog(nil)
 
 	require.Equal(t, "No agent-callable session commands are available.", text)
 	require.False(t, strings.HasSuffix(text, "\n"))
 }
 
 func TestFormatAgentCommandCatalogRendersEnums(t *testing.T) {
-	text := FormatAgentCommandCatalog([]CommandCatalogEntry{{Descriptor: command.Descriptor{
+	text := formatAgentCommandCatalog([]CommandCatalogEntry{{Descriptor: command.Descriptor{
 		Path:        []string{"workflow", "runs"},
 		Description: "List workflow runs",
 		Input: command.InputDescriptor{Fields: []command.InputFieldDescriptor{{
