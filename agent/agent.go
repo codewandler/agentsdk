@@ -704,6 +704,8 @@ func (a *Instance) runtimeOptions() []agentruntime.Option {
 	opts := a.baseRuntimeOptions(true)
 	if a.history != nil {
 		opts = append(opts, agentruntime.WithHistory(a.history))
+	} else {
+		opts = append(opts, agentruntime.WithHistory(agentruntime.NewHistory(a.historyOptions(true)...)))
 	}
 	if a.threadRuntime != nil {
 		opts = append(opts, agentruntime.WithThreadRuntime(a.threadRuntime))
@@ -743,9 +745,6 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 	// again via engine options would cause a duplicate-provider error.
 	if a.threadRuntime == nil {
 		opts = append(opts, agentruntime.WithContextProviders(a.contextProviders()...))
-	}
-	if includeSessionID {
-		opts = append([]agentruntime.Option{agentruntime.WithHistoryOptions(agentruntime.WithHistorySessionID(a.sessionID))}, opts...)
 	}
 	if reasoning, ok := a.reasoningConfig(); ok {
 		opts = append(opts, agentruntime.WithReasoning(reasoning))
@@ -901,7 +900,22 @@ func (a *Instance) startEphemeralCapabilitySession(ctx context.Context) error {
 }
 
 func (a *Instance) historyOptions(includeSessionID bool) []agentruntime.HistoryOption {
-	return agentruntime.HistoryOptions(a.baseRuntimeOptions(includeSessionID)...)
+	opts := []agentruntime.HistoryOption{
+		agentruntime.WithHistoryModel(a.inference.Model),
+		agentruntime.WithHistoryMaxOutputTokens(a.inference.MaxTokens),
+		agentruntime.WithHistoryTemperature(a.inference.Temperature),
+		agentruntime.WithHistorySystem(a.MaterializedSystem()),
+		agentruntime.WithHistoryTools(tool.UnifiedToolsFrom(a.activeTools())),
+		agentruntime.WithHistoryToolChoice(unified.ToolChoice{Mode: unified.ToolChoiceAuto}),
+		agentruntime.WithHistoryCachePolicy(unified.CachePolicyOn),
+	}
+	if includeSessionID {
+		opts = append([]agentruntime.HistoryOption{agentruntime.WithHistorySessionID(a.sessionID)}, opts...)
+	}
+	if reasoning, ok := a.reasoningConfig(); ok {
+		opts = append(opts, agentruntime.WithHistoryReasoning(reasoning))
+	}
+	return opts
 }
 
 // ensureCapabilityRegistry returns the configured registry. Capability factories

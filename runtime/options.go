@@ -18,10 +18,6 @@ func WithHistory(history *History) Option {
 	return func(e *Engine) { e.history = history }
 }
 
-func WithHistoryOptions(opts ...HistoryOption) Option {
-	return func(e *Engine) { e.historyOptions = append(e.historyOptions, opts...) }
-}
-
 func WithModel(model string) Option {
 	return func(e *Engine) {
 		e.request.Model = model

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
@@ -156,38 +155,6 @@ func TestWithCacheDefaults(t *testing.T) {
 	_, err = agent.RunTurn(context.Background(), "hi")
 	require.NoError(t, err)
 	require.Equal(t, unified.CachePolicyOff, client.requests[0].CachePolicy)
-}
-
-func TestHistoryOptionsReturnsDefaultsFromRuntimeOptions(t *testing.T) {
-	echo := tool.New("echo", "echo text", func(_ tool.Ctx, p struct{}) (tool.Result, error) {
-		return tool.Text("ok"), nil
-	})
-	reasoning := unified.ReasoningConfig{Effort: unified.ReasoningEffortHigh}
-	history := NewHistory(HistoryOptions(
-		WithHistoryOptions(WithHistorySessionID("sess_1")),
-		WithModel("model"),
-		WithMaxOutputTokens(100),
-		WithTemperature(0.3),
-		WithSystem("system"),
-		WithTools([]tool.Tool{echo}),
-		WithToolChoice(unified.ToolChoice{Mode: unified.ToolChoiceAuto}),
-		WithCachePolicy(unified.CachePolicyOn),
-		WithReasoning(reasoning),
-	)...)
-
-	req, err := history.BuildRequestForProvider(conversation.NewRequest().User("hi").Build(), conversation.ProviderIdentity{})
-	require.NoError(t, err)
-	require.Equal(t, "sess_1", history.SessionID())
-	require.Equal(t, "model", req.Model)
-	require.Equal(t, 100, *req.MaxOutputTokens)
-	require.Equal(t, 0.3, *req.Temperature)
-	require.Len(t, req.Instructions, 1)
-	require.Equal(t, unified.InstructionSystem, req.Instructions[0].Kind)
-	require.Equal(t, unified.TextPart{Text: "system"}, req.Instructions[0].Content[0])
-	require.Len(t, req.Tools, 1)
-	require.Equal(t, unified.ToolChoiceAuto, req.ToolChoice.Mode)
-	require.Equal(t, unified.CachePolicyOn, req.CachePolicy)
-	require.Equal(t, unified.ReasoningEffortHigh, req.Reasoning.Effort)
 }
 
 func requireEventType[T runner.Event](t *testing.T, events []runner.Event) T {

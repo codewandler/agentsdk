@@ -87,7 +87,7 @@ func newThreadEngine(ctx context.Context, store thread.Store, threadRuntime *Thr
 	if threadRuntime == nil || threadRuntime.Live() == nil {
 		return nil, fmt.Errorf("runtime: thread runtime is required")
 	}
-	historyOptions := append(HistoryOptions(opts...), WithHistoryLiveThread(threadRuntime.Live()))
+	historyOptions := append(historyOptions(opts...), WithHistoryLiveThread(threadRuntime.Live()))
 	history, err := ResumeHistoryFromThread(ctx, store, threadRuntime.Live(), historyOptions...)
 	if err != nil {
 		return nil, err

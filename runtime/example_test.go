@@ -60,20 +60,6 @@ func ExampleNew() {
 	// Output: ok
 }
 
-func ExampleHistoryOptions() {
-	tools := toolactivation.New(localcli.New().DefaultTools()...)
-	opts := runtime.HistoryOptions(
-		runtime.WithHistoryOptions(runtime.WithHistorySessionID("example-session")),
-		runtime.WithModel("default"),
-		runtime.WithTools(tools.ActiveTools()),
-		runtime.WithCachePolicy(unified.CachePolicyOn),
-	)
-	history := runtime.NewHistory(opts...)
-
-	fmt.Println(history.SessionID())
-	// Output: example-session
-}
-
 func ExampleOpenThreadEngine() {
 	ctx := context.Background()
 	tools := toolactivation.New(localcli.New().DefaultTools()...)

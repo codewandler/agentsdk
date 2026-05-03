@@ -62,7 +62,7 @@ func New(client unified.Client, opts ...Option) (*Engine, error) {
 	return engine, nil
 }
 
-func HistoryOptions(opts ...Option) []HistoryOption {
+func historyOptions(opts ...Option) []HistoryOption {
 	engine := &Engine{
 		maxSteps: 8,
 		request:  conversation.Request{Stream: true},
