@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -24,7 +22,6 @@ import (
 // App is the user-facing composition root. It owns command dispatch and one or
 // more running agent instances.
 type App struct {
-	out                   io.Writer
 	commands              *command.Registry
 	agents                map[string]*agent.Instance
 	specs                 map[string]agent.Spec
@@ -52,7 +49,6 @@ type App struct {
 type Option func(*config)
 
 type config struct {
-	out             io.Writer
 	commands        []command.Command
 	specs           []agent.Spec
 	defaultAgent    string
@@ -69,7 +65,7 @@ type config struct {
 }
 
 func New(opts ...Option) (*App, error) {
-	cfg := config{out: os.Stdout}
+	cfg := config{}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&cfg)
@@ -85,7 +81,6 @@ func New(opts ...Option) (*App, error) {
 	}
 
 	a := &App{
-		out:          cfg.out,
 		commands:     command.NewRegistry(),
 		agents:       map[string]*agent.Instance{},
 		specs:        map[string]agent.Spec{},
@@ -142,10 +137,6 @@ func New(opts ...Option) (*App, error) {
 		}
 	}
 	return a, nil
-}
-
-func WithOutput(out io.Writer) Option {
-	return func(c *config) { c.out = out }
 }
 
 func WithCommand(commands ...command.Command) Option {
@@ -208,13 +199,6 @@ func WithWorkflows(defs ...workflow.Definition) Option {
 // innermost) before any plugin-contributed middlewares.
 func WithToolMiddlewares(middlewares ...tool.Middleware) Option {
 	return func(c *config) { c.toolMiddlewares = append(c.toolMiddlewares, middlewares...) }
-}
-
-func (a *App) Out() io.Writer {
-	if a == nil || a.out == nil {
-		return io.Discard
-	}
-	return a.out
 }
 
 func (a *App) Commands() *command.Registry {

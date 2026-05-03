@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -43,7 +42,7 @@ func TestAppRegistersBundleResources(t *testing.T) {
 		},
 		SkillSources: []skill.Source{{ID: "test", Root: ".agents/skills"}},
 	}
-	app, err := New(WithResourceBundle(bundle), WithOutput(&bytes.Buffer{}))
+	app, err := New(WithResourceBundle(bundle))
 	require.NoError(t, err)
 	require.Equal(t, []skill.Source{{ID: "test", Root: ".agents/skills"}}, app.SkillSources())
 	spec, ok := app.AgentSpec("coder")
@@ -69,7 +68,6 @@ func TestAppRegistersDatasourceWorkflowActionResources(t *testing.T) {
 			Name:  "search_docs",
 			Steps: []workflow.Step{{ID: "search", Action: workflow.ActionRef{Name: "docs.search"}}},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Equal(t, []action.Action{actionDef}, app.Actions())
@@ -97,7 +95,7 @@ func TestAppRegistersBundleDatasourceAndWorkflowContributions(t *testing.T) {
 			Description: "Sync documentation",
 		}},
 	}
-	app, err := New(WithResourceBundle(bundle), WithOutput(&bytes.Buffer{}))
+	app, err := New(WithResourceBundle(bundle))
 	require.NoError(t, err)
 
 	ds, ok := app.DataSource("docs")
@@ -124,7 +122,6 @@ func TestAppExecutesRegisteredWorkflow(t *testing.T) {
 			{ID: "upper", Action: workflow.ActionRef{Name: "upper"}},
 			{ID: "suffix", Action: workflow.ActionRef{Name: "suffix"}, DependsOn: []string{"upper"}},
 		}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -139,7 +136,6 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 			return action.Result{Data: input}
 		})),
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -177,7 +173,6 @@ func TestAppWorkflowActionAcceptsExecutionOptions(t *testing.T) {
 			return action.Result{Data: input}
 		})),
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -194,7 +189,6 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = app.InstantiateAgent("coder",
@@ -221,7 +215,6 @@ func TestWorkflowResourceCanUseDefaultAgentTurnAction(t *testing.T) {
 	app, err := New(
 		WithResourceBundle(bundle),
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = app.InstantiateAgent("coder",
@@ -255,7 +248,6 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 			return action.Result{Data: input}
 		})),
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	inst, err := app.InstantiateAgent("coder",
@@ -288,7 +280,6 @@ func TestAppWorkflowActionExposesRegisteredWorkflow(t *testing.T) {
 			return action.Result{Data: input}
 		})),
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -306,7 +297,6 @@ func TestAppRegisterWorkflowActions(t *testing.T) {
 			return action.Result{Data: input}
 		})),
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.NoError(t, app.RegisterWorkflowActions())
@@ -321,7 +311,6 @@ func TestAppRegisterWorkflowActions(t *testing.T) {
 func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 	app, err := New(
 		WithWorkflows(workflow.Definition{Name: "missing_action", Steps: []workflow.Step{{ID: "missing", Action: workflow.ActionRef{Name: "missing"}}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -336,7 +325,6 @@ func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {
 	app, err := New(
 		WithResourceBundle(resource.ContributionBundle{AgentSpecs: []agent.Spec{{Name: "reviewer", System: "one"}}}),
 		WithResourceBundle(resource.ContributionBundle{AgentSpecs: []agent.Spec{{Name: "reviewer", System: "two"}}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	spec, ok := app.AgentSpec("reviewer")
@@ -355,7 +343,6 @@ func TestPluginDuplicateCommandFirstWinsWithDiagnostic(t *testing.T) {
 				return command.Text("second"), nil
 			}),
 		}}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	result, err := app.Commands().Execute(context.Background(), "/review")
@@ -385,7 +372,7 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 		Name:      "coder",
 		System:    "You code.",
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), WithOutput(&bytes.Buffer{}))
+	}))
 	require.NoError(t, err)
 	_, err = app.InstantiateAgent("coder",
 		agent.WithClient(client),
@@ -414,7 +401,6 @@ func TestAppExplicitSpecCanSelectOptionalLocalCLITools(t *testing.T) {
 			Tools:     []string{"git_status", "web_search"},
 		}),
 		WithPlugin(testToolCatalogPlugin{}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -434,7 +420,6 @@ func TestAppDefaultSpecUsesConfiguredLocalCLIPluginTools(t *testing.T) {
 			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		}),
 		WithPlugin(testToolCatalogPlugin{}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -470,7 +455,6 @@ func TestAppPluginCapabilityFactoriesConfigureAgentCapabilities(t *testing.T) {
 			}},
 		}),
 		WithPlugin(plannerplugin.New()),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -502,7 +486,7 @@ func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 	app, err := New(WithAgentSpec(agent.Spec{
 		Name:      "coder",
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), WithOutput(&bytes.Buffer{}))
+	}))
 	require.NoError(t, err)
 	_, err = app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
@@ -525,7 +509,6 @@ func TestAppCommandResultAgentTurnRoutesToDefaultAgent(t *testing.T) {
 		WithCommand(command.New(command.Descriptor{Name: "ask"}, func(context.Context, command.Params) (command.Result, error) {
 			return command.AgentTurn("expanded"), nil
 		})),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
@@ -545,7 +528,6 @@ func TestAppSendRejectsAgentOnlyCommandsFromUserInput(t *testing.T) {
 		}, func(context.Context, command.Params) (command.Result, error) {
 			return command.Text("no"), nil
 		})),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -562,7 +544,6 @@ func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 			Name:   "review",
 			Policy: command.Policy{AgentCallable: true},
 		}, nil)),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Empty(t, app.AgentCommandView("coder").AgentCommands())
@@ -573,7 +554,6 @@ func TestAgentCommandViewRequiresExplicitAgentCommandSelection(t *testing.T) {
 			Name:   "review",
 			Policy: command.Policy{AgentCallable: true},
 		}, nil)),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Len(t, app.AgentCommandView("coder").AgentCommands(), 1)
@@ -594,7 +574,6 @@ func TestAppDiscoversDefaultSkillSources(t *testing.T) {
 			Skills:    []string{"project-skill", "home-skill"},
 		}),
 		WithDefaultSkillSourceDiscovery(SkillSourceDiscovery{WorkspaceDir: workspace, HomeDir: home, IncludeGlobalUserResources: true}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(workspace))
@@ -670,7 +649,6 @@ func TestPluginContextProvidersCollected(t *testing.T) {
 			name:      "test",
 			providers: []agentcontext.Provider{prov},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Len(t, app.ContextProviders(), 1)
@@ -687,7 +665,6 @@ func TestPluginContextProvidersMultiplePlugins(t *testing.T) {
 			name:      "beta",
 			providers: []agentcontext.Provider{stubProvider{key: "beta_ctx"}},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Len(t, app.ContextProviders(), 2)
@@ -712,7 +689,6 @@ func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
 			System:    "You code.",
 			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -737,7 +713,6 @@ func TestPluginWithoutContextProvidersInterfaceIgnored(t *testing.T) {
 	// context providers.
 	app, err := New(
 		WithPlugin(testCommandsPlugin{name: "cmds"}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Empty(t, app.ContextProviders())
@@ -772,7 +747,6 @@ func TestPluginRegistersActionsDataSourcesAndWorkflows(t *testing.T) {
 			datasources: []datasource.Definition{{Name: "docs", Kind: datasource.KindCorpus, Actions: datasource.Actions{Fetch: action.Ref{Name: "docs.fetch"}}}},
 			workflows:   []workflow.Definition{{Name: "fetch_docs", Steps: []workflow.Step{{ID: "fetch", Action: workflow.ActionRef{Name: "docs.fetch"}}}}},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	require.Equal(t, []action.Action{actionDef}, app.Actions())
@@ -805,7 +779,6 @@ func TestMultiFacetPluginRegistersToolsAndContextProviders(t *testing.T) {
 			tools:     []tool.Tool{dummyTool},
 			providers: []agentcontext.Provider{prov},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -844,7 +817,6 @@ func TestAgentContextPluginForwardedToAgent(t *testing.T) {
 			System:    "You code.",
 			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 
@@ -874,7 +846,6 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 			System:    "You code.",
 			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		}),
-		WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 

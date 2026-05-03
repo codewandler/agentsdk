@@ -1,7 +1,6 @@
 package harness
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -25,7 +24,6 @@ func TestDefaultSessionSendDelegatesToAppDefaultAgent(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
@@ -44,7 +42,6 @@ func TestDefaultSessionSendDelegatesToAppDefaultAgent(t *testing.T) {
 func TestSessionInfoCommandReportsHarnessMetadata(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -84,7 +81,6 @@ func TestSessionControlCommands(t *testing.T) {
 			Inference:   agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		}),
 		app.WithDefaultAgent("coder"),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	inst, err := application.InstantiateDefaultAgent(agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
@@ -146,7 +142,7 @@ func TestSessionCompactCommand(t *testing.T) {
 		Name:      "coder",
 		System:    "You code.",
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), app.WithOutput(&bytes.Buffer{}))
+	}))
 	require.NoError(t, err)
 	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
@@ -172,7 +168,7 @@ func TestSessionCompactCommandTooShort(t *testing.T) {
 		Name:      "coder",
 		System:    "You code.",
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
-	}), app.WithOutput(&bytes.Buffer{}))
+	}))
 	require.NoError(t, err)
 	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
@@ -189,7 +185,6 @@ func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -229,7 +224,6 @@ func TestSessionCommandCatalogIncludesExecutableCommandsWithSchemas(t *testing.T
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -274,7 +268,6 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder",
@@ -347,7 +340,6 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 func TestSessionWorkflowRunStateMissingLiveThread(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
@@ -397,7 +389,7 @@ func TestSessionWorkflowRunStateNilSessionAndAgent(t *testing.T) {
 	require.False(t, ok)
 	require.Nil(t, store)
 
-	application, err := app.New(app.WithOutput(&bytes.Buffer{}))
+	application, err := app.New()
 	require.NoError(t, err)
 	store, ok = (&Session{App: application}).WorkflowRunStore()
 	require.False(t, ok)
@@ -407,7 +399,6 @@ func TestSessionWorkflowRunStateNilSessionAndAgent(t *testing.T) {
 func TestSessionWorkflowCommandUsageAndNotFound(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -444,7 +435,6 @@ func TestSessionWorkflowListAndShowCommands(t *testing.T) {
 			},
 			workflow.Definition{Name: "release_notes", Steps: []workflow.Step{{ID: "write", Action: workflow.ActionRef{Name: "write_notes"}}}},
 		),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
@@ -478,7 +468,6 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -528,7 +517,6 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 func TestSessionWorkflowStartCommandUsageAndMissingWorkflow(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -556,7 +544,6 @@ func TestSessionWorkflowStartCommandFailureIncludesRunStatusAndIsQueryable(t *te
 			return action.Result{Error: errors.New(boom)}
 		})),
 		app.WithWorkflows(workflow.Definition{Name: "failflow", Steps: []workflow.Step{{ID: "fail", Action: workflow.ActionRef{Name: "fail"}}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -615,7 +602,6 @@ func TestSessionWorkflowRunsCommandFiltersByWorkflowAndStatus(t *testing.T) {
 			workflow.Definition{Name: "okflow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}},
 			workflow.Definition{Name: "failflow", Steps: []workflow.Step{{ID: "fail", Action: workflow.ActionRef{Name: "fail"}}}},
 		),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -664,7 +650,6 @@ func TestSessionWorkflowRunsCommandFiltersByWorkflowAndStatus(t *testing.T) {
 func TestSessionWorkflowListNoWorkflows(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
@@ -680,7 +665,6 @@ func TestSessionWorkflowListNoWorkflows(t *testing.T) {
 func TestSessionWorkflowRunsNoRecordedRuns(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
@@ -706,7 +690,7 @@ func TestDefaultSessionReportsMissingAppAndAgent(t *testing.T) {
 	_, err = service.DefaultSession()
 	require.ErrorContains(t, err, "app is required")
 
-	application, err := app.New(app.WithOutput(&bytes.Buffer{}))
+	application, err := app.New()
 	require.NoError(t, err)
 	_, err = NewService(application).DefaultSession()
 	require.ErrorContains(t, err, "no default agent")
@@ -721,7 +705,7 @@ func TestSessionReportsMissingApp(t *testing.T) {
 }
 
 func TestSessionExecuteCommandReportsInvalidPathAndUnknownRoot(t *testing.T) {
-	application, err := app.New(app.WithAgentSpec(agent.Spec{Name: "coder"}), app.WithOutput(&bytes.Buffer{}))
+	application, err := app.New(app.WithAgentSpec(agent.Spec{Name: "coder"}))
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)

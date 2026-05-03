@@ -221,7 +221,7 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	var opts []app.Option
 	appCfg := cfg.App
 	if appCfg.Output != nil {
-		opts = append(opts, app.WithOutput(appCfg.Output), app.WithAgentOptions(agent.WithOutput(appCfg.Output)))
+		opts = append(opts, app.WithAgentOptions(agent.WithOutput(appCfg.Output)))
 	}
 	if hasResourceBundle(appCfg.ResourceBundle) {
 		opts = append(opts, app.WithResourceBundle(appCfg.ResourceBundle))

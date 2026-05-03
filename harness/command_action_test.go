@@ -1,7 +1,6 @@
 package harness
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -60,7 +59,6 @@ func newCommandActionWorkflowTestSession(t *testing.T) (*app.App, *Session) {
 			Action: workflow.ActionRef{Name: CommandActionName},
 			Input:  map[string]any{"path": []any{"session", "info"}},
 		}}}),
-		app.WithOutput(&bytes.Buffer{}),
 	)
 	require.NoError(t, err)
 	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
