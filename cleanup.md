@@ -74,6 +74,7 @@
     - `harness.PrepareResolvedAgent` owns generic default-agent selection plus agent-spec overrides.
     - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy.
   - Moved workflow thread recording out of `app.App` and into `harness.Session.ExecuteWorkflow`; app workflow helpers now stay registry/executor-focused while session live-thread persistence is owned by harness.
+  - Removed legacy app-level workflow command shims (`RegisterWorkflowCommand` / `WorkflowCommand`); workflow slash commands now live on the harness command tree.
 
 - **Remaining cleanup candidates**
   - Revisit `agent.Instance` responsibilities and move outward only where the slice deletes or simplifies more than it adds:

@@ -492,56 +492,6 @@ func (a *App) RegisterWorkflowActions(names ...string) error {
 	return nil
 }
 
-func (a *App) RegisterWorkflowCommand(commandName, workflowName, description string, opts ...WorkflowExecutionOption) error {
-	cmd, err := a.WorkflowCommand(commandName, workflowName, description, opts...)
-	if err != nil {
-		return err
-	}
-	return a.RegisterCommands(cmd)
-}
-
-func (a *App) WorkflowCommand(commandName, workflowName, description string, opts ...WorkflowExecutionOption) (command.Command, error) {
-	if a == nil {
-		return nil, fmt.Errorf("app: nil app")
-	}
-	commandName = strings.TrimPrefix(strings.TrimSpace(commandName), "/")
-	workflowName = strings.TrimSpace(workflowName)
-	if commandName == "" {
-		return nil, fmt.Errorf("app: workflow command name is required")
-	}
-	if workflowName == "" {
-		return nil, fmt.Errorf("app: workflow name is required")
-	}
-	if _, ok := a.Workflow(workflowName); !ok {
-		return nil, fmt.Errorf("app: workflow %q not found", workflowName)
-	}
-	if description == "" {
-		description = fmt.Sprintf("Run workflow %s", workflowName)
-	}
-	return command.New(command.Spec{Name: commandName, Description: description, ArgumentHint: "[input]"}, func(ctx context.Context, params command.Params) (command.Result, error) {
-		result := a.ExecuteWorkflow(ctx, workflowName, params.Raw, opts...)
-		if result.Error != nil {
-			return command.Result{}, result.Error
-		}
-		return command.Text(renderWorkflowCommandResult(result.Data)), nil
-	}), nil
-}
-
-func renderWorkflowCommandResult(data any) string {
-	if wfResult, ok := data.(workflow.Result); ok {
-		data = wfResult.Data
-	}
-	switch v := data.(type) {
-	case nil:
-		return ""
-	case string:
-		return v
-	case fmt.Stringer:
-		return v.String()
-	default:
-		return fmt.Sprint(v)
-	}
-}
 func (a *App) RegisterAgent(name string, inst *agent.Instance) error {
 	if name == "" {
 		return fmt.Errorf("app: agent name is required")

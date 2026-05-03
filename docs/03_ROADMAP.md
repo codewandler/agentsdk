@@ -279,7 +279,7 @@ Current state to reuse:
 
 Status: partially complete.
 
-Current implementation supports Go-defined sequential workflows over `action.Action`, app-owned workflow execution through `App.ExecuteWorkflow`, workflow-as-action exposure, slash-command workflow triggers through `App.RegisterWorkflowCommand`, and concrete workflow event payload structs returned through `action.Result.Events` plus an optional live event handler. Workflow event definitions are registered in the same `thread.EventDefinition` style used elsewhere so persistence adapters can map concrete payloads into thread events.
+Current implementation supports Go-defined sequential workflows over `action.Action`, app-owned workflow execution through `App.ExecuteWorkflow`, workflow-as-action exposure, harness-owned slash-command workflow triggers through `command.Tree`, and concrete workflow event payload structs returned through `action.Result.Events` plus an optional live event handler. Workflow event definitions are registered in the same `thread.EventDefinition` style used elsewhere so persistence adapters can map concrete payloads into thread events.
 
 These workflow events are live telemetry shaped for persistence. Workflow now has run identity, materialized `workflow.RunState`, `workflow.RunSummary`, started/completed timing, duration, step attempt metadata, `workflow.ValueRef` output references, a projector that rebuilds run/step/attempt status and outputs from concrete workflow events, a context-aware `workflow.RunStore` contract, an in-memory implementation, a thread event recorder, and a thread-backed run store scoped to a thread/branch. App-level workflow execution helpers accept run ID and event-handler options, but `App.ExecuteWorkflow` stays registry/executor-focused and does not auto-record to a default agent thread. Harness session execution wires `workflow.ThreadRecorder` for the session agent's live thread when available, and harness session APIs expose single-run lookup and run-summary listing from the thread-backed projection. Runtime step dataflow remains Go-native `any`; workflow events and projected state use inline, external, or redacted value references. Remaining work includes richer validation/output contracts, chronological/indexed run listing, and harness-owned multi-session workflow lifecycle.
 
@@ -299,7 +299,7 @@ Tasks:
    - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially; ✅ `agent.TurnAction` and app default-agent turn action helpers exist
    - legacy tool adapter action wrapping `tool.Tool` where needed;
    - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer; ✅ initial app helper exists
-   - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result; ✅ initial workflow command adapter exists
+   - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result; ✅ harness `/workflow start` command exists on the declarative command tree
    - no-op/transform action for tests.
 
 4. Add a dogfood workflow example for the documentation refinement loop used to evolve these docs: ✅ initial resource workflow fixture exercises workflow loading, agent-turn action execution, and thread-backed run recording
@@ -331,7 +331,7 @@ Acceptance criteria:
 - Output from one step can feed the next. ✅
 - A prompt/model-turn can run as an action. ✅ `agent.TurnAction` exposes an `agent.Instance` turn as an `action.Action` and app helpers can register the default agent as a workflow action
 - A workflow can be exposed as an action. ✅
-- A command can trigger a workflow through `app.App`; an initial dogfood workflow resource fixture exercises the resource-defined workflow path.
+- A command can trigger a workflow through `harness.Session`; an initial dogfood workflow resource fixture exercises the resource-defined workflow path.
 - Action intent can be inspected before execution, including actions exposed as tools.
 - Execution is observable through events. ✅ initial in-memory workflow events exist
 - Workflow run event/state access has an explicit store boundary. ✅ context-aware `workflow.RunStore` with memory and thread-backed implementations exists
