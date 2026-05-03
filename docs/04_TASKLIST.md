@@ -223,24 +223,24 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 12. Triggers and scheduling
 
-- [ ] Define `trigger` package boundary.
-- [ ] Define trigger source interface.
-- [ ] Define trigger/job sink interface targeting harness sessions/workflows.
-- [ ] Define config model for trigger targets, session mode, interval, and input/prompt.
-- [ ] Define trigger event metadata: trigger ID, type, source, schedule, target session, session mode, target agent/workflow/action, input/prompt.
-- [ ] Implement interval trigger as first proof.
-- [ ] Support configurable session modes: shared, trigger-owned, ephemeral, resume-or-create.
-- [ ] Support scheduled agent prompt through a workflow or direct prompt target.
-- [ ] Support scheduled workflow start as the preferred target model.
-- [ ] Allow direct action target only where policy/context are explicit; prefer workflow target first.
-- [ ] Enforce one active run per trigger by default; skip overlapping fires with no overlap-policy config initially.
-- [ ] Persist trigger-caused run/session metadata.
-- [ ] Publish trigger/job events through session/harness subscriptions.
-- [ ] Add cancellation/disable semantics for running triggers/jobs.
-- [ ] Add daemon API for listing active triggers/jobs and inspecting last fire/error.
-- [ ] Add REPL commands such as `/triggers` or `/jobs` so normal `agentsdk run` can start/manage repeating work in the current harness/session.
-- [ ] Add CLI smoke coverage for interval-triggered prompt/workflow execution.
-- [ ] Document trigger/scheduling conventions.
+- [x] Define `trigger` package boundary.
+- [x] Define trigger source interface.
+- [x] Define trigger/job sink interface targeting harness sessions/workflows.
+- [x] Define config model for trigger targets, session mode, interval, and input/prompt.
+- [x] Define trigger event metadata: trigger ID, type, source, schedule, target session, session mode, target agent/workflow/action, input/prompt.
+- [x] Implement interval trigger as first proof.
+- [x] Support configurable session modes: shared, trigger-owned, ephemeral, resume-or-create.
+- [x] Support scheduled agent prompt through a workflow or direct prompt target.
+- [x] Support scheduled workflow start as the preferred target model.
+- [x] Allow direct action target only where policy/context are explicit; prefer workflow target first.
+- [x] Enforce one active run per trigger by default; skip overlapping fires with no overlap-policy config initially.
+- [x] Persist trigger-caused run/session metadata.
+- [x] Publish trigger/job events through session/harness subscriptions.
+- [x] Add cancellation/disable semantics for running triggers/jobs.
+- [x] Add daemon API for listing active triggers/jobs and inspecting last fire/error.
+- [x] Add REPL commands such as `/triggers` or `/jobs` so normal `agentsdk run` can start/manage repeating work in the current harness/session.
+- [x] Add CLI smoke coverage for interval-triggered prompt/workflow execution.
+- [x] Document trigger/scheduling conventions.
 
 ## 13. Resource/app manifests
 

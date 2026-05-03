@@ -18,6 +18,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
 	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
+	"github.com/codewandler/agentsdk/trigger"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/agentsdk/workflow"
 )
@@ -28,6 +29,7 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*Session
 	closed   bool
+	triggers trigger.RegistryView
 }
 
 type Session struct {
@@ -239,6 +241,24 @@ func (s *Service) Status() ServiceStatus {
 		Sessions:       sessions,
 	}
 }
+
+func (s *Service) SetTriggerRegistry(registry trigger.RegistryView) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.triggers = registry
+	s.mu.Unlock()
+}
+
+func (s *Service) TriggerRegistry() trigger.RegistryView {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.triggers
+}
 func (s *Service) Close() error {
 	if s == nil {
 		return nil
@@ -346,6 +366,7 @@ func (s *Session) Commands() (*command.Registry, error) {
 		newSkillCommand,
 		newCompactCommand,
 		newWorkflowCommand,
+		newJobsCommand,
 		newSessionCommand,
 	}
 	registry := command.NewRegistry()
@@ -627,6 +648,13 @@ func (s *Session) Close() error {
 		close(ch)
 	}
 	return nil
+}
+
+func (s *Session) TriggerRegistry() trigger.RegistryView {
+	if s == nil || s.service == nil {
+		return nil
+	}
+	return s.service.TriggerRegistry()
 }
 
 func (s *Session) summary() SessionSummary {

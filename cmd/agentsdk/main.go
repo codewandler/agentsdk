@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
@@ -23,6 +24,7 @@ import (
 	"github.com/codewandler/agentsdk/resource"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/terminal/cli"
+	"github.com/codewandler/agentsdk/trigger"
 	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/adapterconfig"
 	"github.com/codewandler/llmadapter/compatibility"
@@ -74,6 +76,10 @@ func serveCmd() *cobra.Command {
 		statusOnly       bool
 		noDefaultPlugins bool
 		pluginNames      []string
+		triggerInterval  time.Duration
+		triggerWorkflow  string
+		triggerPrompt    string
+		triggerInput     string
 	)
 	cmd := &cobra.Command{
 		Use:           "serve [path]",
@@ -111,6 +117,24 @@ func serveCmd() *cobra.Command {
 			if sessionName != "" && loaded.Session != nil {
 				loaded.Session.Name = sessionName
 			}
+			if triggerInterval > 0 {
+				rule, err := serveTriggerRule(triggerInterval, triggerWorkflow, triggerPrompt, triggerInput, agentName)
+				if err != nil {
+					return err
+				}
+				events, cancelEvents := host.TriggerEvents(16)
+				defer cancelEvents()
+				if err := host.AddTrigger(cmd.Context(), rule); err != nil {
+					return err
+				}
+				if statusOnly {
+					for event := range events {
+						if event.Type == trigger.JobEventCompleted || event.Type == trigger.JobEventFailed || event.Type == trigger.JobEventSkipped {
+							break
+						}
+					}
+				}
+			}
 			printServeStatus(cmd.OutOrStdout(), host.Status())
 			if statusOnly {
 				return host.Shutdown(cmd.Context())
@@ -132,6 +156,10 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&statusOnly, "status", false, "Print service status and exit without waiting")
 	cmd.Flags().StringSliceVar(&pluginNames, "plugin", nil, "Activate named app plugin (repeatable)")
 	cmd.Flags().BoolVar(&noDefaultPlugins, "no-default-plugins", false, "Disable the built-in local_cli fallback plugin")
+	cmd.Flags().DurationVar(&triggerInterval, "trigger-interval", 0, "Start an interval trigger for smoke/service use")
+	cmd.Flags().StringVar(&triggerWorkflow, "trigger-workflow", "", "Workflow to start for --trigger-interval")
+	cmd.Flags().StringVar(&triggerPrompt, "trigger-prompt", "", "Agent prompt to run for --trigger-interval")
+	cmd.Flags().StringVar(&triggerInput, "trigger-input", "", "Input for --trigger-workflow")
 	return cmd
 }
 
@@ -153,6 +181,36 @@ func printServeStatus(out io.Writer, status daemon.Status) {
 	for _, session := range status.Sessions {
 		fmt.Fprintf(out, "- %s id=%s agent=%s thread_backed=%t\n", session.Name, session.SessionID, session.AgentName, session.ThreadBacked)
 	}
+	if len(status.Jobs) > 0 {
+		fmt.Fprintf(out, "jobs: %d\n", len(status.Jobs))
+		for _, job := range status.Jobs {
+			fmt.Fprintf(out, "- job %s status=%s target=%s:%s matched=%d skipped=%d\n", job.RuleID, job.Status, job.TargetKind, job.TargetName, job.Matched, job.Skipped)
+		}
+	}
+}
+
+func serveTriggerRule(every time.Duration, workflowName, prompt, input, agentName string) (trigger.Rule, error) {
+	if every <= 0 {
+		return trigger.Rule{}, fmt.Errorf("--trigger-interval must be positive")
+	}
+	if workflowName == "" && prompt == "" {
+		return trigger.Rule{}, fmt.Errorf("--trigger-interval requires --trigger-workflow or --trigger-prompt")
+	}
+	if workflowName != "" && prompt != "" {
+		return trigger.Rule{}, fmt.Errorf("--trigger-workflow and --trigger-prompt cannot be used together")
+	}
+	target := trigger.Target{Kind: trigger.TargetAgentPrompt, AgentName: agentName, Prompt: prompt, Input: input}
+	if workflowName != "" {
+		target = trigger.Target{Kind: trigger.TargetWorkflow, WorkflowName: workflowName, AgentName: agentName, Input: input}
+	}
+	return trigger.Rule{
+		ID:      "cli-interval",
+		Source:  trigger.IntervalSource{SourceID: "cli-interval", Every: every, Immediate: true},
+		Matcher: trigger.All{trigger.EventType(trigger.EventTypeInterval), trigger.SourceIs("cli-interval")},
+		Target:  target,
+		Session: trigger.SessionPolicy{Mode: trigger.SessionTriggerOwned, AgentName: agentName},
+		Policy:  trigger.JobPolicy{Overlap: trigger.OverlapSkipIfRunning},
+	}, nil
 }
 
 func toolCmd() *cobra.Command {

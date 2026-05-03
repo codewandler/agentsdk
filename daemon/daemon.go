@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/codewandler/agentsdk/harness"
+	"github.com/codewandler/agentsdk/trigger"
 )
 
 const Mode = "harness.service"
@@ -29,8 +30,9 @@ type Host struct {
 	sessionsDir string
 	configPath  string
 
-	mu     sync.Mutex
-	closed bool
+	mu        sync.Mutex
+	closed    bool
+	scheduler *trigger.Scheduler
 }
 
 func New(cfg Config) (*Host, error) {
@@ -45,7 +47,10 @@ func New(cfg Config) (*Host, error) {
 	if err != nil {
 		return nil, fmt.Errorf("daemon: config path: %w", err)
 	}
-	return &Host{service: cfg.Service, sessionsDir: sessionsDir, configPath: configPath}, nil
+	host := &Host{service: cfg.Service, sessionsDir: sessionsDir, configPath: configPath}
+	host.scheduler = trigger.NewScheduler(harness.TriggerExecutor{Service: cfg.Service, StoreDir: sessionsDir})
+	cfg.Service.SetTriggerRegistry(host.scheduler)
+	return host, nil
 }
 
 func (h *Host) Service() *harness.Service {
@@ -107,12 +112,46 @@ func (h *Host) Status() Status {
 		serviceStatus.Health = "closed"
 		serviceStatus.Closed = true
 	}
-	return Status{ServiceStatus: serviceStatus, Storage: h.StoragePaths()}
+	return Status{ServiceStatus: serviceStatus, Storage: h.StoragePaths(), Jobs: h.Jobs()}
 }
 
 type Status struct {
 	harness.ServiceStatus
 	Storage StoragePaths
+	Jobs    []trigger.JobSummary
+}
+
+func (h *Host) AddTrigger(ctx context.Context, rule trigger.Rule) error {
+	if h == nil || h.scheduler == nil {
+		return fmt.Errorf("daemon: trigger scheduler is unavailable")
+	}
+	if h.isClosed() {
+		return fmt.Errorf("daemon: host is closed")
+	}
+	return h.scheduler.AddRule(ctx, rule)
+}
+
+func (h *Host) Jobs() []trigger.JobSummary {
+	if h == nil || h.scheduler == nil {
+		return nil
+	}
+	return h.scheduler.Jobs()
+}
+
+func (h *Host) StopJob(id trigger.RuleID) error {
+	if h == nil || h.scheduler == nil {
+		return nil
+	}
+	return h.scheduler.StopJob(id)
+}
+
+func (h *Host) TriggerEvents(buffer int) (<-chan trigger.JobEvent, func()) {
+	if h == nil || h.scheduler == nil {
+		ch := make(chan trigger.JobEvent)
+		close(ch)
+		return ch, func() {}
+	}
+	return h.scheduler.Subscribe(buffer)
 }
 
 func (h *Host) Shutdown(ctx context.Context) error {
@@ -134,6 +173,9 @@ func (h *Host) Shutdown(ctx context.Context) error {
 	}
 	h.closed = true
 	h.mu.Unlock()
+	if h.scheduler != nil {
+		h.scheduler.StopAll()
+	}
 	if h.service != nil {
 		return h.service.Close()
 	}

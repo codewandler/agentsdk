@@ -59,6 +59,25 @@ func TestServeStatusPrintsHarnessServiceSnapshot(t *testing.T) {
 	require.Contains(t, text, "agent=coder")
 	require.Contains(t, text, "thread_backed=true")
 }
+func TestServeStatusRunsIntervalWorkflowTrigger(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
+	writeTestFile(t, filepath.Join(dir, ".agents", "workflows", "echo.yaml"), "name: echo_flow\nsteps:\n  - id: echo\n    action: echo\n")
+	sessionsDir := filepath.Join(dir, "sessions")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"serve", dir, "--status", "--sessions-dir", sessionsDir, "--no-default-plugins", "--trigger-interval", "1h", "--trigger-workflow", "echo_flow", "--trigger-input", "hello"})
+
+	require.NoError(t, cmd.Execute())
+	text := out.String()
+	require.Contains(t, text, "jobs: 1")
+	require.Contains(t, text, "job cli-interval")
+	require.Contains(t, text, "target=workflow:echo_flow")
+	require.Contains(t, text, "matched=1")
+}
 
 func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	dir := t.TempDir()

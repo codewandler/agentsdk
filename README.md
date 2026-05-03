@@ -472,6 +472,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/13_ACTION_TOOL_CONVERGENCE.md`](docs/13_ACTION_TOOL_CONVERGENCE.md) — `action.Action` / `tool.Tool` boundaries, adapter policy, intent normalization, and action result contracts.
 - [`docs/14_DAEMON_TRIGGER_SCHEDULING.md`](docs/14_DAEMON_TRIGGER_SCHEDULING.md) — daemon/service mode, trigger scheduling checkpoint, and open questions.
 - [`docs/15_DAEMON_SERVICE_MODE.md`](docs/15_DAEMON_SERVICE_MODE.md) — `agentsdk serve`, daemon-as-harness-deployment ownership, storage/status conventions, and service-mode smoke coverage.
+- [`docs/16_TRIGGERS_SCHEDULING.md`](docs/16_TRIGGERS_SCHEDULING.md) — event-source/matcher/executor trigger model, interval source, daemon jobs, and scheduling conventions.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
