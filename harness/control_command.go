@@ -21,7 +21,7 @@ type skillActivateCommandInput struct {
 	Name string `command:"arg=name"`
 }
 
-func NewHelpCommand(session *Session) (*command.Tree, error) {
+func newHelpCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("help",
 		command.Description("Show available commands"),
@@ -32,7 +32,7 @@ func NewHelpCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewAgentsCommand(session *Session) (*command.Tree, error) {
+func newAgentsCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("agents",
 		command.Description("Show available agents"),
@@ -42,7 +42,7 @@ func NewAgentsCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewNewCommand(session *Session) (*command.Tree, error) {
+func newNewCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("new",
 		command.Description("Start a new session"),
@@ -53,7 +53,7 @@ func NewNewCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewQuitCommand(session *Session) (*command.Tree, error) {
+func newQuitCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("quit",
 		command.Description("Exit the app"),
@@ -64,7 +64,7 @@ func NewQuitCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewTurnCommand(session *Session) (*command.Tree, error) {
+func newTurnCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("turn",
 		command.Description("Run a prompt as an agent turn"),
@@ -77,7 +77,7 @@ func NewTurnCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewContextCommand(session *Session) (*command.Tree, error) {
+func newContextCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("context",
 		command.Description("Show last context render state"),
@@ -87,7 +87,7 @@ func NewContextCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewSkillsCommand(session *Session) (*command.Tree, error) {
+func newSkillsCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("skills",
 		command.Description("List discovered skills and activation status"),
@@ -97,7 +97,7 @@ func NewSkillsCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewSkillCommand(session *Session) (*command.Tree, error) {
+func newSkillCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("skill",
 		command.Description("Activate a skill on the current agent"),
@@ -110,7 +110,7 @@ func NewSkillCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
-func NewCompactCommand(session *Session) (*command.Tree, error) {
+func newCompactCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("compact",
 		command.Description("Summarize and compact conversation history"),

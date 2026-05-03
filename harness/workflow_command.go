@@ -33,7 +33,7 @@ type workflowRunsCommandInput struct {
 	Status   workflow.RunStatus `command:"flag=status"`
 }
 
-func NewWorkflowCommand(session *Session) (*command.Tree, error) {
+func newWorkflowCommand(session *Session) (*command.Tree, error) {
 	h := WorkflowCommandHandler{Session: session}
 	return command.NewTree("workflow", command.Description("Inspect and run workflows")).
 		Sub("list", command.Typed(h.workflowListCommand),

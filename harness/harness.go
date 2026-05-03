@@ -71,17 +71,17 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 
 func (s *Session) Commands() (*command.Registry, error) {
 	builders := []func(*Session) (*command.Tree, error){
-		NewHelpCommand,
-		NewAgentsCommand,
-		NewNewCommand,
-		NewQuitCommand,
-		NewTurnCommand,
-		NewContextCommand,
-		NewSkillsCommand,
-		NewSkillCommand,
-		NewCompactCommand,
-		NewWorkflowCommand,
-		NewSessionCommand,
+		newHelpCommand,
+		newAgentsCommand,
+		newNewCommand,
+		newQuitCommand,
+		newTurnCommand,
+		newContextCommand,
+		newSkillsCommand,
+		newSkillCommand,
+		newCompactCommand,
+		newWorkflowCommand,
+		newSessionCommand,
 	}
 	registry := command.NewRegistry()
 	for _, build := range builders {
