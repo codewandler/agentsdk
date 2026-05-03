@@ -7,8 +7,13 @@ Portable tool definitions, conversation/runtime helpers, markdown utilities, and
 ## Features
 
 - **Tool system**: Define and execute LLM agent tools with schema validation.
-- **Standard tools**: Filesystem, shell, git, web, notifications, todo, and tool activation management.
+- **Named plugins**: Compose local CLI, planner, git, skill, tool-management,
+  and other contributions explicitly; `app.New` and `agent.New` do not install
+  hidden standard tools.
 - **Runtime facade**: Run model/tool turns over `llmadapter/unified.Client`.
+- **Harness sessions**: Load app/default-agent/session stacks with
+  `harness.LoadSession`, then dispatch user turns, commands, and workflows
+  through `harness.Session`.
 - **Terminal app shell**: Build Cobra-based terminal agents and run filesystem
   agent bundles with `agentsdk run`.
 - **Resource discovery**: Load `.agents` and `.claude` agents, commands, and
@@ -31,6 +36,26 @@ Portable tool definitions, conversation/runtime helpers, markdown utilities, and
 - Persist and resume conversation sessions.
 - Load configuration from markdown instruction files.
 - Ship slim filesystem-described agents without writing a full Go app.
+
+## Current recommended path
+
+For new applications, prefer the refactored app/harness path:
+
+1. Compose agent specs, actions, workflows, commands, datasources, and named
+   plugins with `app.New(...)`.
+2. Use a named plugin such as `plugins/localcli` when you want the local terminal
+   tool bundle. There is no generic hidden `standard` bundle.
+3. Open a `harness.Session` with `harness.LoadSession(...)` or
+   `harness.NewService(...).DefaultSession()`.
+4. Send input through `session.Send(...)`, structured commands through
+   `session.ExecuteCommand(...)`, and workflows through
+   `session.ExecuteWorkflow(...)`.
+5. Keep command results structured and render them at terminal, API, TUI, or
+   model-facing presentation boundaries.
+
+See [docs/05_QUICKSTART.md](docs/05_QUICKSTART.md) for runnable examples,
+including `/session info`, `/workflow list`, `/workflow start`, `/workflow runs`,
+and `/workflow run <id>`.
 
 ## Recommended Runtime Stack
 
@@ -175,8 +200,10 @@ go run ./cmd/agentsdk run [path] [task]
 ```
 
 `path` defaults to the current working directory. When no explicit agent is
-found, agentsdk uses a small built-in general-purpose terminal agent so
-`agentsdk run` still opens a usable REPL.
+found, the terminal host activates the named `local_cli` fallback plugin and its
+small general-purpose terminal agent so `agentsdk run` still opens a usable
+REPL. Disable that host policy with `--no-default-plugins` or activate plugins
+explicitly with `--plugin <name>`.
 
 Resource roots can be shaped like either project compatibility directories or
 plugin roots:
@@ -245,6 +272,21 @@ Generic `agentsdk run` does not include global user resources by default. Pass
 ```bash
 go run ./cmd/agentsdk run . --include-global
 ```
+Session and workflow commands are available as slash commands in one-shot or REPL
+mode:
+
+```bash
+agentsdk run . /session info
+agentsdk run . /workflow list
+agentsdk run --sessions-dir .agentsdk/sessions . /workflow start release_notes "v1.2.3"
+agentsdk run --sessions-dir .agentsdk/sessions --continue . /workflow runs
+agentsdk run --sessions-dir .agentsdk/sessions --continue . /workflow run run_abc123
+```
+
+Workflow run lookup uses the current thread-backed session. Use `--sessions-dir`
+with `--continue` or `--session <id-or-jsonl-path>` when querying runs from a
+previous invocation.
+
 
 Use-case compatibility can be inspected or enforced through llmadapter evidence:
 

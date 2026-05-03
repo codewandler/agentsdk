@@ -24,19 +24,19 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 1. Documentation / user-facing readiness
 
-- [ ] Update README with the current recommended path: local CLI plugin, no hidden standard tools, harness session, command tree, workflow run UX.
-- [ ] Add a refactored SDK quickstart doc.
-- [ ] Add a minimal Go app example using `app.New(...)` and named plugins.
-- [ ] Add a harness session example using `harness.LoadSession(...)` or `harness.NewService(...)`.
-- [ ] Add a `session.Send(...)` example.
-- [ ] Add a `session.ExecuteCommand(...)` example.
-- [ ] Add a `session.ExecuteWorkflow(...)` example.
-- [ ] Add CLI examples for `/session info`.
-- [ ] Add CLI examples for `/workflow list`.
-- [ ] Add CLI examples for `/workflow start`.
-- [ ] Add CLI examples for `/workflow runs` and `/workflow run <id>`.
-- [ ] Document current pre-1.0 unstable seams: `agent.Instance`, writer output, synchronous workflow lifecycle, renderer/displayable design.
-- [ ] Update architecture diagrams if desired after the current shape stabilizes.
+- [x] Update README with the current recommended path: local CLI plugin, no hidden standard tools, harness session, command tree, workflow run UX.
+- [x] Add a refactored SDK quickstart doc.
+- [x] Add a minimal Go app example using `app.New(...)` and named plugins.
+- [x] Add a harness session example using `harness.LoadSession(...)` or `harness.NewService(...)`.
+- [x] Add a `session.Send(...)` example.
+- [x] Add a `session.ExecuteCommand(...)` example.
+- [x] Add a `session.ExecuteWorkflow(...)` example.
+- [x] Add CLI examples for `/session info`.
+- [x] Add CLI examples for `/workflow list`.
+- [x] Add CLI examples for `/workflow start`.
+- [x] Add CLI examples for `/workflow runs` and `/workflow run <id>`.
+- [x] Document current pre-1.0 unstable seams: `agent.Instance`, writer output, synchronous workflow lifecycle, renderer/displayable design.
+- [x] Update architecture diagrams if desired after the current shape stabilizes.
 
 ## 2. End-to-end tests
 
