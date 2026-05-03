@@ -22,6 +22,7 @@
     - `tools/standard` has since been deleted; named plugins own composition.
     - `agent.New` no longer imports or silently installs generic tool bundles.
     - Hosts pass tools explicitly.
+    - Ambiguous `app.WithTools(...)` has been removed; hosts choose `app.WithDefaultTools(...)`, `app.WithCatalogTools(...)`, or plugin facets explicitly.
 
 - **Phase 2 — Re-evaluate late-registration APIs after ownership fix** ✅
   - Completed in:

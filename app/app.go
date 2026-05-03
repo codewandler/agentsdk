@@ -67,7 +67,6 @@ type config struct {
 	actions         []action.Action
 	datasources     []datasource.Definition
 	workflows       []workflow.Definition
-	tools           []tool.Tool
 	defaultTools    []tool.Tool
 	catalogTools    []tool.Tool
 	toolMiddlewares []tool.Middleware
@@ -105,10 +104,7 @@ func New(opts ...Option) (*App, error) {
 		workflows:    map[string]workflow.Definition{},
 	}
 	defaultTools := append([]tool.Tool(nil), cfg.defaultTools...)
-	defaultTools = append(defaultTools, cfg.tools...)
-	catalogTools := append([]tool.Tool(nil), cfg.catalogTools...)
-	catalogTools = append(catalogTools, cfg.tools...)
-	catalog, err := tool.NewCatalog(catalogTools...)
+	catalog, err := tool.NewCatalog(cfg.catalogTools...)
 	if err != nil {
 		return nil, err
 	}
@@ -230,10 +226,6 @@ func WithAgentVerbose(verbose bool) Option {
 
 func WithAgentOutput(out io.Writer) Option {
 	return WithAgentOptions(agent.WithOutput(out))
-}
-
-func WithTools(tools ...tool.Tool) Option {
-	return func(c *config) { c.tools = append(c.tools, tools...) }
 }
 
 // WithDefaultTools adds tools used by agents that do not explicitly select tools.
