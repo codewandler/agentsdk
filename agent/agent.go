@@ -152,14 +152,6 @@ func New(opts ...Option) (*Instance, error) {
 	return a, nil
 }
 
-func Must(opts ...Option) *Instance {
-	a, err := New(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return a
-}
-
 func (a *Instance) SessionID() string {
 	if a == nil {
 		return ""

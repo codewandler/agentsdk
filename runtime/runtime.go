@@ -62,14 +62,6 @@ func New(client unified.Client, opts ...Option) (*Engine, error) {
 	return engine, nil
 }
 
-func Must(client unified.Client, opts ...Option) *Engine {
-	engine, err := New(client, opts...)
-	if err != nil {
-		panic(err)
-	}
-	return engine
-}
-
 func HistoryOptions(opts ...Option) []HistoryOption {
 	engine := &Engine{
 		maxSteps: 8,
