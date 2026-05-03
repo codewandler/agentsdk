@@ -12,7 +12,7 @@ const DefaultTurnActionName = "agent.turn"
 
 // TurnAction exposes an agent turn as an action.Action. It is a narrow adapter
 // for workflows and app code that need to call the current agent/session through
-// the action layer while agent.Instance remains the compatibility facade.
+// the action layer while agent.Instance remains the lifecycle facade.
 func TurnAction(inst *Instance, spec action.Spec) action.Action {
 	if spec.Name == "" {
 		spec.Name = DefaultTurnActionName
