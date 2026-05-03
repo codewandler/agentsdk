@@ -87,29 +87,29 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 5. Writer/output replacement design
 
-- [ ] Design structured output/event model before replacing writer fields.
-- [ ] Define displayable payload shape.
-- [ ] Define notices publication shape.
-- [ ] Define command result publication shape.
-- [ ] Define workflow event publication shape.
-- [ ] Define usage record publication shape.
-- [ ] Define diagnostics publication shape.
-- [ ] Define debug event publication shape.
-- [ ] Define risk/safety event publication shape.
-- [ ] Define terminal renderer contract.
-- [ ] Define TUI renderer contract.
-- [ ] Define HTTP/SSE renderer contract.
-- [ ] Define JSON/machine-readable renderer contract.
-- [ ] Define LLM-facing summary renderer contract.
-- [ ] Decide whether payload `Display(mode)` remains sufficient.
-- [ ] Decide whether a renderer registry reduces code.
-- [ ] Replace `harness.SessionLoadConfig.App.Output` after design exists.
-- [ ] Replace `agent.WithOutput` after design exists.
-- [ ] Replace terminal event handler writer paths after design exists.
-- [ ] Replace debug-message output after design exists.
-- [ ] Replace auto-compaction output after design exists.
-- [ ] Replace usage persistence error output after design exists.
-- [ ] Keep risk logging out of this slice until separately designed.
+- [x] Design structured output/event model before replacing writer fields.
+- [x] Define displayable payload shape.
+- [x] Define notices publication shape.
+- [x] Define command result publication shape.
+- [x] Define workflow event publication shape.
+- [x] Define usage record publication shape.
+- [x] Define diagnostics publication shape.
+- [x] Define debug event publication shape.
+- [x] Define risk/safety event publication shape.
+- [x] Define terminal renderer contract.
+- [x] Define TUI renderer contract.
+- [x] Define HTTP/SSE renderer contract.
+- [x] Define JSON/machine-readable renderer contract.
+- [x] Define LLM-facing summary renderer contract.
+- [x] Decide whether payload `Display(mode)` remains sufficient.
+- [x] Decide whether a renderer registry reduces code.
+- [x] Replace `harness.SessionLoadConfig.App.Output` after design exists.
+- [x] Replace `agent.WithOutput` after design exists.
+- [x] Replace terminal event handler writer paths after design exists.
+- [x] Replace debug-message output after design exists.
+- [x] Replace auto-compaction output after design exists.
+- [x] Replace usage persistence error output after design exists.
+- [x] Keep risk logging out of this slice until separately designed.
 
 ## 6. Command system follow-ups
 
