@@ -189,6 +189,33 @@ func TestTreeDescriptorIncludesStructuredInputFields(t *testing.T) {
 	}}, desc.Input)
 }
 
+func TestTreeDescriptorIncludesOutputMetadataAndDefensiveCopies(t *testing.T) {
+	tree, err := NewTree("workflow").
+		Sub("list", nil,
+			Output(OutputDescriptor{
+				Kind:        "workflow.list",
+				Description: "Workflow list payload",
+				MediaTypes:  []string{"application/json"},
+				Schema: JSONSchema{Type: "object", Properties: map[string]JSONSchema{
+					"definitions": {Type: "array", Items: &JSONSchema{Type: "object"}},
+				}},
+			}),
+		).
+		Build()
+	require.NoError(t, err)
+
+	desc := tree.Descriptor().Subcommands[0]
+	require.Equal(t, "workflow.list", desc.Output.Kind)
+	require.Equal(t, []string{"application/json"}, desc.Output.MediaTypes)
+	require.Equal(t, "array", desc.Output.Schema.Properties["definitions"].Type)
+
+	desc.Output.MediaTypes[0] = "mutated"
+	desc.Output.Schema.Properties["definitions"] = JSONSchema{Type: "mutated"}
+	desc = tree.Descriptor().Subcommands[0]
+	require.Equal(t, []string{"application/json"}, desc.Output.MediaTypes)
+	require.Equal(t, "array", desc.Output.Schema.Properties["definitions"].Type)
+}
+
 func TestTreeDescriptorInputEnumValuesAreDefensiveCopies(t *testing.T) {
 	tree, err := NewTree("workflow").
 		Sub("runs", nil, Flag("status").Enum("running", "succeeded", "failed")).

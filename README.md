@@ -465,6 +465,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/06_AGENT_FACADE_AUDIT.md`](docs/06_AGENT_FACADE_AUDIT.md) — `agent.Instance` responsibility audit and extraction triggers.
 - [`docs/07_HARNESS_SESSION_LIFECYCLE.md`](docs/07_HARNESS_SESSION_LIFECYCLE.md) — harness/session lifecycle APIs and ownership decisions.
 - [`docs/08_OUTPUT_EVENT_MODEL.md`](docs/08_OUTPUT_EVENT_MODEL.md) — structured output/event model and renderer contracts.
+- [`docs/09_COMMAND_SYSTEM_FOLLOWUPS.md`](docs/09_COMMAND_SYSTEM_FOLLOWUPS.md) — command descriptor, schema/export, policy, and `session_command` follow-up decisions.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 

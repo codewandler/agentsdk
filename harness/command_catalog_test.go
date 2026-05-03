@@ -41,3 +41,21 @@ func catalogNames(entries []CommandCatalogEntry) []string {
 	}
 	return names
 }
+
+func TestCommandCatalogIncludesOutputSchema(t *testing.T) {
+	descriptors := []command.Descriptor{{
+		Name:       "workflow",
+		Path:       []string{"workflow", "list"},
+		Executable: true,
+		Output: command.OutputDescriptor{
+			Kind:   "workflow.list",
+			Schema: command.JSONSchema{Type: "object"},
+		},
+	}}
+
+	catalog := commandCatalogFromDescriptors(descriptors)
+
+	require.Len(t, catalog, 1)
+	require.Equal(t, "workflow.list", catalog[0].Descriptor.Output.Kind)
+	require.Equal(t, command.JSONSchema{Type: "object"}, catalog[0].OutputSchema)
+}

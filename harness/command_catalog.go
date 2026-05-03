@@ -26,8 +26,9 @@ func CommandCatalogUserCallable() CommandCatalogOption {
 // schema projection. The descriptor remains the source of truth; InputSchema is
 // derived from Descriptor.Input.
 type CommandCatalogEntry struct {
-	Descriptor  command.Descriptor `json:"descriptor"`
-	InputSchema command.JSONSchema `json:"inputSchema"`
+	Descriptor   command.Descriptor `json:"descriptor"`
+	InputSchema  command.JSONSchema `json:"inputSchema"`
+	OutputSchema command.JSONSchema `json:"outputSchema,omitempty"`
 }
 
 // Internal control commands are omitted from catalogs; they remain directly
@@ -64,8 +65,9 @@ func commandCatalogFromDescriptors(descriptors []command.Descriptor, opts ...Com
 func appendCommandCatalogEntries(out *[]CommandCatalogEntry, desc command.Descriptor, opts commandCatalogOptions) {
 	if desc.Executable && commandCatalogKeeps(desc, opts) {
 		*out = append(*out, CommandCatalogEntry{
-			Descriptor:  desc,
-			InputSchema: command.CommandInputSchema(desc),
+			Descriptor:   desc,
+			InputSchema:  command.CommandInputSchema(desc),
+			OutputSchema: desc.Output.Schema,
 		})
 	}
 	for _, sub := range desc.Subcommands {

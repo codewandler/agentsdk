@@ -16,6 +16,14 @@ type Policy struct {
 	Internal      bool `json:"internal,omitempty"`
 }
 
+func UserPolicy() Policy { return Policy{UserCallable: true} }
+
+func AgentPolicy() Policy { return Policy{AgentCallable: true} }
+
+func InternalPolicy() Policy { return Policy{Internal: true} }
+
+func TrustedPolicy() Policy { return Policy{Internal: true} }
+
 // Params carries parsed arguments from a slash command invocation.
 type Params struct {
 	Raw   string
@@ -450,6 +458,7 @@ func cloneDescriptor(desc Descriptor) Descriptor {
 	desc.Args = append([]ArgDescriptor(nil), desc.Args...)
 	desc.Flags = append([]FlagDescriptor(nil), desc.Flags...)
 	desc.Input.Fields = append([]InputFieldDescriptor(nil), desc.Input.Fields...)
+	desc.Output = cloneOutputDescriptor(desc.Output)
 	desc.Subcommands = cloneDescriptors(desc.Subcommands)
 	return desc
 }
@@ -473,6 +482,11 @@ func (d Descriptor) UserCallable() bool {
 // AgentCallable reports whether this command descriptor may be invoked by an agent command tool.
 func (d Descriptor) AgentCallable() bool {
 	return !d.Policy.Internal && d.Policy.AgentCallable
+}
+
+// InternalCallable reports whether this command descriptor is internal/trusted-only.
+func (d Descriptor) InternalCallable() bool {
+	return d.Policy.Internal
 }
 
 func filterCommands(commands []Command, keep func(Descriptor) bool) []Command {

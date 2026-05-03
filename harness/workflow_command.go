@@ -38,29 +38,34 @@ func newWorkflowCommand(session *Session) (*command.Tree, error) {
 		Sub("list", command.Typed(h.workflowListCommand),
 			command.Description("List workflows"),
 			command.WithPolicy(command.Policy{UserCallable: true, AgentCallable: true}),
+			command.Output(outputDescriptor("harness.workflow.list", "Registered workflow definitions")),
 		).
 		Sub("show", command.Typed(h.workflowShowCommand),
 			command.Description("Show workflow"),
 			command.WithPolicy(command.Policy{UserCallable: true, AgentCallable: true}),
 			command.TypedInput[workflowShowCommandInput](),
 			command.Arg("name").Required(),
+			command.Output(outputDescriptor("harness.workflow.definition", "Workflow definition detail")),
 		).
 		Sub("start", command.Typed(h.workflowStartCommand),
 			command.Description("Start workflow"),
 			command.TypedInput[workflowStartCommandInput](),
 			command.Arg("name").Required(),
 			command.Arg("input").Variadic(),
+			command.Output(outputDescriptor("harness.workflow.start", "Started workflow run result")),
 		).
 		Sub("runs", command.Typed(h.workflowRunsCommand),
 			command.Description("List workflow runs"),
 			command.TypedInput[workflowRunsCommandInput](),
 			command.Flag("workflow"),
 			command.Flag("status").Enum(string(workflow.RunRunning), string(workflow.RunSucceeded), string(workflow.RunFailed)),
+			command.Output(outputDescriptor("harness.workflow.runs", "Workflow run summaries")),
 		).
 		Sub("run", command.Typed(h.workflowRunCommand),
 			command.Description("Show workflow run"),
 			command.TypedInput[workflowRunCommandInput](),
 			command.Arg("run-id").Required(),
+			command.Output(outputDescriptor("harness.workflow.run", "Workflow run detail")),
 		).
 		Build()
 }

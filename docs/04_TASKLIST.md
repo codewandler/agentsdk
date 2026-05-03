@@ -113,20 +113,20 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 6. Command system follow-ups
 
-- [ ] Keep all new broad commands on `command.Tree`.
-- [ ] Add output payload metadata to command descriptors.
-- [ ] Add richer command result descriptors if useful for API/LLM clients.
-- [ ] Decide whether current typed input binding is enough.
-- [ ] Add typed output binding only if it reduces boilerplate.
-- [ ] Improve help generation from descriptors.
-- [ ] Improve JSON schema generation from descriptors.
-- [ ] Add command descriptor export for HTTP/OpenAPI-like channels.
-- [ ] Add user-callable policy variant if current policy is insufficient.
-- [ ] Add internal/trusted policy variant if current policy is insufficient.
-- [ ] Add workflow-callable policy variant only if needed.
-- [ ] Consider richer LLM-safe schemas only if generic envelope + catalog context is insufficient.
-- [ ] Keep `session_command` as the preferred agent command projection.
-- [ ] Decide whether to remove/deprecate older `command_run`.
+- [x] Keep all new broad commands on `command.Tree`.
+- [x] Add output payload metadata to command descriptors.
+- [x] Add richer command result descriptors if useful for API/LLM clients.
+- [x] Decide whether current typed input binding is enough.
+- [x] Add typed output binding only if it reduces boilerplate.
+- [x] Improve help generation from descriptors.
+- [x] Improve JSON schema generation from descriptors.
+- [x] Add command descriptor export for HTTP/OpenAPI-like channels.
+- [x] Add user-callable policy variant if current policy is insufficient.
+- [x] Add internal/trusted policy variant if current policy is insufficient.
+- [x] Add workflow-callable policy variant only if needed.
+- [x] Consider richer LLM-safe schemas only if generic envelope + catalog context is insufficient.
+- [x] Keep `session_command` as the preferred agent command projection.
+- [x] Decide whether to remove/deprecate older `command_run`.
 
 ## 7. Command result/rendering cleanup
 

@@ -38,34 +38,8 @@ func formatAgentCommandCatalog(catalog []CommandCatalogEntry) string {
 			fmt.Fprintf(&b, ": %s", desc.Description)
 		}
 		b.WriteByte('\n')
-		if len(desc.Input.Fields) == 0 {
-			b.WriteString("  input: {}\n")
-			continue
-		}
-		b.WriteString("  input:\n")
-		fields := append([]command.InputFieldDescriptor(nil), desc.Input.Fields...)
-		sort.SliceStable(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
-		for _, field := range fields {
-			fmt.Fprintf(&b, "  - %s: %s", field.Name, field.Type)
-			if field.Required {
-				b.WriteString(" required")
-			} else {
-				b.WriteString(" optional")
-			}
-			if field.Variadic {
-				b.WriteString(" variadic")
-			}
-			if field.Source != "" {
-				fmt.Fprintf(&b, " source=%s", field.Source)
-			}
-			if len(field.EnumValues) > 0 {
-				fmt.Fprintf(&b, " enum=%s", strings.Join(field.EnumValues, "|"))
-			}
-			if field.Description != "" {
-				fmt.Fprintf(&b, " - %s", field.Description)
-			}
-			b.WriteByte('\n')
-		}
+		writeAgentCommandCatalogInput(&b, desc)
+		writeAgentCommandCatalogOutput(&b, desc.Output)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -108,4 +82,55 @@ func (p agentCommandCatalogProvider) StateFingerprint(ctx context.Context, req a
 		return "", false, err
 	}
 	return providerContext.Fingerprint, true, nil
+}
+
+func writeAgentCommandCatalogInput(b *strings.Builder, desc command.Descriptor) {
+	if len(desc.Input.Fields) == 0 {
+		b.WriteString("  input: {}\n")
+		return
+	}
+	b.WriteString("  input:\n")
+	fields := append([]command.InputFieldDescriptor(nil), desc.Input.Fields...)
+	sort.SliceStable(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
+	for _, field := range fields {
+		fmt.Fprintf(b, "  - %s: %s", field.Name, field.Type)
+		if field.Required {
+			b.WriteString(" required")
+		} else {
+			b.WriteString(" optional")
+		}
+		if field.Variadic {
+			b.WriteString(" variadic")
+		}
+		if field.Source != "" {
+			fmt.Fprintf(b, " source=%s", field.Source)
+		}
+		if len(field.EnumValues) > 0 {
+			fmt.Fprintf(b, " enum=%s", strings.Join(field.EnumValues, "|"))
+		}
+		if field.Description != "" {
+			fmt.Fprintf(b, " - %s", field.Description)
+		}
+		b.WriteByte('\n')
+	}
+}
+
+func writeAgentCommandCatalogOutput(b *strings.Builder, output command.OutputDescriptor) {
+	if output.Kind == "" && output.Description == "" && output.Schema.Type == "" {
+		return
+	}
+	b.WriteString("  output:")
+	if output.Kind != "" {
+		fmt.Fprintf(b, " %s", output.Kind)
+	}
+	if output.Schema.Type != "" {
+		fmt.Fprintf(b, " schema=%s", output.Schema.Type)
+	}
+	if len(output.MediaTypes) > 0 {
+		fmt.Fprintf(b, " media=%s", strings.Join(output.MediaTypes, "|"))
+	}
+	if output.Description != "" {
+		fmt.Fprintf(b, " - %s", output.Description)
+	}
+	b.WriteByte('\n')
 }

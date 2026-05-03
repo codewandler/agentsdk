@@ -17,6 +17,7 @@ func newSessionCommand(session *Session) (*command.Tree, error) {
 	return command.NewTree("session", command.Description("Inspect the active session")).
 		Sub("info", command.Typed(h.sessionInfoCommand),
 			command.Description("Show session metadata"),
+			command.Output(outputDescriptor("harness.session.info", "Session metadata and current agent details")),
 		).
 		Build()
 }

@@ -50,6 +50,11 @@ func WithPolicy(policy Policy) NodeOption {
 	return nodeOptionFunc(func(n *treeNode) { n.desc.Policy = policy })
 }
 
+// Output describes the command result payload for API and LLM clients.
+func Output(output OutputDescriptor) NodeOption {
+	return nodeOptionFunc(func(n *treeNode) { n.desc.Output = output })
+}
+
 // ArgSpec declares a positional argument accepted by a tree node.
 type ArgSpec struct {
 	Name        string
@@ -146,6 +151,7 @@ type Descriptor struct {
 	Args         []ArgDescriptor  `json:"args,omitempty"`
 	Flags        []FlagDescriptor `json:"flags,omitempty"`
 	Input        InputDescriptor  `json:"input"`
+	Output       OutputDescriptor `json:"output,omitempty,omitzero"`
 	Executable   bool             `json:"executable,omitempty"`
 	Subcommands  []Descriptor     `json:"subcommands,omitempty"`
 }
@@ -180,6 +186,19 @@ type InputFieldDescriptor struct {
 	Required    bool        `json:"required,omitempty"`
 	Variadic    bool        `json:"variadic,omitempty"`
 	EnumValues  []string    `json:"enumValues,omitempty"`
+}
+
+// OutputDescriptor describes the display/result payload a command returns.
+type OutputDescriptor struct {
+	Kind        string     `json:"kind,omitempty"`
+	Description string     `json:"description,omitempty"`
+	MediaTypes  []string   `json:"mediaTypes,omitempty"`
+	Schema      JSONSchema `json:"schema,omitempty"`
+}
+
+// IsZero reports whether the output descriptor carries no useful metadata.
+func (d OutputDescriptor) IsZero() bool {
+	return d.Kind == "" && d.Description == "" && len(d.MediaTypes) == 0 && d.Schema.IsZero()
 }
 
 // InputSource identifies where an input field comes from.
@@ -720,7 +739,7 @@ func (n *treeNode) commandInputFromMap(path []string, input map[string]any) (Com
 }
 
 func (n *treeNode) descriptor() Descriptor {
-	desc := Descriptor{Name: n.desc.Name, Path: n.path(), Aliases: append([]string(nil), n.desc.Aliases...), Description: n.desc.Description, ArgumentHint: n.desc.ArgumentHint, Policy: n.desc.Policy, Executable: n.handler != nil}
+	desc := Descriptor{Name: n.desc.Name, Path: n.path(), Aliases: append([]string(nil), n.desc.Aliases...), Description: n.desc.Description, ArgumentHint: n.desc.ArgumentHint, Policy: n.desc.Policy, Output: cloneOutputDescriptor(n.desc.Output), Executable: n.handler != nil}
 	hints := n.inputHintTypes()
 	for _, arg := range n.args {
 		desc.Args = append(desc.Args, ArgDescriptor{Name: arg.Name, Description: arg.Description, Required: arg.IsRequired, Variadic: arg.IsVariadic})
@@ -745,6 +764,29 @@ func (n *treeNode) descriptor() Descriptor {
 		desc.Subcommands = append(desc.Subcommands, child.descriptor())
 	}
 	return desc
+}
+
+func cloneOutputDescriptor(desc OutputDescriptor) OutputDescriptor {
+	desc.MediaTypes = append([]string(nil), desc.MediaTypes...)
+	desc.Schema = cloneJSONSchema(desc.Schema)
+	return desc
+}
+
+func cloneJSONSchema(schema JSONSchema) JSONSchema {
+	schema.Required = append([]string(nil), schema.Required...)
+	schema.Enum = append([]string(nil), schema.Enum...)
+	if schema.Items != nil {
+		items := cloneJSONSchema(*schema.Items)
+		schema.Items = &items
+	}
+	properties := schema.Properties
+	if len(properties) > 0 {
+		schema.Properties = make(map[string]JSONSchema, len(properties))
+		for name, child := range properties {
+			schema.Properties[name] = cloneJSONSchema(child)
+		}
+	}
+	return schema
 }
 
 func (n *treeNode) inputHintTypes() map[inputBindingKey]InputType {

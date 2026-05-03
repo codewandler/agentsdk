@@ -55,3 +55,8 @@ func jsonSchemaType(inputType InputType) string {
 		return "string"
 	}
 }
+
+// IsZero reports whether the schema carries no projection metadata.
+func (s JSONSchema) IsZero() bool {
+	return s.Type == "" && s.Description == "" && len(s.Properties) == 0 && s.Items == nil && len(s.Required) == 0 && len(s.Enum) == 0
+}

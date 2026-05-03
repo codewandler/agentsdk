@@ -19,6 +19,7 @@ func TestFormatAgentCommandCatalogRendersToolContext(t *testing.T) {
 	require.Contains(t, text, "workflow list: List workflows")
 	require.Contains(t, text, "workflow show: Show workflow")
 	require.Contains(t, text, "name: string required source=arg")
+	require.Contains(t, text, "output: harness.workflow.list schema=object")
 	require.NotContains(t, text, "workflow start")
 }
 
