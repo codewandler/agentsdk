@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/codewandler/agentsdk/agent"
@@ -56,6 +57,34 @@ func TestLoadSessionRegistersSessionScopedActions(t *testing.T) {
 	require.NoError(t, result.Error)
 	require.Equal(t, "workflow answer", result.Data.(workflow.Result).Data)
 	require.Len(t, client.Requests(), 1)
+}
+
+func TestLoadSessionAttachesAgentCommandProjection(t *testing.T) {
+	client := runnertest.NewClient(runnertest.TextStream("turn ok"))
+	loaded, err := LoadSession(SessionLoadConfig{
+		App: AppLoadConfig{DefaultAgent: "test"},
+		AppOptions: []app.Option{
+			app.WithAgentSpec(agent.Spec{Name: "test", System: "system", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
+			app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: agent.DefaultTurnActionName}}}}),
+		},
+		AgentOptions: []agent.Option{agent.WithClient(client)},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, loaded.Agent.RunTurn(t.Context(), 1, "hello"))
+	require.Contains(t, requestToolNames(client.RequestAt(0).Tools), AgentCommandToolName)
+	require.Contains(t, loaded.Agent.ContextState(), string(AgentCommandCatalogProviderKey))
+
+	sessionTool := loaded.Session.AgentCommandProjection().Tools[0]
+	res, err := sessionTool.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","show"],"input":{"name":"ask_flow"}}`))
+	require.NoError(t, err)
+	require.False(t, res.IsError())
+	require.Contains(t, res.String(), "ask_flow")
+
+	res, err = sessionTool.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
+	require.NoError(t, err)
+	require.True(t, res.IsError())
+	require.Contains(t, res.String(), "not callable")
 }
 
 func TestLoadSessionAppliesPlugins(t *testing.T) {

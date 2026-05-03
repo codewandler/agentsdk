@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
+	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/stretchr/testify/require"
 )
@@ -138,6 +141,64 @@ func TestRunUsesLocalCLIPluginAgentEvenWhenEmptyManifestNamesDefault(t *testing.
 
 	require.NoError(t, err)
 	require.Len(t, client.Requests(), 1)
+}
+
+func TestLoadUsesDefaultLocalCLIPlugin(t *testing.T) {
+	factory := &recordingCLIPluginFactory{}
+
+	loaded, err := Load(t.Context(), Config{
+		Resources:     EmbeddedResources(testBundle(), ".agents"),
+		Workspace:     t.TempDir(),
+		PluginFactory: factory,
+		AgentOptions:  []agent.Option{agent.WithClient(runnertest.NewClient())},
+		Out:           &bytes.Buffer{},
+		Err:           &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, []string{"local_cli"}, factory.names)
+}
+
+func TestLoadDisablesDefaultLocalCLIPlugin(t *testing.T) {
+	factory := &recordingCLIPluginFactory{}
+
+	loaded, err := Load(t.Context(), Config{
+		Resources:        EmbeddedResources(testBundle(), ".agents"),
+		Workspace:        t.TempDir(),
+		NoDefaultPlugins: true,
+		PluginFactory:    factory,
+		AgentOptions:     []agent.Option{agent.WithClient(runnertest.NewClient())},
+		Out:              &bytes.Buffer{},
+		Err:              &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Empty(t, factory.names)
+}
+
+func TestLoadAppliesManifestAndExplicitPluginRefs(t *testing.T) {
+	factory := &recordingCLIPluginFactory{}
+	resolution := agentdir.Resolution{
+		Bundle:   resource.ContributionBundle{AgentSpecs: []agent.Spec{{Name: "coder", System: "system"}}},
+		Manifest: &agentdir.AppManifest{Plugins: []agentdir.PluginRef{{Name: "manifest"}}},
+	}
+
+	loaded, err := Load(t.Context(), Config{
+		Resources:        ResolvedResources(resolution),
+		Workspace:        t.TempDir(),
+		NoDefaultPlugins: true,
+		PluginNames:      []string{"explicit"},
+		PluginFactory:    factory,
+		AgentOptions:     []agent.Option{agent.WithClient(runnertest.NewClient())},
+		Out:              &bytes.Buffer{},
+		Err:              &bytes.Buffer{},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, []string{"manifest", "explicit"}, factory.names)
 }
 
 func TestRunCanDisableDefaultPlugins(t *testing.T) {
@@ -390,3 +451,16 @@ steps:
 `)}
 	return bundle
 }
+
+type recordingCLIPluginFactory struct {
+	names []string
+}
+
+func (f *recordingCLIPluginFactory) PluginForName(_ context.Context, name string, _ map[string]any) (app.Plugin, error) {
+	f.names = append(f.names, name)
+	return namedCLIPlugin(name), nil
+}
+
+type namedCLIPlugin string
+
+func (p namedCLIPlugin) Name() string { return string(p) }

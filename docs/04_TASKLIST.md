@@ -10,16 +10,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [ ] Run `agentsdk run . /workflow start <name> [input]` and capture a run ID.
 - [ ] Run `agentsdk run . /workflow runs` and verify the started run appears.
 - [ ] Run `agentsdk run . /workflow run <run-id>` and verify detail output.
-- [ ] Verify default local CLI plugin loads.
-- [ ] Verify `--no-default-plugins` disables default local CLI composition.
-- [ ] Verify explicit plugin refs still work.
-- [ ] Verify `session_command` is visible to an agent turn.
-- [ ] Verify agent command catalog context is present in agent context.
-- [ ] Verify agent-callable commands work through `session_command`.
-- [ ] Verify non-agent-callable commands are rejected through `session_command`.
-- [ ] Verify app manifest plugin refs load.
-- [ ] Verify resource-backed agent specs load.
-- [ ] Verify resource-backed workflows load.
+- [x] Verify default local CLI plugin loads.
+- [x] Verify `--no-default-plugins` disables default local CLI composition.
+- [x] Verify explicit plugin refs still work.
+- [x] Verify `session_command` is visible to an agent turn.
+- [x] Verify agent command catalog context is present in agent context.
+- [x] Verify agent-callable commands work through `session_command`.
+- [x] Verify non-agent-callable commands are rejected through `session_command`.
+- [x] Verify app manifest plugin refs load.
+- [x] Verify resource-backed agent specs load.
+- [x] Verify resource-backed workflows load.
 - [ ] Decide whether the current refactored state is stable enough for daily dogfood use.
 
 ## 1. Documentation / user-facing readiness
