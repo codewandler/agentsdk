@@ -322,6 +322,63 @@
       "cache_accounting": "live"
     },
     {
+      "candidate": "claude_opus_4_7",
+      "public_model": "claude-opus-4-7",
+      "native_model": "claude-opus-4-7",
+      "provider": "claude",
+      "provider_api": "anthropic.messages",
+      "family": "anthropic.messages",
+      "required_status": "passed",
+      "status": "approved",
+      "duration_seconds": 9.96,
+      "text": "live",
+      "tools": "live",
+      "tool_continuation": "live",
+      "structured_output": "live",
+      "reasoning": "live",
+      "prompt_caching": "live",
+      "usage": "live",
+      "cache_accounting": "live"
+    },
+    {
+      "candidate": "anthropic_opus_4_7",
+      "public_model": "claude-opus-4-7",
+      "native_model": "claude-opus-4-7",
+      "provider": "anthropic",
+      "provider_api": "anthropic.messages",
+      "family": "anthropic.messages",
+      "required_status": "passed",
+      "status": "approved",
+      "duration_seconds": 8.97,
+      "text": "live",
+      "tools": "live",
+      "tool_continuation": "live",
+      "structured_output": "live",
+      "reasoning": "live",
+      "prompt_caching": "live",
+      "usage": "live",
+      "cache_accounting": "live"
+    },
+    {
+      "candidate": "openrouter_opus_4_7",
+      "public_model": "anthropic/claude-opus-4.7",
+      "native_model": "anthropic/claude-opus-4.7",
+      "provider": "openrouter_messages",
+      "provider_api": "openrouter.anthropic_messages",
+      "family": "anthropic.messages",
+      "required_status": "passed",
+      "status": "approved",
+      "duration_seconds": 17.15,
+      "text": "live",
+      "tools": "live",
+      "tool_continuation": "live",
+      "structured_output": "live",
+      "reasoning": "live",
+      "prompt_caching": "live",
+      "usage": "live",
+      "cache_accounting": "live"
+    },
+    {
       "candidate": "minimax_latest",
       "public_model": "minimax-latest",
       "native_model": "MiniMax-M2.7",
@@ -345,6 +402,6 @@
     "All rows passed the required agentic-coding feature checks in the recorded live run.",
     "Cache accounting is mandatory for agentic coding; every approved row reported provider cache write or cache read counters.",
     "OpenRouter cache accounting is decoded from Responses-style input token details and Chat/Completions-style prompt token details.",
-    "Sonnet and Opus rows use the current repository/modeldb aliases claude-sonnet-4-6 and claude-opus-4-6."
+    "The short Opus row uses the agentsdk alias overlay for claude-opus-4-6; Opus 4.7 rows use explicit model IDs."
   ]
 }
