@@ -356,7 +356,7 @@ Current state:
 - `harness.Service` and `harness.Session` wrap the existing app/default-agent stack.
 - Harness exposes session metadata plus session-scoped workflow run lookup/listing over the default agent live thread.
 - Terminal send paths route through `harness.Session`, so harness can own session-aware slash-command namespaces such as `/session` and `/workflow`.
-- Harness commands are backed by declarative `command.Tree` definitions and exposed through `Session.CommandDescriptors` and `Session.ExecuteCommand` for structured, non-stringified command execution.
+- Harness commands are backed by declarative `command.Tree` definitions and exposed through `Session.Commands().Descriptors()` and `Session.ExecuteCommand` for structured, non-stringified command execution.
 - Default harness sessions attach the command projection automatically: the `session_command` tool and agent command catalog context provider are available to agent turns, while `AgentCallable` policy still filters executable commands.
 - Terminal one-shot mode renders returned `command.Result` payloads instead of discarding command output.
 - Current harness load configuration still has writer-based compatibility fields for the existing app/agent terminal path. These exist only because the current app/agent/terminal stack still accepts writers; they should not become the long-term channel output model.
@@ -434,7 +434,7 @@ Status: initial gate complete.
 The current command model has a declarative `command.Tree` in the existing `command` package. It supports subcommands, declared positional args, declared flags, enum/required validation, generated usage/help from descriptors, structured invocation handlers, and structured execution without converting input maps into slash-command strings. Harness `/workflow` and `/session` are tree-backed, and sessions expose:
 
 ```go
-func (s *Session) CommandDescriptors() []command.Descriptor
+func (s *Session) Commands() (*command.Registry, error)
 func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[string]any) (command.Result, error)
 ```
 

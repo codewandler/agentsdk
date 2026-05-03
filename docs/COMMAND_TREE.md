@@ -171,7 +171,7 @@ func (c Command) Descriptor() Descriptor
 func (r *Registry) Descriptors() []Descriptor
 func (r *Registry) ExecuteMap(ctx context.Context, path []string, input map[string]any) (Result, error)
 func (s *harness.Session) Commands() (*command.Registry, error)
-func (s *harness.Session) CommandDescriptors() []command.Descriptor
+// callers use Commands().Descriptors() for schema discovery
 func (s *harness.Session) CommandCatalog() []harness.CommandCatalogEntry
 ```
 

@@ -143,14 +143,6 @@ func (s *Session) Commands() (*command.Registry, error) {
 	return registry, nil
 }
 
-func (s *Session) CommandDescriptors() []command.Descriptor {
-	commands, err := s.Commands()
-	if err != nil {
-		return nil
-	}
-	return commands.Descriptors()
-}
-
 func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[string]any) (command.Result, error) {
 	if s == nil || s.App == nil {
 		return command.Result{}, fmt.Errorf("harness: app is required")

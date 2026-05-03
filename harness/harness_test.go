@@ -181,7 +181,7 @@ func TestSessionCompactCommandTooShort(t *testing.T) {
 	require.Contains(t, renderCommandResult(t, result), "too short")
 }
 
-func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
+func TestSessionCommandsExposeDescriptorsAndStructuredExecute(t *testing.T) {
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
@@ -192,7 +192,9 @@ func TestSessionCommandDescriptorsAndStructuredExecute(t *testing.T) {
 	session, err := NewService(application).DefaultSession()
 	require.NoError(t, err)
 
-	descriptors := session.CommandDescriptors()
+	commands, err := session.Commands()
+	require.NoError(t, err)
+	descriptors := commands.Descriptors()
 	workflowDescriptor := requireDescriptorPath(t, descriptors, "workflow")
 	sessionDescriptor := requireDescriptorPath(t, descriptors, "session")
 	require.Equal(t, []string{"workflow"}, workflowDescriptor.Path)

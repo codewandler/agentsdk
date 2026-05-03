@@ -40,7 +40,11 @@ func (s *Session) CommandCatalog(opts ...CommandCatalogOption) []CommandCatalogE
 	if s == nil {
 		return nil
 	}
-	return commandCatalogFromDescriptors(s.CommandDescriptors(), opts...)
+	commands, err := s.Commands()
+	if err != nil {
+		return nil
+	}
+	return commandCatalogFromDescriptors(commands.Descriptors(), opts...)
 }
 
 func commandCatalogFromDescriptors(descriptors []command.Descriptor, opts ...CommandCatalogOption) []CommandCatalogEntry {

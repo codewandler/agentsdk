@@ -597,7 +597,6 @@ The terminal path routes through `harness.Session.Send`, so harness can own sess
 The same command model is exposed programmatically through:
 
 ```go
-CommandDescriptors() []command.Descriptor
 ExecuteCommand(ctx context.Context, path []string, input map[string]any) (command.Result, error)
 ```
 
@@ -658,7 +657,7 @@ harness.Service
   supports multiple channels/triggers
 ```
 
-The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, session-scoped workflow browsing, default session projections, and command-result application. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.CommandDescriptors`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths. Terminal one-shot mode renders returned `command.Result` values at the terminal boundary rather than discarding them.
+The first harness implementation already wraps `app.App` and the default `agent.Instance` enough for terminal sends, session metadata, session-scoped workflow browsing, default session projections, and command-result application. It intentionally keeps command namespaces such as `/workflow` and `/session` in harness rather than app: app remains the composition/execution registry, while harness owns the channel/session context needed to answer questions such as "which thread-backed workflow runs belong to this session?". Harness command namespaces are now declarative `command.Tree` definitions; `Session.Send`, `Session.Commands().Descriptors()`, and `Session.ExecuteCommand` all use the same tree-backed command model instead of separate switch-based parsing paths. Terminal one-shot mode renders returned `command.Result` values at the terminal boundary rather than discarding them.
 
 Harness loading now owns the reusable setup that used to sit in `terminal/cli.Load`: selecting and preparing the default agent from resolved resources, applying generic agent-spec overrides, resolving model-policy/source-API load settings, resolving default/manifest/explicit plugin refs through `app.PluginFactory`, applying loaded plugins, translating grouped session/app configuration into `app.Option` values, instantiating the default agent, creating the service, and opening the default session. Terminal remains responsible for terminal-only policy such as CLI flag interpretation, local CLI fallback/default-plugin policy, terminal event handlers, debug-message output, fallback spec selection, and risk-log presentation.
 
