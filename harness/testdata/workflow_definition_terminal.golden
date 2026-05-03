@@ -1,0 +1,6 @@
+workflow: ask_flow
+description: Ask the default agent
+
+steps:
+- ask: ask_agent
+- summarize: summarize depends_on=ask

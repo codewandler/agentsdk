@@ -72,21 +72,6 @@ func (p AgentsPayload) Display(command.DisplayMode) (string, error) {
 	return b.String(), nil
 }
 
-type ContextStatePayload struct {
-	State       string
-	Unavailable string
-}
-
-func (p ContextStatePayload) Display(command.DisplayMode) (string, error) {
-	if p.Unavailable != "" {
-		return p.Unavailable, nil
-	}
-	if p.State == "" {
-		return "context: no render state", nil
-	}
-	return p.State, nil
-}
-
 type SkillsPayload struct {
 	State       *skill.ActivationState
 	Unavailable string

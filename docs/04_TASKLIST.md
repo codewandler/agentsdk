@@ -130,19 +130,19 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 7. Command result/rendering cleanup
 
-- [ ] Audit remaining `command.Text(...)` usage.
-- [ ] Classify simple message usages.
-- [ ] Classify structured notice candidates.
-- [ ] Classify typed payload candidates.
-- [ ] Classify error candidates.
-- [ ] Reduce one-off payload structs where generic payloads are enough.
-- [ ] Add generic message payload only if repeated.
-- [ ] Add generic validation detail payload only if repeated.
-- [ ] Add generic table/list payload only if repeated.
-- [ ] Keep rendering at presentation boundaries.
-- [ ] Remove any remaining inline formatting from harness command handlers where practical.
-- [ ] Improve JSON rendering coverage for structured command payloads.
-- [ ] Add snapshot/golden tests if output stabilizes.
+- [x] Audit remaining `command.Text(...)` usage.
+- [x] Classify simple message usages.
+- [x] Classify structured notice candidates.
+- [x] Classify typed payload candidates.
+- [x] Classify error candidates.
+- [x] Reduce one-off payload structs where generic payloads are enough.
+- [x] Add generic message payload only if repeated.
+- [x] Add generic validation detail payload only if repeated.
+- [x] Add generic table/list payload only if repeated.
+- [x] Keep rendering at presentation boundaries.
+- [x] Remove any remaining inline formatting from harness command handlers where practical.
+- [x] Improve JSON rendering coverage for structured command payloads.
+- [x] Add snapshot/golden tests if output stabilizes.
 
 ## 8. Workflow lifecycle
 

@@ -1,0 +1,6 @@
+session:
+id: session_123
+agent: coder
+thread: thread_123
+branch: branch_123
+model: model=test/model max_tokens=1000

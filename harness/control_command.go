@@ -172,13 +172,13 @@ func (h controlCommandHandler) turnCommand(ctx context.Context, input turnComman
 func (h controlCommandHandler) contextCommand(context.Context, command.Invocation) (command.Result, error) {
 	inst, ok := h.currentAgent()
 	if !ok {
-		return command.Display(ContextStatePayload{Unavailable: "context: no current agent"}), nil
+		return command.Notice("context: no current agent"), nil
 	}
 	state := inst.ContextState()
 	if state == "context: no render state" {
 		state = fmt.Sprintf("context: no render state yet for agent %q\nrun a turn first to capture provider context", inst.Spec().Name)
 	}
-	return command.Display(ContextStatePayload{State: state}), nil
+	return command.Notice(state), nil
 }
 
 func (h controlCommandHandler) skillsCommand(context.Context, command.Invocation) (command.Result, error) {
