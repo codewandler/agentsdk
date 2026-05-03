@@ -60,17 +60,6 @@ func WithToolSkillActivation(state *skill.ActivationState) ToolContextOption {
 	return WithToolExtra(skill.ContextKey, state)
 }
 
-func WithToolExtras(values map[string]any) ToolContextOption {
-	return func(c *ToolContext) {
-		if c.extra == nil {
-			c.extra = map[string]any{}
-		}
-		for key, value := range values {
-			c.extra[key] = value
-		}
-	}
-}
-
 func (c *ToolContext) WorkDir() string { return c.workDir }
 func (c *ToolContext) AgentID() string { return c.agentID }
 func (c *ToolContext) SessionID() string {

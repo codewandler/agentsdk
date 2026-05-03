@@ -18,8 +18,6 @@ import (
 
 type Option func(*Instance)
 
-type InferenceOption func(*InferenceOptions)
-
 type ThinkingMode string
 
 const (
@@ -46,36 +44,6 @@ func DefaultInferenceOptions() InferenceOptions {
 		Effort:      unified.ReasoningEffortMedium,
 		Temperature: 0.1,
 	}
-}
-
-func NewInferenceOptions(opts ...InferenceOption) InferenceOptions {
-	cfg := DefaultInferenceOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
-	return cfg
-}
-
-func WithModel(model string) InferenceOption {
-	return func(o *InferenceOptions) { o.Model = model }
-}
-
-func WithMaxTokens(max int) InferenceOption {
-	return func(o *InferenceOptions) { o.MaxTokens = max }
-}
-
-func WithThinking(mode ThinkingMode) InferenceOption {
-	return func(o *InferenceOptions) { o.Thinking = mode }
-}
-
-func WithEffort(effort unified.ReasoningEffort) InferenceOption {
-	return func(o *InferenceOptions) { o.Effort = effort }
-}
-
-func WithTemperature(value float64) InferenceOption {
-	return func(o *InferenceOptions) { o.Temperature = value }
 }
 
 func WithInferenceOptions(opts InferenceOptions) Option {
@@ -108,10 +76,6 @@ func WithSpec(spec Spec) Option {
 	}
 }
 
-func WithSkillSources(sources ...skill.Source) Option {
-	return func(a *Instance) { a.specSkillSources = append(a.specSkillSources, sources...) }
-}
-
 func WithSkillRepository(repo *skill.Repository) Option {
 	return func(a *Instance) { a.skillRepo = repo }
 }
@@ -134,10 +98,6 @@ func WithToolTimeout(timeout time.Duration) Option {
 
 func WithSystem(prompt string) Option {
 	return func(a *Instance) { a.system = prompt }
-}
-
-func WithSystemBuilder(builder func(workspace, prompt string) string) Option {
-	return func(a *Instance) { a.systemBuilder = builder }
 }
 
 func WithSessionStoreDir(dir string) Option {

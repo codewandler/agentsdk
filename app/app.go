@@ -59,7 +59,6 @@ type config struct {
 	defaultAgent    string
 	plugins         []Plugin
 	bundles         []resource.ContributionBundle
-	skillSources    []skill.Source
 	discoveries     []SkillSourceDiscovery
 	agentOptions    []agent.Option
 	actions         []action.Action
@@ -85,7 +84,6 @@ func New(opts ...Option) (*App, error) {
 		}
 		discoveredSources = append(discoveredSources, sources...)
 	}
-	discoveredSources = append(discoveredSources, cfg.skillSources...)
 
 	a := &App{
 		out:          cfg.out,
@@ -173,10 +171,6 @@ func WithPlugin(plugin Plugin) Option {
 			c.plugins = append(c.plugins, plugin)
 		}
 	}
-}
-
-func WithSkillSources(sources ...skill.Source) Option {
-	return func(c *config) { c.skillSources = append(c.skillSources, sources...) }
 }
 
 func WithDefaultSkillSourceDiscovery(discovery SkillSourceDiscovery) Option {
@@ -355,7 +349,7 @@ func applyWorkflowExecutionOptions(opts []WorkflowExecutionOption) workflowExecu
 	return cfg
 }
 
-func (a *App) AgentTurnAction(agentName string, spec action.Spec) (action.Action, error) {
+func (a *App) agentTurnAction(agentName string, spec action.Spec) (action.Action, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app: nil app")
 	}
@@ -374,7 +368,7 @@ func (a *App) AgentTurnAction(agentName string, spec action.Spec) (action.Action
 }
 
 func (a *App) DefaultAgentTurnAction(spec action.Spec) (action.Action, error) {
-	return a.AgentTurnAction("", spec)
+	return a.agentTurnAction("", spec)
 }
 
 func (a *App) workflowExecutor(opts ...WorkflowExecutionOption) workflow.Executor {
