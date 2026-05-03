@@ -8,9 +8,9 @@ require (
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000
-	github.com/codewandler/llmadapter v1.0.0-rc.29
+	github.com/codewandler/llmadapter v1.0.0-rc.30
 	github.com/codewandler/markdown v0.46.2
-	github.com/codewandler/modeldb v0.14.3
+	github.com/codewandler/modeldb v0.14.4
 	github.com/emiago/diago v0.28.0
 	github.com/emiago/sipgo v1.3.1
 	github.com/invopop/jsonschema v0.14.0
