@@ -79,6 +79,9 @@
     - `terminal/cli.Load` remains the compatibility/channel wrapper for CLI-specific policy: CLI flag/config decoding, local CLI default plugin policy, terminal UI adapters, debug-message output, risk-log presentation, and fallback spec selection.
   - Moved workflow thread recording out of `app.App` and into `harness.Session.ExecuteWorkflow`; app workflow helpers now stay registry/executor-focused while session live-thread persistence is owned by harness.
   - Removed legacy app-level workflow command shims (`RegisterWorkflowCommand` / `WorkflowCommand`); workflow slash commands now live on the harness command tree.
+  - Moved workflow execution options from `app` into `workflow` (`workflow.WithRunID`, `workflow.WithEventHandler`), so app no longer owns workflow executor option shims.
+  - Removed the redundant `app.App.WorkflowAction(...)` helper; callers that need action adaptation can use `workflow.WorkflowAction` directly.
+  - Removed redundant `Session.AgentCommandCatalog(...)`; agent-callable catalog discovery now uses `Session.CommandCatalog(CommandCatalogAgentCallable())`.
 
 - **Remaining cleanup candidates**
   - Revisit `agent.Instance` responsibilities and move outward only where the slice deletes or simplifies more than it adds:
