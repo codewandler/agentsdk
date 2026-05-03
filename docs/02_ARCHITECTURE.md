@@ -559,11 +559,11 @@ Live workflow events are telemetry payloads shaped to be compatible with future 
 
 `workflow.RunStore` defines the workflow-facing run access contract: append events for a `RunID`, read recorded events, and project current `RunState`. It accepts `context.Context` because durable implementations read and append through thread stores or future external storage. `workflow.MemoryRunStore` is the simple in-memory implementation and is intentionally not a durable database; it clarifies append/read/project semantics, run isolation, unknown-run behavior, and projector error handling. `workflow.ThreadRecorder` records live workflow events into a `thread.Live`, and `workflow.ThreadRunStore` satisfies the same run-store semantics by appending to and reading from a scoped thread/branch log.
 
-`app.App` workflow helpers accept execution options for run ID generation and live event handling, which lets callers install `workflow.ThreadRecorder` without coupling `workflow.Executor` to persistence. As a transitional session seam, `App.ExecuteWorkflow` also detects the default agent's live thread and composes a recorder automatically, preserving any caller-provided event handler while appending workflow events into the session thread. Thread append integration builds on the run-state model rather than writing unprojectable telemetry. Do not create a separate workflow database until thread events prove insufficient.
+`app.App` workflow helpers accept execution options for run ID generation and live event handling, which lets callers install persistence adapters without coupling `workflow.Executor` to storage. Session-owned workflow execution goes through `harness.Session.ExecuteWorkflow`, which composes `workflow.ThreadRecorder` when the active agent has a live thread and preserves caller-provided event handlers. Thread append integration builds on the run-state model rather than writing unprojectable telemetry. Do not create a separate workflow database until thread events prove insufficient.
 
 ### Workflow run read models and harness commands
 
-Workflow execution remains owned by `workflow.Executor` and the transitional `app.App` workflow helpers, but session-scoped workflow history is now read through harness APIs. The current path is intentionally narrow:
+Workflow execution remains owned by `workflow.Executor`; `app.App` resolves workflow definitions and actions, while `harness.Session` owns session-scoped workflow recording and history APIs. The current path is intentionally narrow:
 
 ```text
 workflow.Executor
@@ -614,8 +614,8 @@ runner.RunTurn         = one model/tool loop; can be used by a prompt/model acti
 runtime.Engine         = high-level turn engine over history/thread/context
 workflow.Executor      = DAG/pipeline orchestration over workflow.ActionRef -> action.Action
 workflow.WorkflowAction = adapter exposing a workflow run as action.Action
-app.App               = current composition root and registry host; exposes transitional workflow execution helpers
-harness.Service        = future host for apps, sessions, workflows, channels, triggers
+app.App               = composition root and registry host for workflow definitions/actions
+harness.Service        = host/session seam for command-triggered workflows, recording, channels, triggers
 ```
 
 A prompt or model turn is also an action when treated as an executable unit: it has input, output, context, policy, and result semantics. The current `agent.TurnAction` adapter exposes an `agent.Instance` turn as an `action.Action` for workflow/app use, returning the latest assistant text after the turn commits. The fact that it calls an LLM is an implementation detail of that action implementation, not a reason to make workflows depend directly on LLM concepts.

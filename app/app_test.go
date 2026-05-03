@@ -291,23 +291,6 @@ func TestAppWorkflowActionExposesRegisteredWorkflow(t *testing.T) {
 	require.Equal(t, "hi", result.Data.(workflow.Result).Data)
 }
 
-func TestAppRegisterWorkflowActions(t *testing.T) {
-	app, err := New(
-		WithActions(action.New(action.Spec{Name: "echo"}, func(_ action.Ctx, input any) action.Result {
-			return action.Result{Data: input}
-		})),
-		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
-	)
-	require.NoError(t, err)
-	require.NoError(t, app.RegisterWorkflowActions())
-
-	registered, ok := app.ActionRegistry().Get("echo_flow")
-	require.True(t, ok)
-	result := registered.Execute(context.Background(), "hi")
-	require.NoError(t, result.Error)
-	require.Equal(t, "hi", result.Data.(workflow.Result).Data)
-}
-
 func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 	app, err := New(
 		WithWorkflows(workflow.Definition{Name: "missing_action", Steps: []workflow.Step{{ID: "missing", Action: workflow.ActionRef{Name: "missing"}}}}),
@@ -318,7 +301,6 @@ func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 	require.ErrorContains(t, app.ExecuteWorkflow(context.Background(), "missing_action", nil).Error, "action \"missing\" not found")
 	_, ok := app.WorkflowAction("nope")
 	require.False(t, ok)
-	require.ErrorContains(t, app.RegisterWorkflowActions("nope"), "workflow \"nope\" not found")
 }
 
 func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {

@@ -378,27 +378,6 @@ func (a *App) WorkflowAction(name string, opts ...WorkflowExecutionOption) (acti
 	return workflow.WorkflowAction{Definition: def, Executor: a.workflowExecutor(opts...)}, true
 }
 
-func (a *App) RegisterWorkflowActions(names ...string) error {
-	if a == nil {
-		return fmt.Errorf("app: nil app")
-	}
-	if len(names) == 0 {
-		for _, def := range a.Workflows() {
-			names = append(names, def.Name)
-		}
-	}
-	for _, name := range names {
-		actionDef, ok := a.WorkflowAction(name)
-		if !ok {
-			return fmt.Errorf("app: workflow %q not found", name)
-		}
-		if err := a.RegisterActions(actionDef); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (a *App) RegisterAgent(name string, inst *agent.Instance) error {
 	if name == "" {
 		return fmt.Errorf("app: agent name is required")
