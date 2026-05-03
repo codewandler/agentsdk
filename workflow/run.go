@@ -38,11 +38,12 @@ const (
 type StepStatus string
 
 const (
-	StepQueued       StepStatus = "queued"
-	StepRunning      StepStatus = "running"
-	StepSucceeded    StepStatus = "succeeded"
-	StepFailedStatus StepStatus = "failed"
-	StepCanceled     StepStatus = "canceled"
+	StepQueued        StepStatus = "queued"
+	StepRunning       StepStatus = "running"
+	StepSucceeded     StepStatus = "succeeded"
+	StepFailedStatus  StepStatus = "failed"
+	StepCanceled      StepStatus = "canceled"
+	StepSkippedStatus StepStatus = "skipped"
 )
 
 // RunState is the materialized state of one workflow execution.
@@ -89,14 +90,15 @@ type RunMetadata struct {
 
 // StepState is the materialized state of one workflow step.
 type StepState struct {
-	ID            string
-	ActionName    string
-	ActionVersion string
-	Status        StepStatus
-	Attempt       int
-	Attempts      []AttemptState
-	Output        ValueRef
-	Error         string
+	ID             string
+	ActionName     string
+	ActionVersion  string
+	IdempotencyKey string
+	Status         StepStatus
+	Attempt        int
+	Attempts       []AttemptState
+	Output         ValueRef
+	Error          string
 }
 
 // AttemptState is the materialized state of one step attempt.
@@ -176,6 +178,7 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		step.ActionName = e.ActionName
 		step.ActionVersion = e.ActionVersion
 		step.Status = StepRunning
+		step.IdempotencyKey = e.IdempotencyKey
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Error = ""
 		step = upsertAttempt(step, AttemptState{Attempt: step.Attempt, Status: StepRunning})
@@ -188,6 +191,7 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		step.ActionName = e.ActionName
 		step.ActionVersion = e.ActionVersion
 		step.Status = StepSucceeded
+		step.IdempotencyKey = e.IdempotencyKey
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Output = e.Output
 		step.Error = ""
@@ -200,10 +204,22 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		step.ID = e.StepID
 		step.ActionName = e.ActionName
 		step.ActionVersion = e.ActionVersion
+		step.IdempotencyKey = e.IdempotencyKey
 		step.Status = StepFailedStatus
 		step.Attempt = normalizeAttempt(e.Attempt)
 		step.Error = e.Error
 		step = upsertAttempt(step, AttemptState{Attempt: step.Attempt, Status: StepFailedStatus, Error: e.Error})
+		state.Steps[e.StepID] = step
+		states[e.RunID] = state
+	case StepSkipped:
+		state := stateFor(states, e.RunID)
+		step := state.Steps[e.StepID]
+		step.ID = e.StepID
+		step.ActionName = e.ActionName
+		step.ActionVersion = e.ActionVersion
+		step.IdempotencyKey = e.IdempotencyKey
+		step.Status = StepSkippedStatus
+		step.Error = e.Reason
 		state.Steps[e.StepID] = step
 		states[e.RunID] = state
 	case Completed:
@@ -234,7 +250,7 @@ func applyEvent(states map[RunID]RunState, event any) error {
 		state.Duration = runDuration(state.StartedAt, state.CompletedAt)
 		state.Error = e.Reason
 		states[e.RunID] = state
-	case *Queued, *Started, *StepStarted, *StepCompleted, *StepFailed, *Completed, *Failed, *Canceled:
+	case *Queued, *Started, *StepStarted, *StepCompleted, *StepFailed, *StepSkipped, *Completed, *Failed, *Canceled:
 		return fmt.Errorf("workflow: pointer events are not supported")
 	default:
 		return nil

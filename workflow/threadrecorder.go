@@ -77,6 +77,8 @@ func workflowThreadEventPayload(event any) (thread.EventKind, any, bool) {
 		return EventStepCompleted, e, true
 	case StepFailed:
 		return EventStepFailed, e, true
+	case StepSkipped:
+		return EventStepSkipped, e, true
 	case Completed:
 		return EventCompleted, e, true
 	case Failed:

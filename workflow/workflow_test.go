@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/thread"
@@ -169,6 +171,108 @@ func TestExecutorValidatesActionInputAndOutput(t *testing.T) {
 
 	outputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), Definition{Name: "output", Steps: []Step{{ID: "returns_wrong", Action: ActionRef{Name: "returns_wrong"}}}}, nil)
 	require.ErrorContains(t, outputResult.Error, "invalid output")
+}
+
+func TestExecutorRunsIndependentStepsInParallelWithFanIn(t *testing.T) {
+	reg := action.NewRegistry()
+	started := make(chan string, 2)
+	release := make(chan struct{})
+	require.NoError(t, reg.Register(
+		action.New(action.Spec{Name: "a"}, func(action.Ctx, any) action.Result {
+			started <- "a"
+			<-release
+			return action.Result{Data: "A"}
+		}),
+		action.New(action.Spec{Name: "b"}, func(action.Ctx, any) action.Result {
+			started <- "b"
+			<-release
+			return action.Result{Data: "B"}
+		}),
+		action.New(action.Spec{Name: "join"}, func(_ action.Ctx, input any) action.Result {
+			deps := input.(map[string]any)
+			return action.Result{Data: deps["a"].(string) + deps["b"].(string)}
+		}),
+	))
+	def := Definition{Name: "parallel", Steps: []Step{
+		{ID: "a", Action: ActionRef{Name: "a"}},
+		{ID: "b", Action: ActionRef{Name: "b"}},
+		{ID: "join", Action: ActionRef{Name: "join"}, DependsOn: []string{"a", "b"}},
+	}}
+	done := make(chan action.Result, 1)
+	go func() {
+		done <- Executor{Resolver: RegistryResolver{Registry: reg}, MaxConcurrency: 2}.Execute(context.Background(), def, nil)
+	}()
+
+	require.ElementsMatch(t, []string{"a", "b"}, []string{<-started, <-started})
+	close(release)
+	result := <-done
+	require.NoError(t, result.Error)
+	require.Equal(t, "AB", result.Data.(Result).Data)
+}
+
+func TestExecutorHonorsRetryTimeoutContinueConditionAndInputMapping(t *testing.T) {
+	var flakyAttempts int32
+	reg := action.NewRegistry()
+	require.NoError(t, reg.Register(
+		action.New(action.Spec{Name: "seed"}, func(action.Ctx, any) action.Result {
+			return action.Result{Data: map[string]any{"value": "ok", "run": true}}
+		}),
+		action.New(action.Spec{Name: "flaky"}, func(action.Ctx, any) action.Result {
+			attempt := atomic.AddInt32(&flakyAttempts, 1)
+			if attempt == 1 {
+				return action.Result{Error: errors.New("temporary")}
+			}
+			return action.Result{Data: "retried"}
+		}),
+		action.New(action.Spec{Name: "slow"}, func(ctx action.Ctx, _ any) action.Result {
+			select {
+			case <-ctx.Done():
+				return action.Result{Error: ctx.Err()}
+			case <-time.After(100 * time.Millisecond):
+				return action.Result{Data: "too late"}
+			}
+		}),
+		action.New(action.Spec{Name: "mapped"}, func(_ action.Ctx, input any) action.Result {
+			return action.Result{Data: input}
+		}),
+	))
+	def := Definition{Name: "semantics", Steps: []Step{
+		{ID: "seed", Action: ActionRef{Name: "seed"}},
+		{ID: "flaky", Action: ActionRef{Name: "flaky"}, DependsOn: []string{"seed"}, Retry: RetryPolicy{MaxAttempts: 2}, IdempotencyKey: "flaky-key"},
+		{ID: "slow", Action: ActionRef{Name: "slow"}, DependsOn: []string{"flaky"}, Timeout: time.Millisecond, ErrorPolicy: StepErrorContinue},
+		{ID: "skipped", Action: ActionRef{Name: "mapped"}, DependsOn: []string{"seed"}, When: Condition{StepID: "seed", Equals: "nope"}},
+		{ID: "mapped", Action: ActionRef{Name: "mapped"}, DependsOn: []string{"seed", "flaky", "slow"}, InputMap: map[string]string{"seed": "steps.seed.output.value", "flaky": "steps.flaky.output", "initial": "input"}},
+	}}
+
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, "hello")
+	require.NoError(t, result.Error)
+	wfResult := result.Data.(Result)
+	require.Equal(t, int32(2), atomic.LoadInt32(&flakyAttempts))
+	require.Error(t, wfResult.StepResults["slow"].Error)
+	require.Equal(t, map[string]any{"seed": "ok", "flaky": "retried", "initial": "hello"}, wfResult.StepResults["mapped"].Data)
+	state, ok, err := Projector{}.ProjectRun(result.Events, wfResult.RunID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, StepSkippedStatus, state.Steps["skipped"].Status)
+	require.Equal(t, "flaky-key", state.Steps["flaky"].IdempotencyKey)
+	require.Equal(t, []AttemptState{{Attempt: 1, Status: StepFailedStatus, Error: "temporary"}, {Attempt: 2, Status: StepSucceeded, Output: InlineValue("retried")}}, state.Steps["flaky"].Attempts)
+}
+
+func TestExecutorPreservesExternalAndRedactedValueRefs(t *testing.T) {
+	reg := action.NewRegistry()
+	external := ExternalValue("file:///tmp/output.json", "application/json")
+	require.NoError(t, reg.Register(action.New(action.Spec{Name: "external"}, func(action.Ctx, any) action.Result {
+		return action.Result{Data: external}
+	})))
+	def := Definition{Name: "refs", Steps: []Step{{ID: "external", Action: ActionRef{Name: "external"}}}}
+
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, nil)
+	require.NoError(t, result.Error)
+	state, ok, err := Projector{}.ProjectRun(result.Events, result.Data.(Result).RunID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, external, state.Output)
+	require.Equal(t, external, state.Steps["external"].Output)
 }
 
 func eventKinds(events []action.Event) []thread.EventKind {

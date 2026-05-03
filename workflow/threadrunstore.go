@@ -199,6 +199,9 @@ func WorkflowEventForThreadEvent(event thread.Event) (any, bool, error) {
 	case EventStepFailed:
 		var payload StepFailed
 		return payload, true, decodeWorkflowThreadEvent(event, &payload)
+	case EventStepSkipped:
+		var payload StepSkipped
+		return payload, true, decodeWorkflowThreadEvent(event, &payload)
 	case EventCompleted:
 		var payload Completed
 		return payload, true, decodeWorkflowThreadEvent(event, &payload)
@@ -234,6 +237,8 @@ func workflowEventRunID(event any) RunID {
 	case StepCompleted:
 		return e.RunID
 	case StepFailed:
+		return e.RunID
+	case StepSkipped:
 		return e.RunID
 	case Completed:
 		return e.RunID

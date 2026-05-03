@@ -171,22 +171,22 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 9. Workflow execution semantics
 
-- [ ] Keep sequential pipeline semantics stable before parallel execution.
-- [ ] Improve DAG dependency resolution.
-- [ ] Add fan-out/fan-in semantics.
-- [ ] Add independent parallel steps.
-- [ ] Add concurrency limits.
-- [ ] Add retry policy.
-- [ ] Add timeout policy.
-- [ ] Add step-level error policy.
-- [ ] Add conditional execution.
-- [ ] Add structured dataflow mapping.
-- [ ] Add step input templating/mapping.
-- [ ] Add typed action input/output checking.
-- [ ] Add redaction/external references for large outputs.
-- [ ] Add resumability semantics.
-- [ ] Add idempotency keys where needed.
-- [ ] Add deterministic replay constraints where feasible.
+- [x] Keep sequential pipeline semantics stable before parallel execution.
+- [x] Improve DAG dependency resolution.
+- [x] Add fan-out/fan-in semantics.
+- [x] Add independent parallel steps.
+- [x] Add concurrency limits.
+- [x] Add retry policy.
+- [x] Add timeout policy.
+- [x] Add step-level error policy.
+- [x] Add conditional execution.
+- [x] Add structured dataflow mapping.
+- [x] Add step input templating/mapping.
+- [x] Add typed action input/output checking.
+- [x] Add redaction/external references for large outputs.
+- [x] Add resumability semantics.
+- [x] Add idempotency keys where needed.
+- [x] Add deterministic replay constraints where feasible.
 
 ## 10. Action/tool convergence
 

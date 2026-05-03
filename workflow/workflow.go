@@ -2,10 +2,14 @@
 package workflow
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/codewandler/agentsdk/action"
@@ -18,11 +22,41 @@ type ActionRef = action.Ref
 
 // Step is one workflow node.
 type Step struct {
-	ID        string
-	Action    ActionRef
-	Input     any
-	DependsOn []string
+	ID             string
+	Action         ActionRef
+	Input          any
+	InputMap       map[string]string
+	InputTemplate  any
+	DependsOn      []string
+	When           Condition
+	Retry          RetryPolicy
+	Timeout        time.Duration
+	ErrorPolicy    StepErrorPolicy
+	IdempotencyKey string
 }
+
+// Condition controls whether a step should execute after dependencies finish.
+type Condition struct {
+	StepID string
+	Equals any
+	Exists bool
+	Not    bool
+}
+
+// RetryPolicy controls retry attempts for one step. MaxAttempts includes the
+// first attempt; zero means one attempt.
+type RetryPolicy struct {
+	MaxAttempts int
+	Backoff     time.Duration
+}
+
+// StepErrorPolicy controls how the executor handles terminal step failures.
+type StepErrorPolicy string
+
+const (
+	StepErrorFail     StepErrorPolicy = ""
+	StepErrorContinue StepErrorPolicy = "continue"
+)
 
 // Definition describes a workflow graph. The initial implementation executes a
 // topologically ordered DAG and passes dependency outputs as step inputs.
@@ -46,6 +80,7 @@ const (
 	EventStepStarted   thread.EventKind = "workflow.step_started"
 	EventStepCompleted thread.EventKind = "workflow.step_completed"
 	EventStepFailed    thread.EventKind = "workflow.step_failed"
+	EventStepSkipped   thread.EventKind = "workflow.step_skipped"
 	EventCompleted     thread.EventKind = "workflow.completed"
 	EventFailed        thread.EventKind = "workflow.failed"
 	EventCanceled      thread.EventKind = "workflow.canceled"
@@ -62,6 +97,7 @@ func EventDefinitions() []thread.EventDefinition {
 		thread.DefineEvent[StepStarted](EventStepStarted),
 		thread.DefineEvent[StepCompleted](EventStepCompleted),
 		thread.DefineEvent[StepFailed](EventStepFailed),
+		thread.DefineEvent[StepSkipped](EventStepSkipped),
 		thread.DefineEvent[Completed](EventCompleted),
 		thread.DefineEvent[Failed](EventFailed),
 		thread.DefineEvent[Canceled](EventCanceled),
@@ -89,35 +125,48 @@ type Started struct {
 }
 
 type StepStarted struct {
-	RunID         RunID     `json:"run_id"`
-	WorkflowName  string    `json:"workflow_name"`
-	StepID        string    `json:"step_id"`
-	ActionName    string    `json:"action_name"`
-	ActionVersion string    `json:"action_version,omitempty"`
-	Attempt       int       `json:"attempt"`
-	At            time.Time `json:"at,omitempty"`
+	RunID          RunID     `json:"run_id"`
+	WorkflowName   string    `json:"workflow_name"`
+	StepID         string    `json:"step_id"`
+	ActionName     string    `json:"action_name"`
+	ActionVersion  string    `json:"action_version,omitempty"`
+	Attempt        int       `json:"attempt"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	At             time.Time `json:"at,omitempty"`
 }
 
 type StepCompleted struct {
-	RunID         RunID     `json:"run_id"`
-	WorkflowName  string    `json:"workflow_name"`
-	StepID        string    `json:"step_id"`
-	ActionName    string    `json:"action_name"`
-	ActionVersion string    `json:"action_version,omitempty"`
-	Attempt       int       `json:"attempt"`
-	Output        ValueRef  `json:"output,omitempty"`
-	At            time.Time `json:"at,omitempty"`
+	RunID          RunID     `json:"run_id"`
+	WorkflowName   string    `json:"workflow_name"`
+	StepID         string    `json:"step_id"`
+	ActionName     string    `json:"action_name"`
+	ActionVersion  string    `json:"action_version,omitempty"`
+	Attempt        int       `json:"attempt"`
+	Output         ValueRef  `json:"output,omitempty"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	At             time.Time `json:"at,omitempty"`
 }
 
 type StepFailed struct {
-	RunID         RunID     `json:"run_id"`
-	WorkflowName  string    `json:"workflow_name"`
-	StepID        string    `json:"step_id"`
-	ActionName    string    `json:"action_name"`
-	ActionVersion string    `json:"action_version,omitempty"`
-	Attempt       int       `json:"attempt"`
-	Error         string    `json:"error"`
-	At            time.Time `json:"at,omitempty"`
+	RunID          RunID     `json:"run_id"`
+	WorkflowName   string    `json:"workflow_name"`
+	StepID         string    `json:"step_id"`
+	ActionName     string    `json:"action_name"`
+	ActionVersion  string    `json:"action_version,omitempty"`
+	Attempt        int       `json:"attempt"`
+	Error          string    `json:"error"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	At             time.Time `json:"at,omitempty"`
+}
+type StepSkipped struct {
+	RunID          RunID     `json:"run_id"`
+	WorkflowName   string    `json:"workflow_name"`
+	StepID         string    `json:"step_id"`
+	ActionName     string    `json:"action_name"`
+	ActionVersion  string    `json:"action_version,omitempty"`
+	Reason         string    `json:"reason,omitempty"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	At             time.Time `json:"at,omitempty"`
 }
 
 type Completed struct {
@@ -179,6 +228,7 @@ type Executor struct {
 	Input             ValueRef
 	DefinitionHash    string
 	DefinitionVersion string
+	MaxConcurrency    int
 }
 
 type ExecuteOption func(*Executor)
@@ -227,36 +277,48 @@ func WithDefinitionIdentity(hash, version string) ExecuteOption {
 	}
 }
 
-// Execute runs def and returns a workflow result in action.Result.Data. Execution
-// stops at the first failed or unresolved step; partial step results are kept in
-// Result.StepResults.
+func WithMaxConcurrency(max int) ExecuteOption {
+	return func(e *Executor) { e.MaxConcurrency = max }
+}
+
+// Execute runs def and returns a workflow result in action.Result.Data. The
+// default MaxConcurrency=1 preserves sequential topological pipeline semantics;
+// higher values execute independent ready steps concurrently.
 func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Result {
-	runID := e.RunID
-	if runID == "" {
-		if e.NewRunID != nil {
-			runID = e.NewRunID()
-		} else {
-			runID = NewRunID()
-		}
-	}
-	now := e.Now
-	if now == nil {
-		now = time.Now
-	}
-	var events []action.Event
+	runID := e.runID()
+	now := e.nowFunc()
+	var (
+		mu     sync.Mutex
+		events []action.Event
+	)
 	emit := func(event action.Event) {
+		mu.Lock()
 		events = append(events, event)
+		mu.Unlock()
 		if e.OnEvent != nil {
 			e.OnEvent(ctx, event)
 		}
 	}
+	appendEvents := func(extra []action.Event) {
+		if len(extra) == 0 {
+			return
+		}
+		mu.Lock()
+		events = append(events, extra...)
+		mu.Unlock()
+	}
+	resultEvents := func() []action.Event {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]action.Event(nil), events...)
+	}
 	cancel := func(reason string, data any) action.Result {
 		emit(Canceled{RunID: runID, WorkflowName: def.Name, Reason: reason, At: now()})
-		return action.Result{Data: data, Error: ctx.Err(), Events: events}
+		return action.Result{Data: data, Error: ctx.Err(), Events: resultEvents()}
 	}
 	fail := func(err error, data any) action.Result {
 		emit(Failed{RunID: runID, WorkflowName: def.Name, Error: err.Error(), At: now()})
-		return action.Result{Data: data, Error: err, Events: events}
+		return action.Result{Data: data, Error: err, Events: resultEvents()}
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -278,47 +340,217 @@ func (e Executor) Execute(ctx action.Ctx, def Definition, input any) action.Resu
 		definitionVersion = def.Version
 	}
 	emit(Started{RunID: runID, WorkflowName: def.Name, Metadata: e.Metadata, Input: e.Input, DefinitionHash: definitionHash, DefinitionVersion: definitionVersion, At: now()})
+
+	results, last, err := e.executeSteps(ctx, def, ordered, input, runID, now, emit, appendEvents)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return cancel(ctxErr.Error(), Result{RunID: runID, StepResults: results, Data: last})
+		}
+		return fail(err, Result{RunID: runID, StepResults: results, Data: last})
+	}
+	emit(Completed{RunID: runID, WorkflowName: def.Name, Output: valueRefFor(last), At: now()})
+	return action.Result{Data: Result{RunID: runID, StepResults: results, Data: last}, Events: resultEvents()}
+}
+
+func (e Executor) runID() RunID {
+	if e.RunID != "" {
+		return e.RunID
+	}
+	if e.NewRunID != nil {
+		return e.NewRunID()
+	}
+	return NewRunID()
+}
+
+func (e Executor) nowFunc() func() time.Time {
+	if e.Now != nil {
+		return e.Now
+	}
+	return time.Now
+}
+
+func (e Executor) executeSteps(ctx action.Ctx, def Definition, ordered []Step, input any, runID RunID, now func() time.Time, emit func(action.Event), appendEvents func([]action.Event)) (map[string]action.Result, any, error) {
+	if e.MaxConcurrency <= 1 {
+		return e.executeSequential(ctx, def, ordered, input, runID, now, emit, appendEvents)
+	}
+	return e.executeParallel(ctx, def, ordered, input, runID, now, emit, appendEvents)
+}
+
+func (e Executor) executeSequential(ctx action.Ctx, def Definition, ordered []Step, input any, runID RunID, now func() time.Time, emit func(action.Event), appendEvents func([]action.Event)) (map[string]action.Result, any, error) {
 	results := make(map[string]action.Result, len(ordered))
 	var last any = input
 	for _, step := range ordered {
-		if err := ctx.Err(); err != nil {
-			return cancel(err.Error(), Result{RunID: runID, StepResults: results, Data: last})
-		}
-		a, ok := e.Resolver.ResolveAction(ctx, step.Action)
-		if !ok || a == nil {
-			return fail(fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name), Result{RunID: runID, StepResults: results, Data: last})
-		}
-		stepInput := stepInput(step, input, results)
-		if err := validateActionValue(a.Spec().Input, stepInput, "input"); err != nil {
-			return fail(fmt.Errorf("workflow %q step %q invalid input: %w", def.Name, step.ID, err), Result{RunID: runID, StepResults: results, Data: last})
-		}
-		attempt := 1
-		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, At: now()})
-		res := a.Execute(ctx, stepInput)
+		res, skipped, err := e.executeStep(ctx, def, step, input, results, runID, now, emit, appendEvents)
 		results[step.ID] = res
-		events = append(events, res.Events...)
-		if res.Error != nil {
-			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Error: res.Error.Error(), At: now()})
-			if err := ctx.Err(); err != nil {
-				return cancel(err.Error(), Result{RunID: runID, StepResults: results, Data: last})
+		if err != nil {
+			if step.ErrorPolicy == StepErrorContinue {
+				continue
 			}
-			err := fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, res.Error)
-			return fail(err, Result{RunID: runID, StepResults: results, Data: last})
+			return results, last, err
 		}
-		if err := validateActionValue(a.Spec().Output, res.Data, "output"); err != nil {
-			emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Error: err.Error(), At: now()})
-			return fail(fmt.Errorf("workflow %q step %q invalid output: %w", def.Name, step.ID, err), Result{RunID: runID, StepResults: results, Data: last})
+		if !skipped {
+			last = res.Data
 		}
-		last = res.Data
-		emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Output: InlineValue(res.Data), At: now()})
 	}
-	emit(Completed{RunID: runID, WorkflowName: def.Name, Output: InlineValue(last), At: now()})
-	return action.Result{Data: Result{RunID: runID, StepResults: results, Data: last}, Events: events}
+	return results, last, nil
+}
+
+func (e Executor) executeParallel(ctx action.Ctx, def Definition, ordered []Step, input any, runID RunID, now func() time.Time, emit func(action.Event), appendEvents func([]action.Event)) (map[string]action.Result, any, error) {
+	results := make(map[string]action.Result, len(ordered))
+	done := map[string]bool{}
+	limit := e.MaxConcurrency
+	if limit <= 0 {
+		limit = 1
+	}
+	var last any = input
+	for len(done) < len(ordered) {
+		if err := ctx.Err(); err != nil {
+			return results, last, err
+		}
+		ready := readySteps(ordered, done)
+		if len(ready) == 0 {
+			return results, last, fmt.Errorf("workflow %q has no runnable steps; dependency state is incomplete", def.Name)
+		}
+		if len(ready) > limit {
+			ready = ready[:limit]
+		}
+		type outcome struct {
+			step    Step
+			result  action.Result
+			skipped bool
+			err     error
+		}
+		outcomes := make([]outcome, len(ready))
+		var wg sync.WaitGroup
+		for i, step := range ready {
+			wg.Add(1)
+			go func(i int, step Step) {
+				defer wg.Done()
+				res, skipped, err := e.executeStep(ctx, def, step, input, resultsSnapshot(results), runID, now, emit, appendEvents)
+				outcomes[i] = outcome{step: step, result: res, skipped: skipped, err: err}
+			}(i, step)
+		}
+		wg.Wait()
+		for _, out := range outcomes {
+			results[out.step.ID] = out.result
+			done[out.step.ID] = true
+			if out.err != nil && out.step.ErrorPolicy != StepErrorContinue {
+				return results, last, out.err
+			}
+			if out.err == nil && !out.skipped {
+				last = out.result.Data
+			}
+		}
+	}
+	return results, last, nil
+}
+
+func readySteps(ordered []Step, done map[string]bool) []Step {
+	ready := make([]Step, 0)
+	for _, step := range ordered {
+		if done[step.ID] {
+			continue
+		}
+		depsDone := true
+		for _, dep := range step.DependsOn {
+			if !done[dep] {
+				depsDone = false
+				break
+			}
+		}
+		if depsDone {
+			ready = append(ready, step)
+		}
+	}
+	return ready
+}
+
+func resultsSnapshot(results map[string]action.Result) map[string]action.Result {
+	out := make(map[string]action.Result, len(results))
+	for key, value := range results {
+		out[key] = value
+	}
+	return out
+}
+
+func (e Executor) executeStep(ctx action.Ctx, def Definition, step Step, initial any, results map[string]action.Result, runID RunID, now func() time.Time, emit func(action.Event), appendEvents func([]action.Event)) (action.Result, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return action.Result{Error: err}, false, err
+	}
+	if !conditionMatches(step.When, results) {
+		emit(StepSkipped{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, IdempotencyKey: step.IdempotencyKey, Reason: "condition false", At: now()})
+		return action.Result{}, true, nil
+	}
+	a, ok := e.Resolver.ResolveAction(ctx, step.Action)
+	if !ok || a == nil {
+		err := fmt.Errorf("workflow %q step %q action %q not found", def.Name, step.ID, step.Action.Name)
+		return action.Result{Error: err}, false, err
+	}
+	stepInput := stepInput(step, initial, results)
+	if err := validateActionValue(a.Spec().Input, stepInput, "input"); err != nil {
+		err = fmt.Errorf("workflow %q step %q invalid input: %w", def.Name, step.ID, err)
+		emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: 1, Error: err.Error(), IdempotencyKey: step.IdempotencyKey, At: now()})
+		return action.Result{Error: err}, false, err
+	}
+	maxAttempts := step.Retry.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	var last action.Result
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		stepCtx := context.Context(ctx)
+		cancel := func() {}
+		if step.Timeout > 0 {
+			stepCtx, cancel = context.WithTimeout(stepCtx, step.Timeout)
+		}
+		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, IdempotencyKey: step.IdempotencyKey, At: now()})
+		last = a.Execute(stepCtx, stepInput)
+		cancel()
+		appendEvents(last.Events)
+		lastErr = last.Error
+		if lastErr == nil && step.Timeout > 0 && stepCtx.Err() != nil {
+			lastErr = stepCtx.Err()
+			last.Error = lastErr
+		}
+		if lastErr == nil {
+			if err := validateActionValue(a.Spec().Output, last.Data, "output"); err != nil {
+				lastErr = fmt.Errorf("workflow %q step %q invalid output: %w", def.Name, step.ID, err)
+				last.Error = lastErr
+			}
+		}
+		if lastErr == nil {
+			emit(StepCompleted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Output: valueRefFor(last.Data), IdempotencyKey: step.IdempotencyKey, At: now()})
+			return last, false, nil
+		}
+		emit(StepFailed{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, Error: lastErr.Error(), IdempotencyKey: step.IdempotencyKey, At: now()})
+		if err := ctx.Err(); err != nil {
+			return last, false, err
+		}
+		if attempt < maxAttempts && step.Retry.Backoff > 0 {
+			select {
+			case <-ctx.Done():
+				return last, false, ctx.Err()
+			case <-time.After(step.Retry.Backoff):
+			}
+		}
+	}
+	return last, false, fmt.Errorf("workflow %q step %q failed: %w", def.Name, step.ID, lastErr)
 }
 
 func stepInput(step Step, initial any, results map[string]action.Result) any {
+	if step.InputMap != nil {
+		out := make(map[string]any, len(step.InputMap))
+		for key, expr := range step.InputMap {
+			out[key] = resolveInputExpression(expr, initial, results)
+		}
+		return out
+	}
+	if step.InputTemplate != nil {
+		return renderInputTemplate(step.InputTemplate, initial, results)
+	}
 	if step.Input != nil {
-		return step.Input
+		return renderInputTemplate(step.Input, initial, results)
 	}
 	switch len(step.DependsOn) {
 	case 0:
@@ -332,6 +564,125 @@ func stepInput(step Step, initial any, results map[string]action.Result) any {
 		}
 		return in
 	}
+}
+
+func conditionMatches(condition Condition, results map[string]action.Result) bool {
+	if condition.StepID == "" {
+		return true
+	}
+	res, ok := results[condition.StepID]
+	matched := ok
+	if condition.Exists {
+		matched = ok && res.Data != nil
+	}
+	if condition.Equals != nil {
+		matched = ok && reflect.DeepEqual(res.Data, condition.Equals)
+	}
+	if condition.Not {
+		return !matched
+	}
+	return matched
+}
+
+func renderInputTemplate(template any, initial any, results map[string]action.Result) any {
+	switch v := template.(type) {
+	case string:
+		return renderTemplateString(v, initial, results)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = renderInputTemplate(item, initial, results)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			out[key] = renderInputTemplate(item, initial, results)
+		}
+		return out
+	default:
+		return template
+	}
+}
+
+func renderTemplateString(template string, initial any, results map[string]action.Result) any {
+	trimmed := strings.TrimSpace(template)
+	if strings.HasPrefix(trimmed, "{{") && strings.HasSuffix(trimmed, "}}") && strings.Count(trimmed, "{{") == 1 {
+		return resolveInputExpression(strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}"), initial, results)
+	}
+	out := template
+	for out != "" {
+		start := strings.Index(out, "{{")
+		if start < 0 {
+			return out
+		}
+		endRel := strings.Index(out[start+2:], "}}")
+		if endRel < 0 {
+			return out
+		}
+		end := start + 2 + endRel
+		expr := strings.TrimSpace(out[start+2 : end])
+		value := fmt.Sprint(resolveInputExpression(expr, initial, results))
+		out = out[:start] + value + out[end+2:]
+	}
+	return out
+}
+
+func resolveInputExpression(expr string, initial any, results map[string]action.Result) any {
+	expr = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(expr, "$"), "."))
+	switch expr {
+	case "input":
+		return initial
+	case "":
+		return nil
+	}
+	parts := strings.Split(expr, ".")
+	if len(parts) >= 3 && parts[0] == "steps" {
+		res, ok := results[parts[1]]
+		if !ok {
+			return nil
+		}
+		switch parts[2] {
+		case "output", "data":
+			return valuePath(res.Data, parts[3:])
+		case "error":
+			if res.Error == nil {
+				return nil
+			}
+			return res.Error.Error()
+		}
+	}
+	return nil
+}
+
+func valuePath(value any, path []string) any {
+	cur := value
+	for _, part := range path {
+		switch v := cur.(type) {
+		case map[string]any:
+			cur = v[part]
+		case map[string]string:
+			cur = v[part]
+		default:
+			rv := reflect.ValueOf(cur)
+			if rv.Kind() == reflect.Struct {
+				field := rv.FieldByName(part)
+				if field.IsValid() && field.CanInterface() {
+					cur = field.Interface()
+					continue
+				}
+			}
+			return nil
+		}
+	}
+	return cur
+}
+
+func valueRefFor(value any) ValueRef {
+	if ref, ok := value.(ValueRef); ok {
+		return ref
+	}
+	return InlineValue(value)
 }
 
 func DefinitionHash(def Definition) string {
