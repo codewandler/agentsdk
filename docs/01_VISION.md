@@ -63,10 +63,10 @@ The current repository already provides the foundation for the vision:
 - `capability` and `capabilities/planner` provide attachable, event-sourced capability state.
 - `agentcontext` and `agentcontext/contextproviders` provide context managers, render records, diffs, and built-in context providers.
 - `skill` supports Agent Skills-compatible skill directories, references, repositories, and activation events.
-- `command` supports slash commands and a `command_run` tool bridge for agent-callable commands.
+- `command` supports declarative command trees, descriptors, structured execution, command results, and command-envelope projections; harness sessions expose the current `session_command` agent projection.
 - `agentdir` and `resource` load `.agents`, compatibility roots, app manifests, local/global resources, declarative git sources, and normalized contribution bundles.
 - `app` composes resource bundles, commands, plugins, tools, skills, context providers, middleware, and agent specs into running app instances.
-- `plugins/*` already define first-party plugin bundles for git, skills, tool management, vision, planner, and other concrete contribution sets. Generic “standard” plugin/tool bundles are a transitional smell: useful while bootstrapping, but not a long-term product concept.
+- `plugins/*` define first-party plugin bundles for local CLI composition, git, skills, tool management, vision, planner, and other concrete contribution sets. Generic “standard” plugin/tool bundles have been removed; named plugins own composition.
 - `terminal/cli`, `terminal/repl`, and `terminal/ui` provide the current terminal channel and `agentsdk run` experience.
 - `apps/engineer` is a practical dogfood resource bundle used as a coding/architecture/devops agent; `examples/engineer` remains as a compatibility copy during the transition.
 
@@ -309,7 +309,7 @@ A command is a human/app/channel-facing trigger surface around an action, workfl
 
 Commands should wrap actions where they perform typed work, adding command-specific metadata such as aliases, argument hints, caller policy, slash-command wiring, and channel/user visibility. Command parsing and command results are UX/channel concerns: a command may ask the channel to render text, reset or exit an interactive loop, start an agent turn from a rendered prompt, or dispatch typed work.
 
-Today `command.Command` has its own `Spec`, `Params`, and `Result`, and `command.Tool` exposes only explicitly agent-callable commands as `command_run`. `command.Tool` should continue to exist after the action migration as the deliberate agent-callable command projection and compatibility bridge. The target direction is not to delete commands, and not every command should become a model-callable tool. Instead, make executable command cores action-backed where useful while preserving command-specific policy, parsing, and channel result semantics.
+Today `command.Command` uses descriptor-first metadata, `Params`, structured `Result`, `command.Tree`, and registry-backed structured execution. Harness sessions expose agent-callable commands through the `session_command` projection plus catalog context; the older `command_run` bridge remains as a compatibility surface but should not be expanded. The target direction is not to delete commands, and not every command should become a model-callable tool. Instead, make executable command cores action-backed where useful while preserving command-specific policy, parsing, and channel result semantics.
 
 ### Channel
 
@@ -375,7 +375,7 @@ Examples:
 
 Safety should be a first-class product property, not a per-tool afterthought.
 
-agentsdk already has a foundation: tool intent, middleware hooks, cmdrisk assessment, shell intent declaration, and standard shell/tool-bundle risk analyzer configuration. The future safety layer should generalize this across tools, actions, workflows, channels, and harness policies.
+agentsdk already has a foundation: tool intent, middleware hooks, cmdrisk assessment, shell intent declaration, and local CLI/plugin-provided risk analyzer configuration. The future safety layer should generalize this across tools, actions, workflows, channels, and harness policies.
 
 agentsdk should support:
 

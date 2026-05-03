@@ -31,7 +31,7 @@ Before adding anything, recognize the reusable pieces already present:
 | `capability`, `capabilities/planner` | attachable stateful agent/session features; planner remains a capability because it is event-sourced session state plus context plus action/tool projection, not a workflow. |
 | `agentcontext` | selected context for turns and future workflow steps. |
 | `skill` | instruction/reference resources; not a workflow replacement. |
-| `command` | slash commands, caller policy, channel-result semantics, `command.Tree` for declarative subcommands/args/flags/validation/descriptors, `command.Tool` as the agent-callable projection/compatibility bridge, and possible action-backed command adapters. |
+| `command` | slash commands, caller policy, channel-result semantics, `command.Tree` for declarative subcommands/args/flags/validation/descriptors, harness `session_command` projection for agent-callable commands, and possible action-backed command adapters. |
 | `agentdir`, `resource` | datasource/workflow/action resource discovery should extend this. |
 | `app`, `plugins/*` | datasource/workflow/action registration should extend this plugin/app model. |
 | `terminal/*` | first channel; should migrate onto harness/session APIs. |
@@ -218,7 +218,7 @@ Tasks:
 7. Move middleware concepts completely to `action.*`; keep `tool` middleware as aliases/adapters during migration. ✅ action middleware exists; compatibility migration remains incremental
 8. Define `tool.Tool` as embedding or wrapping `action.Action`, adding LLM-facing concerns such as guidance, activation, provider/tool-call projection, serializable schema constraints, and transcript rendering. ✅ via action-backed tool projection
 9. Decide how `tool.Ctx`, `tool.Result`, and `tool.Intent` alias/adapt to `action.Ctx`, `action.Result`, and action intent for compatibility, while keeping tool JSON serialization/schema constraints as tool-specific projection concerns. ✅ initial aliases/adapters exist
-10. Add adapters: action-to-tool, tool-to-action for legacy tools, command-triggering-action/action-backed-command where useful, keep `command.Tool` for deliberate agent-callable command projection, and define command-result mapping for channel-triggered actions/workflows. ✅ command-triggered workflows now exist; further command/action adapters remain future refinements
+10. Add adapters: action-to-tool, tool-to-action for legacy tools, command-triggering-action/action-backed-command where useful, keep harness `session_command` as the deliberate agent-callable command projection, and define command-result mapping for channel-triggered actions/workflows. ✅ command-triggered workflows and command envelope adapters now exist; further command/action adapters remain future refinements
 11. Support Go-defined datasources, workflows, and actions first. ✅
 12. Add tests for model validation, `action.Type` construction/validation, datasource action references, step references, adapters, middleware ordering, and simple pipeline construction. ✅ initial coverage exists
 
@@ -298,7 +298,7 @@ Tasks:
 
    - prompt/model-turn action using `runtime.Engine` or `agent.Instance` initially; ✅ `agent.TurnAction` exists; app default-agent helper was removed in favor of explicit instance composition
    - legacy tool adapter action wrapping `tool.Tool` where needed;
-   - workflow-as-action adapter so commands, triggers, tools, and parent workflows can start a workflow through the action layer; ✅ initial app helper exists
+   - workflow-as-action adapter so triggers, tools, explicit action registration, and parent workflows can start a workflow through the action layer; ✅ `workflow.WorkflowAction` exists; the redundant app helper was removed
    - command trigger invoking an action or workflow where appropriate, with explicit mapping from action/workflow result to command/channel result; ✅ harness `/workflow start` command exists on the declarative command tree
    - no-op/transform action for tests.
 
@@ -443,7 +443,7 @@ Remaining command-tree follow-ups:
 ```text
 Add typed command input binding similar to action.NewTyped
 Expose output payload metadata in descriptors
-Project selected command trees into LLM-safe tool schemas where policy allows
+Project selected command trees into richer LLM-safe tool schemas only if the generic command envelope plus catalog context proves insufficient
 Add more channels over Session.ExecuteCommand instead of adding channel-specific parsers
 ```
 
@@ -709,7 +709,7 @@ Tasks:
 
 1. Remove concrete tool imports from `runtime`. ✅
 2. Move terminal-specific event rendering out of `agent` into the terminal boundary. ✅
-3. Shrink `agent.Instance` toward a compatibility façade over harness/session/runtime pieces. In progress: terminal rendering, hidden standard tools, and hidden planner factory construction moved out.
+3. Shrink `agent.Instance` toward a compatibility façade over harness/session/runtime pieces. In progress: terminal rendering, hidden standard tools, hidden planner factory construction, generic standard composition, and many pass-through public helpers have moved out or been deleted.
 4. Move default-heavy app wiring out of `app.New` where appropriate. ✅ standard tools are now host-supplied; capability factories now flow through plugin facets.
 5. Remove generic “standard” default composition. ✅ There is no context-free standard tool/plugin set; `tools/standard`, `plugins/standard`, and `agent.DefaultSpec` have been replaced by named use-case/environment plugins.
 6. Move product/environment integrations into named plugins or adapters as they are added.
@@ -737,7 +737,7 @@ Tasks:
 2. Add a host plugin factory registry so config can reference plugins by name without hardcoding active plugins in `terminal/cli`. ✅ `app.PluginFactory` is context-aware and the local CLI factory resolves built-in plugin refs.
 3. Move the fallback terminal agent out of `agent.DefaultSpec` into the local CLI plugin. ✅ moved into `plugins/localcli` as the named local CLI default agent.
 4. Replace terminal hardcoded `standard.DefaultTools`, `standard.CatalogTools`, and planner plugin activation with plugin-driven declarations plus optional CLI flags such as `--plugin` and `--no-default-plugins`. ✅
-5. Introduce named first-party plugins only where they describe a real use case or environment. In progress: `plugins/localcli` exists.
+5. Introduce named first-party plugins only where they describe a real use case or environment. In progress: `plugins/localcli` exists and first-party concrete plugins remain purpose-named.
 6. Stop using `tools/standard`/`plugins/standard`; delete them once callers are migrated. ✅
 
 Acceptance criteria:

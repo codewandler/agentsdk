@@ -208,7 +208,7 @@ Current strengths:
 - Skill references under `references/` can be activated exactly and persisted.
 - Commands support slash-command parsing, aliases, command policy, and command result semantics.
 - Command results are channel instructions: render text, run an agent turn, reset, exit, or mark handled.
-- `command.Tool` bridges only agent-callable commands through `command_run` and deliberately rejects channel-only result kinds from agent context.
+- Harness command projections expose only agent-callable session commands through `session_command` plus catalog context and deliberately reject channel-only command paths from agent context.
 
 Evolution:
 
@@ -217,7 +217,7 @@ Evolution:
 - Prefer action-backed commands for typed work, with command-specific metadata for aliases, argument hints, caller policy, slash-command wiring, and channel/user visibility.
 - Treat command parsing (`command.Params`) as UX input, not as the canonical typed action input schema.
 - Allow commands to trigger actions or workflows where useful, but keep command result semantics distinct from action execution results.
-- Keep `command.Tool` after the action migration as the explicit agent-callable command projection and compatibility bridge.
+- Keep the harness `session_command` projection as the explicit agent-callable command path. Treat the older `command_run` bridge as compatibility unless a concrete use case proves otherwise.
 - Keep agent-callable commands opt-in; do not expose reset/exit/session-control commands through LLM-facing command tools unless there is an explicit policy reason.
 
 ### App/resource/plugin composition
@@ -319,7 +319,7 @@ Current problem:
 
 - declarative spec interpretation;
 - model routing/policy;
-- standard tool bundle setup and mutable activation;
+- tool activation setup;
 - skill repository/state setup;
 - context provider setup;
 - session/thread store setup;
@@ -483,12 +483,12 @@ Workflow
 Pipeline
   workflow whose DAG is a simple sequence
 
-WorkflowAction
-  adapter that exposes a workflow as action.Action
-  useful for commands, triggers, tools, and parent workflows
+workflow.WorkflowAction
+  adapter that exposes a workflow definition as action.Action when a caller needs action-level composition
+  useful for triggers, tools, parent workflows, or explicit action registration
 
 Example: docs_refinement_loop
-  command /refine-docs triggers WorkflowAction(docs_refinement_loop)
+  command /refine-docs starts the docs_refinement_loop workflow through harness/session wiring
   steps: review_source -> challenge_docs -> identify_gaps -> propose_questions -> refine_docs -> report_summary
   each step resolves workflow.ActionRef -> action.Action
 ```
@@ -679,10 +679,10 @@ Current `harness.SessionLoadConfig` still carries `io.Writer` output because the
 | `capabilities/planner` | Keep as built-in capability and dogfood example of event-sourced session state plus context plus action/tool projection. |
 | `agentcontext` | Keep context provider/render model; reuse for workflow steps. |
 | `skill` | Keep instruction/reference resource model. |
-| `command` | Keep slash command and channel-result model; use `command.Tree` for declarative subcommands, args, flags, validation, descriptors, and structured command execution; keep `command.Tool` as the deliberate agent-callable projection/compatibility bridge; add action-backed command adapters where useful without making every command model-callable. |
+| `command` | Keep slash command and channel-result model; use `command.Tree` for declarative subcommands, args, flags, validation, descriptors, and structured command execution; prefer harness `session_command` projection for agent-callable commands; add action-backed command adapters where useful without making every command model-callable. |
 | `resource` | Extend contribution bundle with datasources/workflows/actions. |
 | `agentdir` | Extend loader for `.agents/datasources` and `.agents/workflows`. |
-| `app` | Keep composition root; add datasource/workflow/action registries; later hosted by harness. |
+| `app` | Keep composition root and resource/plugin registry host for agents, actions, datasources, workflows, commands, tools, skills, and diagnostics; hosted by harness for channel/session lifecycle. |
 | `plugins/*` | Extend plugin facets; first-party bundles should be named by concrete capability/use case/environment, not generic “standard”. |
 | `agent` | Keep spec and compatibility façade; migrate host/session duties outward. |
 | `terminal/*` | First channel over harness; render command results at terminal boundaries. |
@@ -705,7 +705,7 @@ Current cleanup work is enforcing these boundaries:
 
 Observed top-level dependency issues:
 
-1. `agent` still imports many high-level and low-level packages: runtime, runner, thread/jsonlstore, usage, skill, context providers, and llmadapter routing. It no longer imports terminal UI, concrete planner construction, or the standard tool bundle; terminal rendering is attached through event handler factories and hosts pass explicit tools/capability registries.
+1. `agent` still imports many high-level and low-level packages: runtime, runner, thread/jsonlstore, usage, skill, context providers, and llmadapter routing. It no longer imports terminal UI, concrete planner construction, or any standard/default tool bundle; terminal rendering is attached through event handler factories and hosts pass explicit tools/capability registries.
 2. `runtime` no longer imports concrete model-callable tool packages such as `tools/skills` or `tools/toolmgmt`; tool and skill activation state is injected through neutral state-owner packages.
 3. `terminal` no longer imports generic standard bundles or concrete planner plugin wiring for defaults. It selects the named `local_cli` default plugin policy, but harness owns generic plugin-ref resolution and plugin application during session load. Terminal accepts manifest/CLI plugin refs and can disable default plugins with `--no-default-plugins`.
 4. `app` no longer imports generic standard bundles; app hosts/plugins provide default and catalog tools explicitly, and capability factories now flow through plugin facets.
