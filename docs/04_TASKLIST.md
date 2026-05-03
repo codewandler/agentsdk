@@ -4,12 +4,12 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 0. Immediate checkpoint / dogfood readiness
 
-- [ ] Run `agentsdk run .` manually against a local app/default local CLI path.
-- [ ] Run `agentsdk run . /session info` and verify output renders.
-- [ ] Run `agentsdk run . /workflow list` and verify output renders.
-- [ ] Run `agentsdk run . /workflow start <name> [input]` and capture a run ID.
-- [ ] Run `agentsdk run . /workflow runs` and verify the started run appears.
-- [ ] Run `agentsdk run . /workflow run <run-id>` and verify detail output.
+- [x] Run `agentsdk run .` manually against a local app/default local CLI path.
+- [x] Run `agentsdk run . /session info` and verify output renders.
+- [x] Run `agentsdk run . /workflow list` and verify output renders.
+- [x] Run `agentsdk run . /workflow start <name> [input]` and capture a run ID.
+- [x] Run `agentsdk run . /workflow runs` and verify the started run appears.
+- [x] Run `agentsdk run . /workflow run <run-id>` and verify detail output.
 - [x] Verify default local CLI plugin loads.
 - [x] Verify `--no-default-plugins` disables default local CLI composition.
 - [x] Verify explicit plugin refs still work.
@@ -20,7 +20,7 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Verify app manifest plugin refs load.
 - [x] Verify resource-backed agent specs load.
 - [x] Verify resource-backed workflows load.
-- [ ] Decide whether the current refactored state is stable enough for daily dogfood use.
+- [x] Decide whether the current refactored state is stable enough for daily dogfood use.
 
 ## 1. Documentation / user-facing readiness
 
