@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
@@ -22,16 +24,69 @@ import (
 
 type Service struct {
 	App *app.App
+
+	mu       sync.Mutex
+	sessions map[string]*Session
+	closed   bool
 }
 
 type Session struct {
 	App    *app.App
 	Agent  *agent.Instance
+	Name   string
 	turnID int
+
+	service *Service
+	mu      sync.Mutex
+	closed  bool
+	nextSub int
+	subs    map[int]chan SessionEvent
+}
+
+// SessionOpenRequest describes a harness-owned session open/resume operation.
+// AgentName defaults to the app default agent when empty. StoreDir enables
+// thread-backed persistence; Resume may be either a session ID or JSONL path.
+type SessionOpenRequest struct {
+	Name         string
+	AgentName    string
+	StoreDir     string
+	Resume       string
+	AgentOptions []agent.Option
+}
+
+type SessionSummary struct {
+	Name         string
+	SessionID    string
+	AgentName    string
+	ThreadBacked bool
+	Closed       bool
+}
+
+type SessionEventType string
+
+const (
+	SessionEventOpened   SessionEventType = "opened"
+	SessionEventInput    SessionEventType = "input"
+	SessionEventCommand  SessionEventType = "command"
+	SessionEventWorkflow SessionEventType = "workflow"
+	SessionEventClosed   SessionEventType = "closed"
+)
+
+type SessionEvent struct {
+	Type           SessionEventType
+	SessionName    string
+	SessionID      string
+	AgentName      string
+	Input          string
+	CommandPath    []string
+	WorkflowName   string
+	CommandResult  command.Result
+	WorkflowResult action.Result
+	Error          error
 }
 
 func NewService(app *app.App) *Service {
-	return &Service{App: app}
+	return &Service{App: app, sessions: map[string]*Session{}}
 }
 
 func (s *Service) DefaultSession() (*Session, error) {
@@ -42,17 +97,138 @@ func (s *Service) DefaultSession() (*Session, error) {
 	if !ok || inst == nil {
 		return nil, fmt.Errorf("harness: no default agent configured")
 	}
-	session := &Session{App: s.App, Agent: inst}
+	return s.attachSession("", inst)
+}
+
+// OpenSession instantiates an agent and registers it as an active harness
+// session. It is the stable API for opening named sessions.
+func (s *Service) OpenSession(ctx context.Context, req SessionOpenRequest) (*Session, error) {
+	if s == nil || s.App == nil {
+		return nil, fmt.Errorf("harness: app is required")
+	}
+	if s.isClosed() {
+		return nil, fmt.Errorf("harness: service is closed")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	opts := append([]agent.Option(nil), req.AgentOptions...)
+	if req.StoreDir != "" {
+		opts = append(opts, agent.WithSessionStoreDir(req.StoreDir))
+	}
+	if req.Resume != "" {
+		opts = append(opts, agent.WithResumeSession(req.Resume))
+	}
+	var (
+		inst *agent.Instance
+		err  error
+	)
+	if strings.TrimSpace(req.AgentName) == "" {
+		inst, err = s.App.InstantiateDefaultAgent(opts...)
+	} else {
+		inst, err = s.App.InstantiateAgent(req.AgentName, opts...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.attachSession(req.Name, inst)
+}
+
+// ResumeSession is the stable API for resuming an existing persisted session by
+// ID or JSONL path. It requires Resume and otherwise follows OpenSession.
+func (s *Service) ResumeSession(ctx context.Context, req SessionOpenRequest) (*Session, error) {
+	if strings.TrimSpace(req.Resume) == "" {
+		return nil, fmt.Errorf("harness: resume session is required")
+	}
+	return s.OpenSession(ctx, req)
+}
+
+func (s *Service) attachSession(name string, inst *agent.Instance) (*Session, error) {
+	if s == nil || s.App == nil {
+		return nil, fmt.Errorf("harness: app is required")
+	}
+	if inst == nil {
+		return nil, fmt.Errorf("harness: no agent configured")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fmt.Errorf("harness: service is closed")
+	}
+	if strings.TrimSpace(name) == "" {
+		name = inst.SessionID()
+	}
+	session := &Session{App: s.App, Agent: inst, Name: name, service: s, subs: map[int]chan SessionEvent{}}
 	if err := session.AttachAgentProjection(session.AgentCommandProjection()); err != nil {
 		return nil, err
 	}
+	if s.sessions == nil {
+		s.sessions = map[string]*Session{}
+	}
+	s.sessions[name] = session
+	session.publish(SessionEvent{Type: SessionEventOpened})
 	return session, nil
+}
+
+func (s *Service) Sessions() []SessionSummary {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	sessions := make(map[string]*Session, len(s.sessions))
+	for name, session := range s.sessions {
+		sessions[name] = session
+	}
+	s.mu.Unlock()
+	names := make([]string, 0, len(sessions))
+	for name := range sessions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]SessionSummary, 0, len(names))
+	for _, name := range names {
+		out = append(out, sessions[name].summary())
+	}
+	return out
+}
+
+func (s *Service) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	s.sessions = map[string]*Session{}
+	s.closed = true
+	s.mu.Unlock()
+	for _, session := range sessions {
+		_ = session.Close()
+	}
+	return nil
+}
+
+func (s *Service) isClosed() bool {
+	if s == nil {
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 func (s *Session) Send(ctx context.Context, input string) (command.Result, error) {
 	if s == nil || s.App == nil {
 		return command.Result{}, fmt.Errorf("harness: app is required")
 	}
+	defer func() { s.publish(SessionEvent{Type: SessionEventInput, Input: input}) }()
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return command.Handled(), nil
@@ -151,7 +327,9 @@ func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[s
 	if err != nil {
 		return command.Result{}, err
 	}
-	return commands.ExecuteMap(ctx, path, input)
+	result, err := commands.ExecuteMap(ctx, path, input)
+	s.publish(SessionEvent{Type: SessionEventCommand, CommandPath: append([]string(nil), path...), CommandResult: result, Error: err})
+	return result, err
 }
 
 func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...workflow.ExecuteOption) action.Result {
@@ -163,6 +341,7 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	if recorder != nil {
 		result.Error = errors.Join(result.Error, recorder.Err())
 	}
+	s.publish(SessionEvent{Type: SessionEventWorkflow, WorkflowName: workflowName, WorkflowResult: result, Error: result.Error})
 	return result
 }
 
@@ -254,4 +433,115 @@ func (s *Session) Out() io.Writer {
 		return io.Discard
 	}
 	return s.Agent.Out()
+}
+
+func (s *Session) Subscribe(buffer int) (<-chan SessionEvent, func()) {
+	if buffer < 0 {
+		buffer = 0
+	}
+	ch := make(chan SessionEvent, buffer)
+	if s == nil {
+		close(ch)
+		return ch, func() {}
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		close(ch)
+		return ch, func() {}
+	}
+	if s.subs == nil {
+		s.subs = map[int]chan SessionEvent{}
+	}
+	id := s.nextSub
+	s.nextSub++
+	s.subs[id] = ch
+	s.mu.Unlock()
+	cancel := func() {
+		s.mu.Lock()
+		if sub, ok := s.subs[id]; ok {
+			delete(s.subs, id)
+			close(sub)
+		}
+		s.mu.Unlock()
+	}
+	return ch, cancel
+}
+
+func (s *Session) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	subs := s.subs
+	s.subs = nil
+	s.mu.Unlock()
+
+	if svc := s.service; svc != nil {
+		svc.mu.Lock()
+		if svc.sessions != nil && svc.sessions[s.Name] == s {
+			delete(svc.sessions, s.Name)
+		}
+		svc.mu.Unlock()
+	}
+
+	event := s.enrichEvent(SessionEvent{Type: SessionEventClosed})
+	for _, ch := range subs {
+		select {
+		case ch <- event:
+		default:
+		}
+		close(ch)
+	}
+	return nil
+}
+
+func (s *Session) summary() SessionSummary {
+	if s == nil {
+		return SessionSummary{}
+	}
+	info := s.Info()
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	return SessionSummary{Name: s.Name, SessionID: info.SessionID, AgentName: info.AgentName, ThreadBacked: info.ThreadBacked, Closed: closed}
+}
+
+func (s *Session) publish(event SessionEvent) {
+	if s == nil {
+		return
+	}
+	event = s.enrichEvent(event)
+	s.mu.Lock()
+	if s.closed || len(s.subs) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	subs := make([]chan SessionEvent, 0, len(s.subs))
+	for _, ch := range s.subs {
+		subs = append(subs, ch)
+	}
+	s.mu.Unlock()
+	for _, ch := range subs {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
+
+func (s *Session) enrichEvent(event SessionEvent) SessionEvent {
+	if s == nil {
+		return event
+	}
+	info := s.Info()
+	event.SessionName = s.Name
+	event.SessionID = info.SessionID
+	event.AgentName = info.AgentName
+	return event
 }

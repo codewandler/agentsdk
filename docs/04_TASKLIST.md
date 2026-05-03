@@ -72,18 +72,18 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 4. Harness/session lifecycle
 
-- [ ] Decide long-term shape of `harness.Service`.
-- [ ] Decide whether `harness.Session` should own more session open/resume behavior.
-- [ ] Decide whether `harness.Session` should own more thread lifecycle behavior.
-- [ ] Decide whether `harness.Session` should own more agent lifecycle behavior.
-- [ ] Decide whether `harness.Session` should own workflow lifecycle beyond synchronous starts.
-- [ ] Decide whether `harness.Session` should own channel event publication.
-- [ ] Add stable harness API for opening named sessions.
-- [ ] Add stable harness API for listing active sessions.
-- [ ] Add stable harness API for resuming sessions by ID/path.
-- [ ] Add stable harness API for closing/shutdown.
-- [ ] Add stable harness API for event subscriptions.
-- [ ] Move any remaining generic lifecycle out of terminal when it deletes duplication.
+- [x] Decide long-term shape of `harness.Service`.
+- [x] Decide whether `harness.Session` should own more session open/resume behavior.
+- [x] Decide whether `harness.Session` should own more thread lifecycle behavior.
+- [x] Decide whether `harness.Session` should own more agent lifecycle behavior.
+- [x] Decide whether `harness.Session` should own workflow lifecycle beyond synchronous starts.
+- [x] Decide whether `harness.Session` should own channel event publication.
+- [x] Add stable harness API for opening named sessions.
+- [x] Add stable harness API for listing active sessions.
+- [x] Add stable harness API for resuming sessions by ID/path.
+- [x] Add stable harness API for closing/shutdown.
+- [x] Add stable harness API for event subscriptions.
+- [x] Move any remaining generic lifecycle out of terminal when it deletes duplication.
 
 ## 5. Writer/output replacement design
 

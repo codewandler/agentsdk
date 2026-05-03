@@ -723,6 +723,91 @@ func TestSessionExecuteCommandReportsInvalidPathAndUnknownRoot(t *testing.T) {
 	require.Equal(t, "missing", unknown.Name)
 }
 
+func TestServiceOpenListResumeAndCloseSessions(t *testing.T) {
+	ctx := context.Background()
+	storeDir := t.TempDir()
+	application, err := app.New(app.WithAgentSpec(agent.Spec{Name: "coder"}), app.WithDefaultAgent("coder"))
+	require.NoError(t, err)
+	service := NewService(application)
+
+	first, err := service.OpenSession(ctx, SessionOpenRequest{
+		Name:         "work",
+		StoreDir:     storeDir,
+		AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "work", first.Name)
+	require.NotEmpty(t, first.SessionID())
+	require.True(t, first.Info().ThreadBacked)
+
+	summaries := service.Sessions()
+	require.Len(t, summaries, 1)
+	require.Equal(t, "work", summaries[0].Name)
+	require.Equal(t, first.SessionID(), summaries[0].SessionID)
+	require.Equal(t, "coder", summaries[0].AgentName)
+	require.True(t, summaries[0].ThreadBacked)
+
+	resumed, err := service.ResumeSession(ctx, SessionOpenRequest{
+		Name:         "resumed",
+		StoreDir:     storeDir,
+		Resume:       first.SessionID(),
+		AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())},
+	})
+	require.NoError(t, err)
+	require.Equal(t, first.SessionID(), resumed.SessionID())
+
+	summaries = service.Sessions()
+	require.Len(t, summaries, 2)
+	require.Equal(t, []string{"resumed", "work"}, []string{summaries[0].Name, summaries[1].Name})
+
+	require.NoError(t, first.Close())
+	summaries = service.Sessions()
+	require.Len(t, summaries, 1)
+	require.Equal(t, "resumed", summaries[0].Name)
+
+	require.NoError(t, service.Close())
+	require.Empty(t, service.Sessions())
+	_, err = service.OpenSession(ctx, SessionOpenRequest{AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())}})
+	require.ErrorContains(t, err, "service is closed")
+}
+
+func TestSessionSubscribePublishesCommandWorkflowAndCloseEvents(t *testing.T) {
+	ctx := context.Background()
+	application, err := app.New(
+		app.WithAgentSpec(agent.Spec{Name: "coder"}),
+		app.WithDefaultAgent("coder"),
+		app.WithWorkflows(workflow.Definition{Name: "noop_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "test.echo"}}}}),
+		app.WithActions(action.New(action.Spec{Name: "test.echo"}, func(action.Ctx, any) action.Result { return action.Result{Data: "ok"} })),
+	)
+	require.NoError(t, err)
+	service := NewService(application)
+	session, err := service.OpenSession(ctx, SessionOpenRequest{Name: "events", AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())}})
+	require.NoError(t, err)
+	events, cancel := session.Subscribe(4)
+	defer cancel()
+
+	_, err = session.ExecuteCommand(ctx, []string{"session", "info"}, nil)
+	require.NoError(t, err)
+	cmdEvent := <-events
+	require.Equal(t, SessionEventCommand, cmdEvent.Type)
+	require.Equal(t, "events", cmdEvent.SessionName)
+	require.Equal(t, []string{"session", "info"}, cmdEvent.CommandPath)
+	require.NoError(t, cmdEvent.Error)
+
+	result := session.ExecuteWorkflow(ctx, "noop_flow", "hello")
+	require.NoError(t, result.Error)
+	workflowEvent := <-events
+	require.Equal(t, SessionEventWorkflow, workflowEvent.Type)
+	require.Equal(t, "noop_flow", workflowEvent.WorkflowName)
+	require.NoError(t, workflowEvent.Error)
+
+	require.NoError(t, session.Close())
+	closeEvent := <-events
+	require.Equal(t, SessionEventClosed, closeEvent.Type)
+	_, ok := <-events
+	require.False(t, ok)
+}
+
 func requireHarnessRequestContainsText(t *testing.T, req unified.Request, want string) {
 	t.Helper()
 	for _, msg := range req.Messages {
