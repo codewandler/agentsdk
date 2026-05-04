@@ -749,9 +749,12 @@ func validateCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if jsonOutput {
-				return printValidateJSON(out, result)
+				if err := printValidateJSON(out, result); err != nil {
+					return err
+				}
+			} else {
+				printValidateText(out, result)
 			}
-			printValidateText(out, result)
 			if !result.OK() {
 				return fmt.Errorf("validation failed")
 			}

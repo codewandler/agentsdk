@@ -437,3 +437,46 @@ func writeTestFile(t *testing.T, path string, content string) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 }
+
+func TestValidatePassesValidApp(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"default_agent":"main","sources":[".agents"]}`)
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "---\nname: main\ndescription: Test\ntools: [bash]\n---\nSystem prompt.")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"validate", dir})
+	require.NoError(t, cmd.Execute())
+	require.Contains(t, out.String(), "0 errors")
+}
+
+func TestValidateFailsBrokenApp(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"name":"broken"}`)
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "# No frontmatter")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"validate", dir})
+	require.ErrorContains(t, cmd.Execute(), "validation failed")
+	require.Contains(t, out.String(), "no \"sources\" field")
+	require.Contains(t, out.String(), "no YAML frontmatter")
+}
+
+func TestValidateJSONFailsBrokenApp(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"name":"broken"}`)
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "# No frontmatter")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"validate", "--json", dir})
+	require.ErrorContains(t, cmd.Execute(), "validation failed")
+	require.Contains(t, out.String(), "\"found\": true")
+}

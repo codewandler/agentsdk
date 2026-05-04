@@ -362,9 +362,11 @@ func ScaffoldResourceApp(ctx context.Context, cfg Config, input ScaffoldResource
   "sources": [".agents"]
 }
 `
+	// Quote description for safe YAML embedding.
+	safeDesc := strings.ReplaceAll(description, `"`, `\"`)
 	agentSpec := fmt.Sprintf(`---
 name: main
-description: %s
+description: "%s"
 tools:
   - bash
   - file_read
@@ -390,7 +392,7 @@ max-steps: 100
 You are the main assistant for %s.
 
 %s
-`, description, name, description)
+`, safeDesc, name, description)
 
 	readme := fmt.Sprintf("# %s\n\n%s\n\n## Run\n\n```bash\nagentsdk validate .\nagentsdk run .\n```\n", name, description)
 

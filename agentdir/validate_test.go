@@ -3,6 +3,7 @@ package agentdir
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,25 +38,11 @@ func findCheck(result ValidationResult, category, subject string) *Check {
 
 func findCheckByMessage(result ValidationResult, substr string) *Check {
 	for _, c := range result.Checks {
-		if contains(c.Message, substr) {
+		if strings.Contains(c.Message, substr) {
 			return &c
 		}
 	}
 	return nil
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		containsStr(s, substr))
-}
-
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 func checkStatuses(result ValidationResult) map[string]int {
