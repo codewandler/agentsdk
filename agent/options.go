@@ -84,8 +84,29 @@ func WithMaxSteps(max int) Option {
 	return func(a *Instance) { a.maxSteps = max }
 }
 
-func WithOutput(w io.Writer) Option {
-	return func(a *Instance) { a.out = w }
+// Deprecated: WithOutput is no longer used. Diagnostic output is routed
+// through [WithDiagnosticHandler] and compaction events through
+// [CompactionEventHandler]. This function is a no-op retained for source
+// compatibility during the migration period.
+func WithOutput(_ io.Writer) Option { return nil }
+
+// DiagnosticHandler receives structured diagnostic messages from the agent.
+// Diagnostics replace the former fmt.Fprintf(a.Out(), ...) paths for usage
+// persistence errors and similar operational notices.
+type DiagnosticHandler func(Diagnostic)
+
+// Diagnostic is a structured operational message emitted by the agent.
+type Diagnostic struct {
+	Component string // e.g. "usage_persistence", "session"
+	Message   string
+	Error     error
+}
+
+// WithDiagnosticHandler installs a handler for structured diagnostic messages.
+// When set, the agent publishes operational notices (usage persistence errors,
+// etc.) through this handler instead of writing to an io.Writer.
+func WithDiagnosticHandler(handler DiagnosticHandler) Option {
+	return func(a *Instance) { a.diagnosticHandler = handler }
 }
 
 func WithWorkspace(dir string) Option {

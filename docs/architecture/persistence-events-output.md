@@ -359,21 +359,22 @@ lookup behavior.
 
 ### `harness.SessionLoadConfig.App.Output`
 
-Current role: passes an `io.Writer` to `agent.WithOutput` for verbose/diagnostic
-agent output.
+~~Current role: passes an `io.Writer` to `agent.WithOutput` for verbose/diagnostic
+agent output.~~
 
-Target: replace with an output sink or event subscriber once `Event`/`Sink` is a
-public package. Until then, keep the field as a compatibility bridge and document
-it as unstable.
+Done: `AppLoadConfig.Output` now flows to `SessionOpenRequest.Out` →
+`Session.out`. The session owns its terminal writer directly; it no longer
+passes a writer to the agent.
 
 ### `agent.WithOutput`
 
-Current role: writer for usage persistence diagnostics and auto-compaction
-messages.
+~~Current role: writer for usage persistence diagnostics and auto-compaction
+messages.~~
 
-Target: replace with `agent.WithOutputSink` or equivalent once the output event
-package exists. `WithOutput` should become a compatibility adapter that converts
-legacy text to diagnostic/notice events, then eventually deprecate.
+Done: `WithOutput` is deprecated (no-op). `out io.Writer` removed from
+`agent.Instance`. Usage persistence errors route through `DiagnosticHandler` →
+`SessionEventDiagnostic`. Compaction rendering deleted — events already flow
+through `CompactionEventHandler` → `SessionEventCompaction`.
 
 ### Terminal event handler writer paths
 
@@ -394,18 +395,21 @@ whether to display or redact them.
 
 ### Auto-compaction output
 
-Current role: `agent.maybeAutoCompact` writes success/failure text to
-`agent.Out()`.
+~~Current role: `agent.maybeAutoCompact` writes success/failure text to
+`agent.Out()`.~~
 
-Target: publish notice/diagnostic events with compaction metadata:
-`replaced_count`, `tokens_before`, `tokens_after`, and `tokens_saved`.
+Done: `compact_render.go` deleted. Compaction lifecycle events already flow
+through `CompactionEventHandler` → `SessionEventCompaction` with full metadata
+(`replaced_count`, `tokens_before`, `tokens_after`, `tokens_saved`). Terminal
+renderers subscribe to session events.
 
 ### Usage persistence error output
 
-Current role: verbose `fmt.Fprintf(a.Out(), ...)` for marshal/append failures.
+~~Current role: verbose `fmt.Fprintf(a.Out(), ...)` for marshal/append failures.~~
 
-Target: publish `DiagnosticPayload` with component `agent.usage_persistence` and
-error details.
+Done: usage persistence errors emit `agent.Diagnostic{Component:
+"usage_persistence", ...}` through `DiagnosticHandler` → harness publishes
+`SessionEventDiagnostic`.
 
 ## Risk logging decision
 

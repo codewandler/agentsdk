@@ -69,7 +69,6 @@ func (a *Instance) emitCompactionEvent(event CompactionEvent) {
 	if a == nil {
 		return
 	}
-	a.renderCompactionEvent(event)
 	a.compactionEventsMu.Lock()
 	handlers := make([]CompactionEventHandler, 0, len(a.compactionEvents))
 	for _, handler := range a.compactionEvents {

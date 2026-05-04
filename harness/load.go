@@ -211,6 +211,7 @@ func LoadSession(cfg SessionLoadConfig) (*LoadedSession, error) {
 	session, err := service.OpenSession(context.Background(), SessionOpenRequest{
 		StoreDir:     cfg.Session.StoreDir,
 		Resume:       cfg.Session.Resume,
+		Out:          cfg.App.Output,
 		AgentOptions: sessionAgentOptions(cfg),
 	})
 	if err != nil {
@@ -245,9 +246,6 @@ func registerSessionActions(application *app.App, inst *agent.Instance, session 
 func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	var opts []app.Option
 	appCfg := cfg.App
-	if appCfg.Output != nil {
-		opts = append(opts, app.WithAgentOptions(agent.WithOutput(appCfg.Output)))
-	}
 	if hasResourceBundle(appCfg.ResourceBundle) {
 		opts = append(opts, app.WithResourceBundle(appCfg.ResourceBundle))
 	}

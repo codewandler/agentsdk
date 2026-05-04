@@ -43,6 +43,7 @@ type Session struct {
 	service         *Service
 	threadStore     thread.Store
 	storeDir        string
+	out             io.Writer
 	mu              sync.Mutex
 	closed          bool
 	nextSub         int
@@ -58,6 +59,7 @@ type SessionOpenRequest struct {
 	AgentName    string
 	StoreDir     string
 	Resume       string
+	Out          io.Writer
 	AgentOptions []agent.Option
 }
 
@@ -86,6 +88,7 @@ const (
 	SessionEventCommand    SessionEventType = "command"
 	SessionEventWorkflow   SessionEventType = "workflow"
 	SessionEventCompaction SessionEventType = "compaction"
+	SessionEventDiagnostic SessionEventType = "diagnostic"
 	SessionEventClosed     SessionEventType = "closed"
 )
 
@@ -100,6 +103,7 @@ type SessionEvent struct {
 	CommandResult   command.Result
 	WorkflowResult  action.Result
 	CompactionEvent agent.CompactionEvent
+	Diagnostic      agent.Diagnostic
 	Error           error
 }
 
@@ -168,7 +172,7 @@ func (s *Service) OpenSession(ctx context.Context, req SessionOpenRequest) (*Ses
 	if err != nil {
 		return nil, err
 	}
-	return s.attachSession(req.Name, inst, threadStore, storeDir)
+	return s.attachSession(req.Name, inst, threadStore, storeDir, req.Out)
 }
 
 // ResumeSession is the stable API for resuming an existing persisted session by
@@ -180,7 +184,7 @@ func (s *Service) ResumeSession(ctx context.Context, req SessionOpenRequest) (*S
 	return s.OpenSession(ctx, req)
 }
 
-func (s *Service) attachSession(name string, inst *agent.Instance, store thread.Store, storeDir string) (*Session, error) {
+func (s *Service) attachSession(name string, inst *agent.Instance, store thread.Store, storeDir string, out io.Writer) (*Session, error) {
 	if s == nil || s.App == nil {
 		return nil, fmt.Errorf("harness: app is required")
 	}
@@ -200,9 +204,15 @@ func (s *Service) attachSession(name string, inst *agent.Instance, store thread.
 	if store == nil {
 		store = inst.ThreadStore()
 	}
-	session := &Session{App: s.App, Agent: inst, Name: name, service: s, threadStore: store, storeDir: storeDir, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
+	if out == nil {
+		out = io.Discard
+	}
+	session := &Session{App: s.App, Agent: inst, Name: name, service: s, threadStore: store, storeDir: storeDir, out: out, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
 	inst.AddCompactionEventHandler(func(event agent.CompactionEvent) {
 		session.publish(SessionEvent{Type: SessionEventCompaction, CompactionEvent: event})
+	})
+	inst.SetDiagnosticHandler(func(d agent.Diagnostic) {
+		session.publish(SessionEvent{Type: SessionEventDiagnostic, Diagnostic: d})
 	})
 	if err := session.AttachAgentProjection(session.AgentCommandProjection()); err != nil {
 		return nil, err
@@ -676,10 +686,10 @@ func (s *Session) Tracker() *usage.Tracker {
 }
 
 func (s *Session) Out() io.Writer {
-	if s == nil || s.Agent == nil {
+	if s == nil || s.out == nil {
 		return io.Discard
 	}
-	return s.Agent.Out()
+	return s.out
 }
 
 func (s *Session) Subscribe(buffer int) (<-chan SessionEvent, func()) {

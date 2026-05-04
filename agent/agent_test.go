@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -654,11 +653,9 @@ func TestAgentCompactionLifecycleEventsStreamSummary(t *testing.T) {
 			unified.CompletedEvent{FinishReason: unified.FinishReasonStop, MessageID: "summary"},
 		},
 	)
-	var buf bytes.Buffer
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
-		WithOutput(&buf),
 		WithSystem("system"),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
@@ -674,7 +671,15 @@ func TestAgentCompactionLifecycleEventsStreamSummary(t *testing.T) {
 	result, err := a.CompactWithOptions(ctx, CompactOptions{KeepWindow: 4})
 	require.NoError(t, err)
 	require.Equal(t, "Summary stream.", result.Summary)
-	require.Contains(t, buf.String(), "Summary stream.")
+
+	// Verify compaction events were emitted through the handler.
+	var summaryText string
+	for _, event := range events {
+		if event.Type == CompactionEventSummaryDelta {
+			summaryText += event.SummaryDelta
+		}
+	}
+	require.Contains(t, summaryText, "Summary stream.")
 
 	types := make([]CompactionEventType, 0, len(events))
 	for _, event := range events {
@@ -712,11 +717,9 @@ func TestAgentAutoCompactionTriggersAboveThreshold(t *testing.T) {
 		runnertest.TextStream(largeResponse),
 		runnertest.TextStream("Summary of conversation."),
 	)
-	var buf bytes.Buffer
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
-		WithOutput(&buf),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 		WithAutoCompaction(AutoCompactionConfig{
 			Enabled:            true,
@@ -726,11 +729,20 @@ func TestAgentAutoCompactionTriggersAboveThreshold(t *testing.T) {
 	)
 	require.NoError(t, err)
 	a.contextWindow = 100_000
+	var events []CompactionEvent
+	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
+	defer cancel()
 
 	ctx := context.Background()
 	require.NoError(t, a.RunTurn(ctx, 1, "hello"))
 	require.NoError(t, a.RunTurn(ctx, 2, "generate large"))
-	require.Contains(t, buf.String(), "auto-compaction committed")
+	var committed bool
+	for _, event := range events {
+		if event.Type == CompactionEventCommitted && event.Trigger == CompactionTriggerAuto {
+			committed = true
+		}
+	}
+	require.True(t, committed, "expected auto-compaction committed event")
 }
 
 func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
@@ -741,38 +753,48 @@ func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
 		runnertest.TextStream(largeResponse),
 		runnertest.TextStream("Summary of conversation."),
 	)
-	var buf bytes.Buffer
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
-		WithOutput(&buf),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
 	a.contextWindow = 100_000
+	var events []CompactionEvent
+	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
+	defer cancel()
 
 	ctx := context.Background()
 	require.NoError(t, a.RunTurn(ctx, 1, "hello"))
 	require.NoError(t, a.RunTurn(ctx, 2, "continue"))
 	require.NoError(t, a.RunTurn(ctx, 3, "generate large"))
-	require.Contains(t, buf.String(), "auto-compaction committed")
+	var committed bool
+	for _, event := range events {
+		if event.Type == CompactionEventCommitted && event.Trigger == CompactionTriggerAuto {
+			committed = true
+		}
+	}
+	require.True(t, committed, "expected auto-compaction committed event")
 }
 
 func TestAgentAutoCompactionCanBeDisabled(t *testing.T) {
 	largeResponse := strings.Repeat("x", 400_000)
 	client := runnertest.NewClient(runnertest.TextStream(largeResponse))
-	var buf bytes.Buffer
 	a, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
-		WithOutput(&buf),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 		WithAutoCompaction(AutoCompactionConfig{Enabled: false}),
 	)
 	require.NoError(t, err)
+	var events []CompactionEvent
+	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
+	defer cancel()
 
 	require.NoError(t, a.RunTurn(context.Background(), 1, "hello"))
-	require.NotContains(t, buf.String(), "auto-compacted")
+	for _, event := range events {
+		require.NotEqual(t, CompactionEventCommitted, event.Type, "compaction should not trigger when disabled")
+	}
 }
 
 func TestAgentAutoCompactionThresholdUsesContextWindow(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/harness"
 	"github.com/codewandler/agentsdk/plugins/localcli"
+	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
 	"github.com/spf13/cobra"
@@ -75,14 +76,7 @@ func replCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			application, err := newResearchApp()
-			if err != nil {
-				return err
-			}
-			if _, err := application.InstantiateDefaultAgent(); err != nil {
-				return err
-			}
-			session, err := harness.NewService(application).DefaultSession()
+			session, err := openResearchSession()
 			if err != nil {
 				return err
 			}
@@ -92,23 +86,27 @@ func replCmd() *cobra.Command {
 }
 
 func runOneShot(ctx context.Context, task string) error {
-	application, err := newResearchApp()
-	if err != nil {
-		return err
-	}
-	if _, err := application.InstantiateDefaultAgent(); err != nil {
-		return err
-	}
-	session, err := harness.NewService(application).DefaultSession()
+	session, err := openResearchSession()
 	if err != nil {
 		return err
 	}
 	_, err = session.Send(ctx, task)
-	if errors.Is(err, agent.ErrMaxStepsReached) {
+	if errors.Is(err, runner.ErrMaxStepsReached) {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 		return nil
 	}
 	return err
+}
+
+func openResearchSession() (*harness.Session, error) {
+	application, err := newResearchApp()
+	if err != nil {
+		return nil, err
+	}
+	service := harness.NewService(application)
+	return service.OpenSession(context.Background(), harness.SessionOpenRequest{
+		Out: os.Stdout,
+	})
 }
 
 func newResearchApp() (*app.App, error) {
@@ -127,7 +125,6 @@ func newResearchApp() (*app.App, error) {
 		app.WithPlugin(localcli.New()),
 		app.WithAgentOptions(
 			agent.WithWorkspace("."),
-			agent.WithOutput(os.Stdout),
 			agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(os.Stdout)),
 			agent.WithModelPolicy(agent.ModelPolicy{
 				UseCase: agent.ModelUseCaseAgenticCoding,

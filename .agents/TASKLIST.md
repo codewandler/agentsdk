@@ -496,6 +496,13 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Remove `harness.DefaultSession()` — all session creation goes through `OpenSession`.
 - [x] Migrate all harness tests from `DefaultSession` to `OpenSession`.
 - [x] Decouple `terminal/ui` from `agent` — move `EventHandlerContext` to `runner` package.
+- [x] Route diagnostics/compaction/usage through structured session events.
+- [x] Remove `agent.WithOutput` / `out io.Writer` from agent — deprecated (no-op).
+- [x] Delete `compact_render.go` — compaction events already flow through handler.
+- [x] Add `agent.DiagnosticHandler` + `SessionEventDiagnostic` for usage persistence errors.
+- [x] Session owns terminal writer via `SessionOpenRequest.Out`.
+- [x] Remove `agent` import from `terminal/cli/run.go` — uses `runner.ErrMaxStepsReached`.
+- [x] Fix `examples/research-desk` to use `OpenSession` (was broken by `DefaultSession` removal).
 - [x] Update `ROADMAP.md`, `99_REVIEW_AND_IMPROVEMENTS.md`, and architecture docs.
 
 ## 31. Datasource work — deferred
@@ -528,7 +535,10 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Add one end-to-end local CLI/harness test.
 - [x] Add/update quickstart.
 - [x] Update examples/apps to use blessed paths.
-- [ ] Move session/thread store ownership from `agent.Instance` to `harness.Session`.
-- [ ] Remove `app.App` live instance cache after harness owns session construction.
-- [ ] Reduce `terminal/ui` → `agent` dependency after harness event APIs exist.
+- [x] Move session/thread store ownership from `agent.Instance` to `harness.Session`.
+- [x] Remove `app.App` live instance cache after harness owns session construction.
+- [x] Reduce `terminal/ui` → `agent` dependency after harness event APIs exist.
+- [x] Route diagnostics/output through structured session/channel events.
+- [ ] Continue shrinking `agent.Instance` — context provider lifecycle, capability ownership.
+- [ ] Reduce `terminal/cli` → `agent` as spec/config types stabilize.
 - [ ] Resume deeper cleanup only where dogfooding exposes friction.

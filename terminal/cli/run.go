@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/terminal/repl"
 	"github.com/codewandler/agentsdk/terminal/ui"
 )
@@ -46,7 +46,7 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		fmt.Fprintln(out)
 		ui.PrintSessionUsage(out, loaded.Session.SessionID(), loaded.Session.Tracker().Aggregate())
-		if errors.Is(err, agent.ErrMaxStepsReached) {
+		if errors.Is(err, runner.ErrMaxStepsReached) {
 			fmt.Fprintf(errOut, "Warning: %v\n", err)
 			return nil
 		}

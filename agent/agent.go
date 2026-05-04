@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,7 +31,9 @@ import (
 	"github.com/codewandler/llmadapter/unified"
 )
 
-var ErrMaxStepsReached = errors.New("maximum steps reached")
+// ErrMaxStepsReached is returned when the agent loop exceeds the configured
+// maximum steps. It is the same sentinel as [runner.ErrMaxStepsReached].
+var ErrMaxStepsReached = runner.ErrMaxStepsReached
 
 const EventUsageRecorded thread.EventKind = "harness.usage_recorded"
 
@@ -74,7 +75,7 @@ type Instance struct {
 	toolActivation           *toolactivation.Manager
 	inference                InferenceOptions
 	maxSteps                 int
-	out                      io.Writer
+	diagnosticHandler        DiagnosticHandler
 	workspace                string
 	toolTimeout              time.Duration
 	system                   string
@@ -122,7 +123,6 @@ func New(opts ...Option) (*Instance, error) {
 	a := &Instance{
 		inference:      DefaultInferenceOptions(),
 		maxSteps:       30,
-		out:            io.Discard,
 		toolTimeout:    30 * time.Second,
 		sessionID:      sessionID,
 		sourceAPI:      adapt.ApiOpenAIResponses,
@@ -234,11 +234,23 @@ func (a *Instance) Tracker() *usage.Tracker {
 	return a.tracker
 }
 
-func (a *Instance) Out() io.Writer {
-	if a == nil || a.out == nil {
-		return io.Discard
+// SetDiagnosticHandler replaces the current diagnostic handler. It is safe to
+// call after construction (e.g. from harness session attachment).
+func (a *Instance) SetDiagnosticHandler(handler DiagnosticHandler) {
+	if a == nil {
+		return
 	}
-	return a.out
+	a.diagnosticHandler = handler
+}
+
+// emitDiagnostic publishes a structured diagnostic message through the
+// configured handler. When no handler is set, the diagnostic is silently
+// discarded.
+func (a *Instance) emitDiagnostic(d Diagnostic) {
+	if a == nil || a.diagnosticHandler == nil {
+		return
+	}
+	a.diagnosticHandler(d)
 }
 
 func (a *Instance) ParamsSummary() string {
@@ -511,9 +523,6 @@ func (a *Instance) RunTurn(ctx context.Context, turnID int, task string) error {
 		agentruntime.WithTurnProviderIdentity(a.providerIdentity),
 		agentruntime.WithTurnEventHandler(handler),
 	)
-	if errors.Is(err, runner.ErrMaxStepsReached) {
-		return ErrMaxStepsReached
-	}
 	if err != nil {
 		return fmt.Errorf("provider=%s model=%s: %w", a.resolvedProvider, a.resolvedModel, err)
 	}
@@ -1179,17 +1188,15 @@ func (a *Instance) persistUsageEvent(record usage.Record) {
 	}
 	raw, err := json.Marshal(record)
 	if err != nil {
-		if a.verbose {
-			fmt.Fprintf(a.Out(), "[usage persist: marshal error: %v]\n", err)
-		}
+		a.emitDiagnostic(Diagnostic{Component: "usage_persistence", Message: "marshal error", Error: err})
 		return
 	}
 	if err := live.Append(context.Background(), thread.Event{
 		Kind:    EventUsageRecorded,
 		Payload: raw,
 		Source:  thread.EventSource{Type: "session", SessionID: a.sessionID},
-	}); err != nil && a.verbose {
-		fmt.Fprintf(a.Out(), "[usage persist: append error: %v]\n", err)
+	}); err != nil {
+		a.emitDiagnostic(Diagnostic{Component: "usage_persistence", Message: "append error", Error: err})
 	}
 }
 

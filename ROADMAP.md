@@ -22,9 +22,12 @@ drift.
     ownership, workflow recording.
   - Do not add new façade methods unless they remove older ownership paths.
 
-- **Route diagnostics, usage, compaction, and notices through structured session/channel events**
-  - Replace `agent.WithOutput` and terminal event handler writer paths with
-    structured event publication through harness/session subscriptions.
+- ~~Route diagnostics, usage, compaction, and notices through structured session/channel events~~ ✅ Done.
+  - `agent.WithOutput` deprecated (no-op). `out io.Writer` removed from `agent.Instance`.
+  - `compact_render.go` deleted — compaction events already flow through `CompactionEventHandler`.
+  - Usage persistence errors routed through `agent.DiagnosticHandler` → `SessionEventDiagnostic`.
+  - Session owns its terminal writer via `SessionOpenRequest.Out`; `Session.Out()` no longer delegates to agent.
+  - `terminal/cli/run.go` no longer imports `agent` — uses `runner.ErrMaxStepsReached`.
 
 ## Terminal rendering
 
