@@ -14,7 +14,7 @@ Stable enough for dogfood:
 - `tool.Tool` as the LLM-facing projection surface, especially for action-backed tools.
 - `workflow` definitions/executor and harness workflow lifecycle APIs.
 - `trigger` and `daemon` for dogfood scheduling/service mode.
-- `.agents` resource layouts documented in `docs/RESOURCES.md`.
+- `.agents` resource layouts documented in `docs/reference/resources.md`.
 - `apps/engineer` and `apps/builder` as first-party dogfood apps.
 
 Unstable/internal until dogfood proves otherwise:

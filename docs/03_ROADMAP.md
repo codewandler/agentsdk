@@ -44,7 +44,7 @@ Status: complete.
 Deliverables:
 
 - `docs/01_VISION.md`
-- `docs/architecture/01_OVERVIEW.md`
+- `docs/architecture/overview.md`
 - `docs/03_ROADMAP.md`
 
 Acceptance criteria:
@@ -150,7 +150,7 @@ Tasks:
 
 4. Keep datasource/workflow loading declarative-only at first; do not require execution. ✅
 5. Update `agentsdk discover` to show discovered datasource and workflow resources. ✅
-6. Update `docs/RESOURCES.md` with the chosen datasource/workflow resource conventions and note whether they are agentsdk-specific. ✅
+6. Update `docs/reference/resources.md` with the chosen datasource/workflow resource conventions and note whether they are agentsdk-specific. ✅
 
 Acceptance criteria:
 
@@ -557,7 +557,7 @@ Acceptance criteria:
 
 Open-question checkpoint:
 
-- See [`docs/architecture/10_DAEMON_TRIGGER_SCHEDULING.md`](architecture/10_DAEMON_TRIGGER_SCHEDULING.md) for settled decisions and remaining implementation notes around CLI shape, daemon wrapper, session modes, targets, config, persistence, overlap, safety, observability, and REPL jobs.
+- See [`docs/architecture/workflows-triggers-daemon.md`](architecture/workflows-triggers-daemon.md) for settled decisions and remaining implementation notes around CLI shape, daemon wrapper, session modes, targets, config, persistence, overlap, safety, observability, and REPL jobs.
 
 Verification:
 

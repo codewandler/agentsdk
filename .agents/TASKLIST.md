@@ -472,51 +472,21 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Add `docs/README.md` as the docs index.
 - [x] Move detailed architecture aspect docs under `docs/architecture/`.
 - [x] Keep vision and roadmap top-level in `docs/`.
-- [x] Add `docs/architecture/01_OVERVIEW.md` as the architecture overview.
+- [x] Add `docs/architecture/overview.md` as the architecture overview.
 - [x] Review and document the remaining `agent` package / `agent.Instance` architecture problem.
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 
-## 29. Architecture docs review and package boundary analysis
+## 29. Architecture review and improvement consolidation
 
-- [x] Review docs from high level to low level.
-- [x] Add package-level import boundary analysis.
-- [x] Classify intended dependency layers.
-- [x] Identify package fan-in/fan-out hotspots.
-- [x] Compare package imports against architecture boundaries.
-- [x] Document suspicious edges and cleanup candidates.
+- [x] Keep architecture docs focused on current infrastructure, rules, and desired ownership.
+- [x] Keep package boundary rules in one package-boundary document.
+- [x] Consolidate review notes and improvement backlog into one `99_REVIEW_AND_IMPROVEMENTS.md` file.
+- [x] Remove separate per-area review files from the architecture index.
+- [x] Preserve package-boundary analysis findings in the consolidated review/improvement file.
 - [x] Keep this batch docs/review-only with no code changes.
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 
-## 30. App/resource/plugin composition boundary review
-
-- [x] Review `app`, `resource`, `agentdir`, and `plugins/*` imports.
-- [x] Confirm `resource` and `agentdir` remain metadata/spec loaders.
-- [x] Confirm `app` remains the reusable definition/registry composition root.
-- [x] Confirm plugins remain named app-level contribution bundles, not a harness/session/channel plugin system.
-- [x] Document that `app.App` still caching live `agent.Instance` values is a cleanup candidate.
-- [x] Keep datasource work postponed until core ownership cleanup is clearer.
-- [x] Keep this batch docs/review-only with no code changes.
-
-## 31. Harness/session/channel boundary review
-
-- [x] Review `harness`, `daemon`, `channel/*`, `terminal/*`, and `cmd/agentsdk` imports.
-- [x] Confirm `harness` remains the live session execution boundary.
-- [x] Confirm `daemon` remains a thin service/process wrapper over harness.
-- [x] Confirm HTTP/SSE remains a channel adapter over harness/session APIs.
-- [x] Document terminal direct `agent` dependency as a cleanup candidate.
-- [x] Document harness store/session ownership as a cleanup candidate.
-- [x] Keep this batch docs/review-only with no code changes.
-
-## 32. Agent/runtime boundary review
-
-- [x] Review `agent`, `runtime`, `runner`, and `runnertest` imports.
-- [x] Confirm `runner` remains the low-level model/tool turn loop.
-- [x] Confirm `runtime` remains reusable execution infrastructure and does not import app/harness/channel layers.
-- [x] Document `agent.Instance` breadth as the concentrated cleanup problem.
-- [x] Identify session/thread lifecycle, output/events, usage, and skill/capability/context state as cleanup candidates.
-- [x] Keep this batch docs/review-only with no code changes.
-
-## 33. Datasource work — deferred
+## 30. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.

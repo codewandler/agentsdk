@@ -1,6 +1,8 @@
-# Agent package and Instance boundary
+# Agent and runtime
 
-This note started as the section-3 `agent.Instance` audit from `docs/04_TASKLIST.md`.
+## Agent instance boundary
+
+This document describes the current `agent.Instance` boundary and desired cleanup direction.
 It now also records the current architecture problem after the harness/session,
 workflow, trigger, channel, persistence, and compaction boundaries became more concrete.
 
@@ -106,7 +108,7 @@ not be replaced abruptly.
 
 ## Current architecture problem after the docs split
 
-The package-level import review in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md) confirms this file's main claim: `agent.Instance` is the largest remaining ownership concentration, not because of a blocking import violation, but because too many subsystems still meet at this façade.
+The package-level import review in [`package-boundaries.md`](package-boundaries.md) confirms this file's main claim: `agent.Instance` is the largest remaining ownership concentration, not because of a blocking import violation, but because too many subsystems still meet at this façade.
 
 The earlier audit was intentionally conservative because the harness/session boundary was not yet proven. That has changed: `harness.Service`, `harness.Session`, session subscriptions, workflow lifecycle, daemon/service mode, HTTP/SSE channel hosting, trigger scheduling, thread inspection, and compaction visibility now exist.
 
@@ -157,6 +159,6 @@ Keep the cleanup incremental, but bias toward deletion over compatibility:
 
 ## Agent/runtime boundary review
 
-The docs-only review in [`30_AGENT_RUNTIME_BOUNDARY.md`](30_AGENT_RUNTIME_BOUNDARY.md) confirms that `runner` and `runtime` are already clean lower layers: neither imports `agent`, `app`, `harness`, terminal, daemon, or channel packages. The remaining issue is concentrated in `agent.Instance`, which imports runtime primitives plus session/state/persistence/output concerns.
+The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPROVEMENTS.md) confirms that `runner` and `runtime` are already clean lower layers: neither imports `agent`, `app`, `harness`, terminal, daemon, or channel packages. The remaining issue is concentrated in `agent.Instance`, which imports runtime primitives plus session/state/persistence/output concerns.
 
 The first implementation cleanup should therefore be a narrow ownership slice, not a rewrite: centralize one session/thread lifecycle responsibility in harness/session, keep tests green, and delete the old `agent.Instance` path rather than preserving a compatibility shim.
