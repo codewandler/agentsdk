@@ -67,6 +67,7 @@ func rootCmd() *cobra.Command {
 	cmd.AddCommand(serveCmd())
 	cmd.AddCommand(buildCmd())
 	cmd.AddCommand(discoverCmd())
+	cmd.AddCommand(validateCmd())
 	cmd.AddCommand(modelsCmd())
 	cmd.AddCommand(toolCmd())
 	return cmd
@@ -727,6 +728,138 @@ func discoverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&localOnly, "local", false, "Only inspect the specified workspace/path")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print machine-readable discovery output")
 	return cmd
+}
+
+func validateCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:           "validate [path]",
+		Short:         "Validate an agentsdk app directory for structural correctness",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := "."
+			if len(args) == 1 {
+				dir = args[0]
+			}
+			result, err := agentdir.Validate(dir, agentdir.ValidateOptions{})
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if jsonOutput {
+				return printValidateJSON(out, result)
+			}
+			printValidateText(out, result)
+			if !result.OK() {
+				return fmt.Errorf("validation failed")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print machine-readable validation output")
+	return cmd
+}
+
+func printValidateJSON(out io.Writer, result agentdir.ValidationResult) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
+
+func printValidateText(out io.Writer, result agentdir.ValidationResult) {
+	fmt.Fprintf(out, "Validating: %s\n\n", result.Dir)
+
+	// Manifest.
+	if result.Manifest.Found {
+		fmt.Fprintf(out, "Manifest: %s\n", result.Manifest.Path)
+		if result.Manifest.DefaultAgent != "" {
+			fmt.Fprintf(out, "  default_agent: %s\n", result.Manifest.DefaultAgent)
+		}
+		if len(result.Manifest.Sources) > 0 {
+			fmt.Fprintf(out, "  sources: %v\n", result.Manifest.Sources)
+		}
+		if result.Manifest.GlobalUserResources != nil {
+			fmt.Fprintf(out, "  include_global_user_resources: %v\n", *result.Manifest.GlobalUserResources)
+		}
+	} else {
+		fmt.Fprintln(out, "Manifest: not found")
+	}
+
+	// Agents.
+	fmt.Fprintf(out, "\nAgents: %d\n", len(result.Agents))
+	for _, a := range result.Agents {
+		frontmatter := "✗"
+		if a.HasFrontmatter {
+			frontmatter = "✓"
+		}
+		fmt.Fprintf(out, "  %s  frontmatter=%s  tools=%d  skills=%d  capabilities=%d\n",
+			a.Name, frontmatter, len(a.Tools), len(a.Skills), len(a.Capabilities))
+	}
+
+	// Skills.
+	if len(result.Skills.Local) > 0 {
+		fmt.Fprintf(out, "\nLocal skills: %v\n", result.Skills.Local)
+	}
+	if len(result.Skills.GlobalAvailable) > 0 {
+		included := "not included"
+		if result.Skills.GlobalIncluded {
+			included = "included"
+		}
+		fmt.Fprintf(out, "Global skills: %v (%s)\n", result.Skills.GlobalAvailable, included)
+	}
+	if len(result.Skills.Unresolvable) > 0 {
+		fmt.Fprintf(out, "Unresolvable skills: %v\n", result.Skills.Unresolvable)
+	}
+
+	// Resources.
+	if len(result.Workflows) > 0 {
+		fmt.Fprintf(out, "\nWorkflows: %v\n", result.Workflows)
+	}
+	if len(result.Actions) > 0 {
+		fmt.Fprintf(out, "Actions: %v\n", result.Actions)
+	}
+	if len(result.StructuredCommands) > 0 {
+		fmt.Fprintf(out, "Structured commands: %v\n", result.StructuredCommands)
+	}
+	if len(result.Commands) > 0 {
+		fmt.Fprintf(out, "Prompt commands: %v\n", result.Commands)
+	}
+	if len(result.Triggers) > 0 {
+		fmt.Fprintf(out, "Triggers: %v\n", result.Triggers)
+	}
+
+	// Checks.
+	fmt.Fprintln(out, "\nChecks:")
+	for _, c := range result.Checks {
+		icon := "✓"
+		switch c.Status {
+		case agentdir.StatusWarning:
+			icon = "⚠"
+		case agentdir.StatusError:
+			icon = "✗"
+		}
+		subject := ""
+		if c.Subject != "" {
+			subject = " [" + c.Subject + "]"
+		}
+		fmt.Fprintf(out, "  %s %s%s: %s\n", icon, c.Category, subject, c.Message)
+	}
+
+	// Summary.
+	passed, warnings, errors := 0, 0, 0
+	for _, c := range result.Checks {
+		switch c.Status {
+		case agentdir.StatusPassed:
+			passed++
+		case agentdir.StatusWarning:
+			warnings++
+		case agentdir.StatusError:
+			errors++
+		}
+	}
+	fmt.Fprintf(out, "\nResult: %d passed, %d warnings, %d errors\n", passed, warnings, errors)
 }
 
 type discoveryWriter interface {
