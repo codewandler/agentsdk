@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/conversation"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/thread"
@@ -62,16 +63,8 @@ const defaultAutoCompactionFallbackContextWindow = 100_000
 const defaultAutoCompactionContextWindowRatio = 0.85
 
 // AutoCompactionConfig controls automatic compaction between turns.
-type AutoCompactionConfig struct {
-	Enabled            bool
-	ContextWindowRatio float64 // fraction of model context window; 0 = default (0.85)
-	KeepWindow         int     // messages to preserve; 0 = default (4)
-
-	// Deprecated: absolute thresholds are no longer used. Configure
-	// ContextWindowRatio instead so compaction follows modeldb context-window
-	// metadata.
-	TokenThreshold int
-}
+// The canonical definition is in [agentconfig.AutoCompactionConfig].
+type AutoCompactionConfig = agentconfig.AutoCompactionConfig
 
 const compactionSystemPrompt = `Summarize the following conversation concisely. Preserve:
 - Key decisions and conclusions

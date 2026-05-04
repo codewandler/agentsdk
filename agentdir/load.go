@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	cmdmarkdown "github.com/codewandler/agentsdk/command/markdown"
@@ -46,15 +46,15 @@ type AutoCompactionFrontmatter struct {
 	KeepWindow         int     `yaml:"keep-window"`
 }
 
-func (fm *AutoCompactionFrontmatter) config() agent.AutoCompactionConfig {
+func (fm *AutoCompactionFrontmatter) config() agentconfig.AutoCompactionConfig {
 	if fm == nil {
-		return agent.AutoCompactionConfig{}
+		return agentconfig.AutoCompactionConfig{}
 	}
 	enabled := true
 	if fm.Enabled != nil {
 		enabled = *fm.Enabled
 	}
-	return agent.AutoCompactionConfig{
+	return agentconfig.AutoCompactionConfig{
 		Enabled:            enabled,
 		ContextWindowRatio: fm.ContextWindowRatio,
 		KeepWindow:         fm.KeepWindow,
@@ -349,7 +349,7 @@ func instructionPathsForAgentFile(file string) []string {
 }
 
 type loadedAgentSpecs struct {
-	Specs  []agent.Spec
+	Specs  []agentconfig.Spec
 	Skills []resource.SkillContribution
 }
 
@@ -392,27 +392,27 @@ func loadAgentSpecs(fsys fs.FS, dir string, source resource.SourceRef) (loadedAg
 	return out, nil
 }
 
-func ParseAgentSpec(name string, content []byte) (agent.Spec, error) {
+func ParseAgentSpec(name string, content []byte) (agentconfig.Spec, error) {
 	spec, _, err := parseAgentSpec(name, content)
 	return spec, err
 }
 
-func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, error) {
+func parseAgentSpec(name string, content []byte) (agentconfig.Spec, AgentFrontmatter, error) {
 	meta, body, err := md.Parse(strings.NewReader(string(content)))
 	if err != nil {
-		return agent.Spec{}, AgentFrontmatter{}, err
+		return agentconfig.Spec{}, AgentFrontmatter{}, err
 	}
 	fm, err := md.Bind[AgentFrontmatter](meta)
 	if err != nil {
-		return agent.Spec{}, AgentFrontmatter{}, err
+		return agentconfig.Spec{}, AgentFrontmatter{}, err
 	}
 	if err := fm.AutoCompaction.validate(); err != nil {
-		return agent.Spec{}, AgentFrontmatter{}, err
+		return agentconfig.Spec{}, AgentFrontmatter{}, err
 	}
 	if fm.Name == "" {
 		fm.Name = strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
 	}
-	inference := agent.DefaultInferenceOptions()
+	inference := agentconfig.DefaultInferenceOptions()
 	if fm.Model != "" {
 		inference.Model = fm.Model
 	}
@@ -423,12 +423,12 @@ func parseAgentSpec(name string, content []byte) (agent.Spec, AgentFrontmatter, 
 		inference.Temperature = fm.Temperature
 	}
 	if fm.Thinking != "" {
-		inference.Thinking = agent.ThinkingMode(fm.Thinking)
+		inference.Thinking = agentconfig.ThinkingMode(fm.Thinking)
 	}
 	if fm.Effort != "" {
 		inference.Effort = unified.ReasoningEffort(fm.Effort)
 	}
-	spec := agent.Spec{
+	spec := agentconfig.Spec{
 		Name:         fm.Name,
 		Description:  fm.Description,
 		System:       body,

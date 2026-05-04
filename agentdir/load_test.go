@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/resource"
@@ -209,7 +209,7 @@ func TestResolveDirManifestModelPolicy(t *testing.T) {
 	resolved, err := ResolveDir(dir)
 	require.NoError(t, err)
 	require.True(t, resolved.HasModelPolicy)
-	require.Equal(t, agent.ModelUseCaseAgenticCoding, resolved.ModelPolicy.UseCase)
+	require.Equal(t, agentconfig.ModelUseCaseAgenticCoding, resolved.ModelPolicy.UseCase)
 	require.Equal(t, "anthropic.messages", string(resolved.ModelPolicy.SourceAPI))
 	require.True(t, resolved.ModelPolicy.ApprovedOnly)
 	require.True(t, resolved.ModelPolicy.AllowDegraded)
@@ -510,7 +510,7 @@ func TestResolutionHelpers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "main", name)
 
-	err = resolved.UpdateAgentSpec("main", func(spec *agent.Spec) {
+	err = resolved.UpdateAgentSpec("main", func(spec *agentconfig.Spec) {
 		spec.MaxSteps = 42
 	})
 	require.NoError(t, err)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/harness"
@@ -36,11 +37,11 @@ type Config struct {
 	Session            string
 	ContinueLast       bool
 
-	Inference        agent.InferenceOptions
+	Inference        agentconfig.InferenceOptions
 	ApplyInference   bool
 	SourceAPI        string
 	ApplySourceAPI   bool
-	ModelPolicy      agent.ModelPolicy
+	ModelPolicy      agentconfig.ModelPolicy
 	ApplyModelPolicy bool
 	MaxSteps         int
 	ApplyMaxSteps    bool
@@ -235,7 +236,7 @@ func sourceAPIOption(cfg Config) (adapt.ApiKind, bool, error) {
 	if !cfg.ApplySourceAPI {
 		return "", false, nil
 	}
-	sourceAPI, err := agent.ParseSourceAPI(cfg.SourceAPI)
+	sourceAPI, err := agentconfig.ParseSourceAPI(cfg.SourceAPI)
 	if err != nil {
 		return "", false, err
 	}

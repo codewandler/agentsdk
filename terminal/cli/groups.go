@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -41,8 +41,8 @@ type Defaults struct {
 	ToolTimeout time.Duration
 	Prompt      string
 	SourceAPI   string
-	ModelPolicy agent.ModelPolicy
-	Thinking    agent.ThinkingMode
+	ModelPolicy agentconfig.ModelPolicy
+	Thinking    agentconfig.ThinkingMode
 	Effort      string
 	Temperature *float64
 }

@@ -3,7 +3,7 @@ package resource
 import (
 	"testing"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,8 +19,8 @@ func TestQualifiedIDPreservesURLSourceRefs(t *testing.T) {
 
 func TestRegistryFirstShortNameWins(t *testing.T) {
 	reg := NewRegistry()
-	reg.RegisterAgent(SourceRef{Ecosystem: "agents", Scope: ScopeProject}, "agents:project:reviewer#agents/reviewer.md", agent.Spec{Name: "reviewer", System: "one"})
-	reg.RegisterAgent(SourceRef{Ecosystem: "claude", Scope: ScopeProject}, "claude:project:reviewer#agents/reviewer.md", agent.Spec{Name: "reviewer", System: "two"})
+	reg.RegisterAgent(SourceRef{Ecosystem: "agents", Scope: ScopeProject}, "agents:project:reviewer#agents/reviewer.md", agentconfig.Spec{Name: "reviewer", System: "one"})
+	reg.RegisterAgent(SourceRef{Ecosystem: "claude", Scope: ScopeProject}, "claude:project:reviewer#agents/reviewer.md", agentconfig.Spec{Name: "reviewer", System: "two"})
 
 	require.Equal(t, []string{"reviewer"}, reg.AgentNames())
 	require.Len(t, reg.Diagnostics(), 1)

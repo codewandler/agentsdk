@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/action"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/runner"
@@ -33,25 +34,9 @@ var ErrMaxStepsReached = runner.ErrMaxStepsReached
 
 const EventUsageRecorded thread.EventKind = "harness.usage_recorded"
 
-// Spec describes an agent identity/configuration independent of a running
-// conversation session.
-type Spec struct {
-	Name              string
-	Description       string
-	System            string
-	Inference         InferenceOptions
-	MaxSteps          int
-	Tools             []string
-	Skills            []string
-	SkillSources      []skill.Source
-	Commands          []string
-	InstructionPaths  []string
-	ResourceID        string
-	ResourceFrom      string
-	Capabilities      []capability.AttachSpec
-	AutoCompaction    AutoCompactionConfig
-	AutoCompactionSet bool
-}
+// Spec is an agent identity/configuration independent of a running session.
+// The canonical definition is in [agentconfig.Spec].
+type Spec = agentconfig.Spec
 
 // Instance is a running session-backed agent built from a Spec and runtime
 // options.

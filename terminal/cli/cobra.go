@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/llmadapter/unified"
@@ -33,7 +34,7 @@ type CommandConfig struct {
 	Prompt             string
 	DiscoveryPolicy    resource.DiscoveryPolicy
 
-	DefaultInference      agent.InferenceOptions
+	DefaultInference      agentconfig.InferenceOptions
 	DefaultMaxSteps       int
 	DefaultToolTimeout    time.Duration
 	ApplyDefaultInference bool
@@ -54,8 +55,8 @@ type CommandConfig struct {
 func NewCommand(cfg CommandConfig) *cobra.Command {
 	cfg = applyProfileDefaults(cfg)
 	inference := cfg.DefaultInference
-	if inference == (agent.InferenceOptions{}) {
-		inference = agent.DefaultInferenceOptions()
+	if inference == (agentconfig.InferenceOptions{}) {
+		inference = agentconfig.DefaultInferenceOptions()
 	}
 	applyProfileInferenceDefaults(&inference, cfg.Profile.Defaults)
 	maxSteps := cfg.DefaultMaxSteps
@@ -92,7 +93,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		useCaseFlag = string(cfg.Profile.Defaults.ModelPolicy.UseCase)
 	}
 	if cfg.Profile.Defaults.ModelPolicy.SourceAPI != "" {
-		sourceAPIFlag = agent.FormatSourceAPI(cfg.Profile.Defaults.ModelPolicy.SourceAPI)
+		sourceAPIFlag = agentconfig.FormatSourceAPI(cfg.Profile.Defaults.ModelPolicy.SourceAPI)
 	}
 	cmd := &cobra.Command{
 		Use:           cfg.Use,
@@ -116,7 +117,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				return fmt.Errorf("cli: resources are required")
 			}
 			if thinkingFlag != "" {
-				inference.Thinking = agent.ThinkingMode(thinkingFlag)
+				inference.Thinking = agentconfig.ThinkingMode(thinkingFlag)
 			}
 			if effortFlag != "" {
 				inference.Effort = unified.ReasoningEffort(effortFlag)
@@ -131,7 +132,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				flags.Changed("model-compat-evidence")
 			if applyModelPolicy {
 				if useCaseFlag != "" {
-					useCase, err := agent.ParseModelUseCase(useCaseFlag)
+					useCase, err := agentconfig.ParseModelUseCase(useCaseFlag)
 					if err != nil {
 						return err
 					}
@@ -142,11 +143,11 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				modelPolicy.AllowUntested = allowUntested
 				modelPolicy.EvidencePath = compatEvidence
 				if modelPolicy.ApprovedOnly && modelPolicy.UseCase == "" {
-					modelPolicy.UseCase = agent.ModelUseCaseAgenticCoding
+					modelPolicy.UseCase = agentconfig.ModelUseCaseAgenticCoding
 				}
 			}
 			if flags.Changed("source-api") && applyModelPolicy {
-				sourceAPI, err := agent.ParseSourceAPI(sourceAPIFlag)
+				sourceAPI, err := agentconfig.ParseSourceAPI(sourceAPIFlag)
 				if err != nil {
 					return err
 				}
@@ -225,7 +226,7 @@ func applyProfileDefaults(cfg CommandConfig) CommandConfig {
 	return cfg
 }
 
-func applyProfileInferenceDefaults(inference *agent.InferenceOptions, defaults Defaults) {
+func applyProfileInferenceDefaults(inference *agentconfig.InferenceOptions, defaults Defaults) {
 	if inference == nil {
 		return
 	}
@@ -288,7 +289,7 @@ func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool
 	annotateFlags(cmd, GroupResources, names...)
 }
 
-func addInferenceFlags(cmd *cobra.Command, cfg CommandConfig, inference *agent.InferenceOptions, thinkingFlag *string, effortFlag *string, sourceAPIFlag *string) {
+func addInferenceFlags(cmd *cobra.Command, cfg CommandConfig, inference *agentconfig.InferenceOptions, thinkingFlag *string, effortFlag *string, sourceAPIFlag *string) {
 	if !cfg.Profile.groupEnabled(GroupInference) {
 		return
 	}

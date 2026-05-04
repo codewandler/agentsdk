@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 )
 
 type ManifestModelPolicy struct {
@@ -16,7 +16,7 @@ type ManifestModelPolicy struct {
 	EvidencePath  string `json:"evidence_path"`
 }
 
-func (p ManifestModelPolicy) AgentPolicy(baseDir string) (agent.ModelPolicy, bool, error) {
+func (p ManifestModelPolicy) AgentPolicy(baseDir string) (agentconfig.ModelPolicy, bool, error) {
 	configured := strings.TrimSpace(p.UseCase) != "" ||
 		strings.TrimSpace(p.SourceAPI) != "" ||
 		p.ApprovedOnly != nil ||
@@ -24,20 +24,20 @@ func (p ManifestModelPolicy) AgentPolicy(baseDir string) (agent.ModelPolicy, boo
 		p.AllowUntested != nil ||
 		strings.TrimSpace(p.EvidencePath) != ""
 	if !configured {
-		return agent.ModelPolicy{}, false, nil
+		return agentconfig.ModelPolicy{}, false, nil
 	}
-	var out agent.ModelPolicy
+	var out agentconfig.ModelPolicy
 	if strings.TrimSpace(p.UseCase) != "" {
-		useCase, err := agent.ParseModelUseCase(p.UseCase)
+		useCase, err := agentconfig.ParseModelUseCase(p.UseCase)
 		if err != nil {
-			return agent.ModelPolicy{}, false, err
+			return agentconfig.ModelPolicy{}, false, err
 		}
 		out.UseCase = useCase
 	}
 	if strings.TrimSpace(p.SourceAPI) != "" {
-		sourceAPI, err := agent.ParseSourceAPI(p.SourceAPI)
+		sourceAPI, err := agentconfig.ParseSourceAPI(p.SourceAPI)
 		if err != nil {
-			return agent.ModelPolicy{}, false, err
+			return agentconfig.ModelPolicy{}, false, err
 		}
 		out.SourceAPI = sourceAPI
 	}

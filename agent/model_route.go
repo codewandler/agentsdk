@@ -54,7 +54,7 @@ func (r *modelRoute) policySourceAPI() adapt.ApiKind {
 }
 
 func (r *modelRoute) applyModelPolicyWithoutAutoResult() error {
-	useCase, err := r.modelPolicy.llmUseCase()
+	useCase, err := r.modelPolicy.LLMUseCase()
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (r *modelRoute) applyModelPolicy(model string) error {
 	if !r.modelPolicy.Configured() {
 		return nil
 	}
-	useCase, err := r.modelPolicy.llmUseCase()
+	useCase, err := r.modelPolicy.LLMUseCase()
 	if err != nil {
 		return err
 	}

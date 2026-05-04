@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/adapterconfig"
 	"github.com/codewandler/llmadapter/compatibility"
@@ -15,77 +16,36 @@ import (
 //go:embed evidence/agentic_coding.json
 var embeddedAgenticCodingEvidence []byte
 
-type ModelUseCase string
+// ModelUseCase identifies a compatibility use case for model routing.
+// The canonical definition is in [agentconfig.ModelUseCase].
+type ModelUseCase = agentconfig.ModelUseCase
 
 const (
-	ModelUseCaseAgenticCoding ModelUseCase = "agentic_coding"
-	ModelUseCaseSummarization ModelUseCase = "summarization"
+	ModelUseCaseAgenticCoding = agentconfig.ModelUseCaseAgenticCoding
+	ModelUseCaseSummarization = agentconfig.ModelUseCaseSummarization
 )
 
-type ModelPolicy struct {
-	UseCase       ModelUseCase
-	SourceAPI     adapt.ApiKind
-	ApprovedOnly  bool
-	AllowDegraded bool
-	AllowUntested bool
-	EvidencePath  string
-}
+// ModelPolicy configures model compatibility routing.
+// The canonical definition is in [agentconfig.ModelPolicy].
+type ModelPolicy = agentconfig.ModelPolicy
 
-func (p ModelPolicy) Configured() bool {
-	return p.UseCase != "" ||
-		p.SourceAPI != "" ||
-		p.ApprovedOnly ||
-		p.AllowDegraded ||
-		p.AllowUntested ||
-		p.EvidencePath != ""
-}
-
-func (p ModelPolicy) llmUseCase() (compatibility.UseCase, error) {
-	if p.UseCase == "" {
-		if p.ApprovedOnly {
-			return compatibility.UseCaseAgenticCoding, nil
-		}
-		return "", nil
-	}
-	return compatibility.ParseUseCase(string(p.UseCase))
-}
-
+// ParseModelUseCase delegates to [agentconfig.ParseModelUseCase].
 func ParseModelUseCase(value string) (ModelUseCase, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", nil
-	}
-	useCase, err := compatibility.ParseUseCase(value)
-	if err != nil {
-		return "", err
-	}
-	return ModelUseCase(useCase), nil
+	return agentconfig.ParseModelUseCase(value)
 }
 
+// ParseSourceAPI delegates to [agentconfig.ParseSourceAPI].
 func ParseSourceAPI(value string) (adapt.ApiKind, error) {
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "", "auto":
-		return "", nil
-	case string(adapt.ApiOpenAIResponses):
-		return adapt.ApiOpenAIResponses, nil
-	case string(adapt.ApiOpenAIChatCompletions), "openai.chat.completions":
-		return adapt.ApiOpenAIChatCompletions, nil
-	case string(adapt.ApiAnthropicMessages):
-		return adapt.ApiAnthropicMessages, nil
-	default:
-		return "", fmt.Errorf("unknown source api %q", value)
-	}
+	return agentconfig.ParseSourceAPI(value)
 }
 
+// FormatSourceAPI delegates to [agentconfig.FormatSourceAPI].
 func FormatSourceAPI(api adapt.ApiKind) string {
-	if api == "" {
-		return "auto"
-	}
-	return string(api)
+	return agentconfig.FormatSourceAPI(api)
 }
 
 func LoadCompatibilityEvidence(policy ModelPolicy) (adapterconfig.CompatibilityEvidence, string, error) {
-	useCase, err := policy.llmUseCase()
+	useCase, err := policy.LLMUseCase()
 	if err != nil {
 		return adapterconfig.CompatibilityEvidence{}, "", err
 	}

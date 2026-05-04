@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
@@ -139,8 +139,8 @@ func localTools(opts ToolOptions, set localToolSet) []tool.Tool {
 
 // DefaultAgent returns the fallback terminal agent spec used when no app
 // resources define an agent.
-func DefaultAgent() agent.Spec {
-	return agent.Spec{
+func DefaultAgent() agentconfig.Spec {
+	return agentconfig.Spec{
 		Name:        "default",
 		Description: "Local CLI development assistant",
 		System: `You are a concise, practical software agent running in a terminal.

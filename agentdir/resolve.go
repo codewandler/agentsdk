@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/resource"
 )
 
@@ -84,7 +84,7 @@ type Resolution struct {
 	Bundle         resource.ContributionBundle
 	DefaultAgent   string
 	Manifest       *AppManifest
-	ModelPolicy    agent.ModelPolicy
+	ModelPolicy    agentconfig.ModelPolicy
 	HasModelPolicy bool
 	Sources        []string
 }
@@ -237,7 +237,7 @@ func (r Resolution) ManifestPluginRefs() []PluginRef {
 	return append([]PluginRef(nil), r.Manifest.Plugins...)
 }
 
-func (r *Resolution) UpdateAgentSpec(name string, update func(*agent.Spec)) error {
+func (r *Resolution) UpdateAgentSpec(name string, update func(*agentconfig.Spec)) error {
 	if r == nil {
 		return fmt.Errorf("agentdir: resolution is nil")
 	}

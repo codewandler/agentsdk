@@ -24,3 +24,5 @@ dist/
 bin/
 *.iml
 .codex
+
+.agentsdk

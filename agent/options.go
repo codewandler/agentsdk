@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/runner"
@@ -18,32 +19,23 @@ import (
 
 type Option func(*Instance)
 
-type ThinkingMode string
+// ThinkingMode controls extended thinking behavior.
+// The canonical definition is in [agentconfig.ThinkingMode].
+type ThinkingMode = agentconfig.ThinkingMode
 
 const (
-	ThinkingModeAuto ThinkingMode = "auto"
-	ThinkingModeOn   ThinkingMode = "on"
-	ThinkingModeOff  ThinkingMode = "off"
+	ThinkingModeAuto = agentconfig.ThinkingModeAuto
+	ThinkingModeOn   = agentconfig.ThinkingModeOn
+	ThinkingModeOff  = agentconfig.ThinkingModeOff
 )
 
 // InferenceOptions holds model request parameters.
-type InferenceOptions struct {
-	Model       string
-	MaxTokens   int
-	Thinking    ThinkingMode
-	Effort      unified.ReasoningEffort
-	Temperature float64
-}
+// The canonical definition is in [agentconfig.InferenceOptions].
+type InferenceOptions = agentconfig.InferenceOptions
 
 // DefaultInferenceOptions returns conservative defaults for a terminal agent.
 func DefaultInferenceOptions() InferenceOptions {
-	return InferenceOptions{
-		Model:       "codex/gpt-5.5",
-		MaxTokens:   16_000,
-		Thinking:    ThinkingModeAuto,
-		Effort:      unified.ReasoningEffortMedium,
-		Temperature: 0.1,
-	}
+	return agentconfig.DefaultInferenceOptions()
 }
 
 func WithInferenceOptions(opts InferenceOptions) Option {

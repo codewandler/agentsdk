@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/skill"
 )
@@ -201,7 +201,7 @@ type ContributionBundle struct {
 	ID               string
 	Name             string
 	Source           SourceRef
-	AgentSpecs       []agent.Spec
+	AgentSpecs       []agentconfig.Spec
 	Commands         []command.Command
 	Skills           []SkillContribution
 	SkillSources     []skill.Source
@@ -285,21 +285,21 @@ func escapeIDPart(s string) string {
 }
 
 type Registry struct {
-	agents      map[string]agent.Spec
-	agentIDs    map[string]agent.Spec
+	agents      map[string]agentconfig.Spec
+	agentIDs    map[string]agentconfig.Spec
 	diagnostics []Diagnostic
 }
 
 func NewRegistry() *Registry {
-	return &Registry{agents: map[string]agent.Spec{}, agentIDs: map[string]agent.Spec{}}
+	return &Registry{agents: map[string]agentconfig.Spec{}, agentIDs: map[string]agentconfig.Spec{}}
 }
 
-func (r *Registry) RegisterAgent(source SourceRef, id string, spec agent.Spec) {
+func (r *Registry) RegisterAgent(source SourceRef, id string, spec agentconfig.Spec) {
 	if r.agents == nil {
-		r.agents = map[string]agent.Spec{}
+		r.agents = map[string]agentconfig.Spec{}
 	}
 	if r.agentIDs == nil {
-		r.agentIDs = map[string]agent.Spec{}
+		r.agentIDs = map[string]agentconfig.Spec{}
 	}
 	if id != "" {
 		r.agentIDs[id] = spec
@@ -311,17 +311,17 @@ func (r *Registry) RegisterAgent(source SourceRef, id string, spec agent.Spec) {
 	r.agents[spec.Name] = spec
 }
 
-func (r *Registry) Agent(name string) (agent.Spec, bool) {
+func (r *Registry) Agent(name string) (agentconfig.Spec, bool) {
 	if r == nil {
-		return agent.Spec{}, false
+		return agentconfig.Spec{}, false
 	}
 	spec, ok := r.agents[strings.TrimSpace(name)]
 	return spec, ok
 }
 
-func (r *Registry) AgentByID(id string) (agent.Spec, bool) {
+func (r *Registry) AgentByID(id string) (agentconfig.Spec, bool) {
 	if r == nil {
-		return agent.Spec{}, false
+		return agentconfig.Spec{}, false
 	}
 	spec, ok := r.agentIDs[strings.TrimSpace(id)]
 	return spec, ok
