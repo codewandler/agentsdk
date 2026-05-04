@@ -13,12 +13,12 @@ Use the detailed aspect docs in this order when reviewing architecture from high
 1. Product and docs surface: `README.md`, `docs/README.md`, vision, roadmap, tasklist.
 2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*` ([`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md)).
 3. Harness/session/channel hosts: `harness`, `daemon`, `channel/*`, `terminal/*` ([`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md)).
-4. Agent/runtime boundary: `agent`, `runtime`, `runner`.
+4. Agent/runtime boundary: `agent`, `runtime`, `runner` ([`30_AGENT_RUNTIME_BOUNDARY.md`](30_AGENT_RUNTIME_BOUNDARY.md)).
 5. Execution primitives: `action`, `tool`, `command`, `workflow`.
 6. Persistence/state/context: `thread`, `conversation`, `agentcontext`, `capability`, `skill`.
 7. Policy/observability/memory: `safety`, `usage`, compaction paths.
 
-The package-level import review lives in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md), the app/resource/plugin composition review lives in [`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md), and the harness/session/channel review lives in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md). Their current conclusion is that there are no blocking low-level-to-host dependency violations, but `agent.Instance` remains the main fan-in/fan-out ownership problem.
+The package-level import review lives in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md), the app/resource/plugin composition review lives in [`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md), the harness/session/channel review lives in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md), and the agent/runtime review lives in [`30_AGENT_RUNTIME_BOUNDARY.md`](30_AGENT_RUNTIME_BOUNDARY.md). Their current conclusion is that there are no blocking low-level-to-host dependency violations, but `agent.Instance` remains the main fan-in/fan-out ownership problem.
 
 ## Current architecture summary
 

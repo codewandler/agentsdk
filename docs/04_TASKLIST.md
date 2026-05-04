@@ -507,7 +507,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Document harness store/session ownership as a cleanup candidate.
 - [x] Keep this batch docs/review-only with no code changes.
 
-## 32. Datasource work — deferred
+## 32. Agent/runtime boundary review
+
+- [x] Review `agent`, `runtime`, `runner`, and `runnertest` imports.
+- [x] Confirm `runner` remains the low-level model/tool turn loop.
+- [x] Confirm `runtime` remains reusable execution infrastructure and does not import app/harness/channel layers.
+- [x] Document `agent.Instance` breadth as the concentrated cleanup problem.
+- [x] Identify session/thread lifecycle, output/events, usage, and skill/capability/context state as cleanup candidates.
+- [x] Keep this batch docs/review-only with no code changes.
+
+## 33. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.

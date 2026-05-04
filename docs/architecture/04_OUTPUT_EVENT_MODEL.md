@@ -417,3 +417,7 @@ This design intentionally completes section 5 by defining the model and migratio
 contracts. It does not mechanically replace every writer call in the same slice;
 that would mix design with broad behavior changes and risk destabilizing the
 terminal dogfood path.
+
+## Agent/runtime boundary review
+
+The agent/runtime review in [`30_AGENT_RUNTIME_BOUNDARY.md`](30_AGENT_RUNTIME_BOUNDARY.md) identifies writer/output and usage side paths in `agent.Instance` as cleanup candidates. The target remains unchanged: execution code should publish typed data, while terminal, HTTP/SSE, and future UI channels render structured events/results at the boundary.

@@ -154,3 +154,9 @@ Keep the cleanup incremental, but bias toward deletion over compatibility:
 - Do not create `agentv2` or a parallel runtime package.
 - Do not move code just to make files smaller.
 - Do not start datasource expansion until this core ownership cleanup is clearer.
+
+## Agent/runtime boundary review
+
+The docs-only review in [`30_AGENT_RUNTIME_BOUNDARY.md`](30_AGENT_RUNTIME_BOUNDARY.md) confirms that `runner` and `runtime` are already clean lower layers: neither imports `agent`, `app`, `harness`, terminal, daemon, or channel packages. The remaining issue is concentrated in `agent.Instance`, which imports runtime primitives plus session/state/persistence/output concerns.
+
+The first implementation cleanup should therefore be a narrow ownership slice, not a rewrite: centralize one session/thread lifecycle responsibility in harness/session, keep tests green, and delete the old `agent.Instance` path rather than preserving a compatibility shim.
