@@ -6,19 +6,23 @@ consumer repos.
 ## Resource format references
 
 When adding or changing filesystem resource layouts for agents, commands,
-plugins, or skills, update `docs/RESOURCES.md` with the external standard or
-compatibility source being followed. Prefer established formats over new
-agentsdk-specific layouts.
+plugins, or skills, update `docs/reference/resources.md` with the external
+standard or compatibility source being followed. Prefer established formats over
+new agentsdk-specific layouts.
+
+The project is pre-1.0 and currently has no external legacy users. Prefer
+deleting stale paths over compatibility shims unless explicitly requested.
 
 ## Testing
 
-Run the full test suite before committing:
+Run the full CI check before committing or handing work back:
 
 ```bash
-go test ./...
+./scripts/ci-check.sh
 ```
 
-For focused work, run tests for the package you changed:
+This includes `go test ./...` plus repository guards. For focused work, run tests
+for the package you changed:
 
 ```bash
 go test ./runtime/...
@@ -26,24 +30,42 @@ go test ./conversation/...
 go test ./tool/...
 ```
 
-See `.agents/reviews/` for detailed review notes and follow-up recommendations.
+See `docs/architecture/99_REVIEW_AND_IMPROVEMENTS.md` for consolidated review
+notes and follow-up recommendations.
 
 ## Apps and examples
 
 The `apps/` directory contains first-party dogfood apps:
 
 - `apps/engineer/` — Resource-only coding/architecture/code-review/DevOps agent used to build agentsdk itself.
-- `apps/builder/` — Reserved for the planned `agentsdk build` builder app.
+- `apps/builder/` — First-party `agentsdk build` dogfood app.
 
 The `examples/` directory contains small instructional agent applications:
 
+- `examples/local-quickstart/` — Minimal resource-only app.
+- `examples/workflow-app/` — Declarative workflow and command exposure example.
+- `examples/command-tree/` — Markdown and YAML command examples.
+- `examples/datasource/` — Go-native datasource registry example.
+- `examples/action-tool-adapter/` — Action/tool adapter example.
 - `examples/devops-cli/` — CLI agent with custom tool wiring.
 - `examples/research-desk/` — Multi-source research agent with resource bundles.
-- `examples/release-notes-agent/` — Planned: release notes generation agent.
-- `examples/repo-maintainer/` — Planned: repository maintenance agent.
 
 When adding or changing SDK APIs, check whether an existing app or example should
 be updated to reflect the change.
+
+## Documentation structure
+
+- Root `README.md` is end-user facing only.
+- `docs/` is publishable; do not put temporary tasklists, planning logs, release
+  gates, or handoff notes there.
+- `docs/README.md` is the publishable docs index.
+- `docs/architecture/` contains stable infrastructure and ownership-rule docs.
+- Review findings and improvement backlog items belong only in
+  `docs/architecture/99_REVIEW_AND_IMPROVEMENTS.md`.
+- Temporary task tracking, readiness gates, plans, and archived internal notes
+  live under `.agents/`.
+- Prefer consolidating existing docs over adding new files. Do not add new
+  per-area architecture review logs.
 
 ## Branding: flai → agentsdk
 
@@ -102,8 +124,12 @@ design rationale.
 
 ## Cross-references
 
-- `README.md` — public API overview, runtime stack, CLI resource bundles.
+- `README.md` — public end-user overview.
 - `CHANGELOG.md` — release history and migration notes.
-- `docs/RESOURCES.md` — external format references and compatibility layouts.
+- `docs/README.md` — publishable docs index.
+- `docs/reference/resources.md` — external format references and compatibility layouts.
+- `docs/architecture/README.md` — architecture docs index.
+- `docs/architecture/99_REVIEW_AND_IMPROVEMENTS.md` — consolidated review and improvement backlog.
+- `.agents/TASKLIST.md` — temporary internal task tracking.
 - `.agents/plans/` — design plans and architecture decisions.
-- `.agents/reviews/` — detailed architecture and implementation review notes.
+- `.agents/archive/` — archived internal notes preserved outside publishable docs.
