@@ -467,9 +467,18 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Broader pre-1.0 usage is documented with quickstart and examples.
 - [x] More stable public-facing use waits for displayable/output design, async workflow lifecycle, and better examples.
 
-## 28. Datasource work — deferred
+## 28. Architecture docs and agent cleanup checkpoint
 
-- [ ] Revisit datasource work after daemon/service mode and trigger scheduling are proven.
+- [x] Add `docs/README.md` as the docs index.
+- [x] Move detailed architecture aspect docs under `docs/architecture/`.
+- [x] Keep vision and roadmap top-level in `docs/`.
+- [x] Add `docs/architecture/01_OVERVIEW.md` as the architecture overview.
+- [x] Review and document the remaining `agent` package / `agent.Instance` architecture problem.
+- [x] Keep datasource work postponed until core ownership cleanup is clearer.
+
+## 29. Datasource work — deferred
+
+- [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.
 - [ ] Flesh out datasource resource format.
 - [ ] Add datasource config schemas.

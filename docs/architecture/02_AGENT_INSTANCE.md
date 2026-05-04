@@ -1,9 +1,8 @@
-# 06 — Agent Façade Audit
+# Agent package and Instance boundary
 
-This note records the section-3 `agent.Instance` audit from `docs/04_TASKLIST.md`.
-It is intentionally conservative: `agent.Instance` remains the public façade while
-ownership seams stabilize in harness/session, runtime, context, capability, and
-output design work.
+This note started as the section-3 `agent.Instance` audit from `docs/04_TASKLIST.md`.
+It now also records the current architecture problem after the harness/session,
+workflow, trigger, channel, persistence, and compaction boundaries became more concrete.
 
 ## Current shape
 
@@ -104,3 +103,52 @@ Extract from `agent.Instance` only when one of these concrete triggers happens:
 
 Until then, `agent.Instance` should stay a façade over clearer internal helpers,
 not be replaced abruptly.
+
+## Current architecture problem after the docs split
+
+The earlier audit was intentionally conservative because the harness/session boundary was not yet proven. That has changed: `harness.Service`, `harness.Session`, session subscriptions, workflow lifecycle, daemon/service mode, HTTP/SSE channel hosting, trigger scheduling, thread inspection, and compaction visibility now exist.
+
+That means the remaining `agent.Instance` breadth is no longer just a temporary convenience. It is now the main architecture smell:
+
+- `agent` still knows too much about session/thread opening and JSONL-backed persistence.
+- `agent` still translates app/resource/plugin state into runtime construction directly.
+- `agent` owns skill activation state, capability setup, context provider setup, usage persistence, compaction, and event/output plumbing in one type.
+- `agent.Instance` is used both as a configured agent façade and as a live session/runtime holder.
+- Channels and daemon hosts increasingly want harness/session events, not direct writer/output hooks from `agent`.
+
+Because this is pre-1.0 and we are the only consumer, do not add compatibility wrappers to hide this. Prefer moving responsibilities to clearer homes and deleting stale accessors/options once the current dogfood paths compile and tests pass.
+
+## Cleanup direction
+
+The desired end state is not a second agent runtime. It is a smaller `agent` package that owns agent specification and per-agent runtime construction inputs, while live execution belongs to harness/session/runtime boundaries.
+
+Concrete ownership targets:
+
+| Responsibility currently near `agent.Instance` | Preferred owner |
+| --- | --- |
+| Agent spec normalization and model policy defaults | `agent` |
+| Low-level model/tool turn loop | `runtime` / `runner` |
+| Session open/resume/list/close and store selection | `harness.Service` / `harness.Session` |
+| Thread event persistence and replay | `thread`, with harness inspection APIs |
+| App/resource/plugin composition | `app`, `resource`, `agentdir`, named `plugins` |
+| Command/workflow/trigger dispatch | `harness`, `command`, `workflow`, `trigger` |
+| Skill activation lifecycle for live sessions | harness/session-owned state projected into agent/runtime context |
+| Capability/context provider lifecycle | session/runtime composition helpers, not terminal or app code |
+| Usage, compaction, diagnostics, output events | structured session/channel events |
+
+## Next cleanup slices
+
+Keep the cleanup incremental, but bias toward deletion over compatibility:
+
+1. **Session/thread ownership:** move JSONL store selection and open/resume helpers behind harness/session APIs, then remove direct store path knowledge from `agent` where possible.
+2. **Runtime construction seam:** split option/spec normalization from live runtime creation so harness can construct runtime state without treating `agent.Instance` as the session owner.
+3. **Skill/capability/context lifecycle:** make session-owned activation and projection state explicit; keep app/plugin registration as metadata/definitions, not live mutable state.
+4. **Output/event path:** route compaction, usage, diagnostics, command/workflow notices, and safety events through structured session events; remove writer-centric APIs once no dogfood path needs them.
+5. **Accessor deletion pass:** after the above, delete `agent.Instance` accessors/options that only exist because terminal/harness used to reach through the façade.
+
+## Non-goals
+
+- Do not keep old paths for hypothetical external users.
+- Do not create `agentv2` or a parallel runtime package.
+- Do not move code just to make files smaller.
+- Do not start datasource expansion until this core ownership cleanup is clearer.

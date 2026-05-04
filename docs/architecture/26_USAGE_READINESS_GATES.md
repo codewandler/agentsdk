@@ -47,10 +47,10 @@ These verify that the terminal default local CLI plugin path opens a harness-bac
 
 Broader pre-1.0 usage is documented through:
 
-- [`docs/05_QUICKSTART.md`](05_QUICKSTART.md)
-- [`examples/README.md`](../examples/README.md)
-- [`docs/29_RELEASE_READINESS.md`](29_RELEASE_READINESS.md)
-- first-party dogfood app docs under [`apps/engineer`](../apps/engineer) and [`apps/builder`](../apps/builder)
+- [`docs/05_QUICKSTART.md`](../05_QUICKSTART.md)
+- [`examples/README.md`](../../examples/README.md)
+- [`docs/architecture/25_RELEASE_READINESS.md`](25_RELEASE_READINESS.md)
+- first-party dogfood app docs under [`apps/engineer`](../../apps/engineer) and [`apps/builder`](../../apps/builder)
 
 ## Deferred public-facing readiness
 

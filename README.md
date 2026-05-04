@@ -459,32 +459,10 @@ Use these directly when `runtime.Agent` is too high level:
 
 - [`AGENTS.md`](AGENTS.md) — developer and AI agent notes, testing guidance, dependency process.
 - [`CHANGELOG.md`](CHANGELOG.md) — release history and migration notes.
+- [`docs/README.md`](docs/README.md) — documentation index and architecture aspect map.
 - [`docs/05_QUICKSTART.md`](docs/05_QUICKSTART.md) — refactored app/harness/CLI quickstart.
-- [`docs/06_AGENT_FACADE_AUDIT.md`](docs/06_AGENT_FACADE_AUDIT.md) — `agent.Instance` responsibility audit and extraction triggers.
-- [`docs/07_HARNESS_SESSION_LIFECYCLE.md`](docs/07_HARNESS_SESSION_LIFECYCLE.md) — harness/session lifecycle APIs and ownership decisions.
-- [`docs/08_OUTPUT_EVENT_MODEL.md`](docs/08_OUTPUT_EVENT_MODEL.md) — structured output/event model and renderer contracts.
-- [`docs/09_COMMAND_SYSTEM_FOLLOWUPS.md`](docs/09_COMMAND_SYSTEM_FOLLOWUPS.md) — command descriptor, schema/export, policy, and `session_command` follow-up decisions.
-- [`docs/10_COMMAND_RENDERING_CLEANUP.md`](docs/10_COMMAND_RENDERING_CLEANUP.md) — command result/rendering audit, generic payload decisions, and rendering coverage.
-- [`docs/11_WORKFLOW_LIFECYCLE.md`](docs/11_WORKFLOW_LIFECYCLE.md) — async workflow lifecycle, run metadata, validation, and command UX decisions.
-- [`docs/12_WORKFLOW_EXECUTION_SEMANTICS.md`](docs/12_WORKFLOW_EXECUTION_SEMANTICS.md) — workflow DAG scheduling, parallelism, retry/timeout/error policy, mapping, and replay constraints.
-- [`docs/13_ACTION_TOOL_CONVERGENCE.md`](docs/13_ACTION_TOOL_CONVERGENCE.md) — `action.Action` / `tool.Tool` boundaries, adapter policy, intent normalization, and action result contracts.
-- [`docs/14_DAEMON_TRIGGER_SCHEDULING.md`](docs/14_DAEMON_TRIGGER_SCHEDULING.md) — daemon/service mode, trigger scheduling checkpoint, and open questions.
-- [`docs/15_DAEMON_SERVICE_MODE.md`](docs/15_DAEMON_SERVICE_MODE.md) — `agentsdk serve`, daemon-as-harness-deployment ownership, storage/status conventions, and service-mode smoke coverage.
-- [`docs/16_TRIGGERS_SCHEDULING.md`](docs/16_TRIGGERS_SCHEDULING.md) — event-source/matcher/executor trigger model, interval source, daemon jobs, and scheduling conventions.
-- [`docs/17_RESOURCE_APP_MANIFESTS.md`](docs/17_RESOURCE_APP_MANIFESTS.md) — resource/app manifest follow-ups for workflows, actions, triggers, structured command resources, plugin refs, discover output, and examples.
-- [`docs/18_PLUGIN_CONTRIBUTION_MODEL.md`](docs/18_PLUGIN_CONTRIBUTION_MODEL.md) — one plugin/contribution model, session projection boundaries, and facet criteria.
-- [`docs/19_TERMINAL_CLI_POLISH.md`](docs/19_TERMINAL_CLI_POLISH.md) — terminal CLI boundary, plugin flags, model policy flags, command inspect surfaces, and workflow UX conventions.
-- [`docs/20_HTTP_SSE_AGUI_COMPATIBILITY.md`](docs/20_HTTP_SSE_AGUI_COMPATIBILITY.md) — native HTTP/SSE channel namespace, AG-UI compatibility boundary, and A2UI payload positioning.
-- [`docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md`](docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md) — context provider lifecycle, descriptors, state snapshots, and non-terminal inspection surfaces.
-- [`docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md`](docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md) — explicit capability registry ownership, projection facets, planner dogfood use, and harness inspection.
-- [`docs/23_SKILL_SYSTEM_FOLLOWUPS.md`](docs/23_SKILL_SYSTEM_FOLLOWUPS.md) — skill ownership boundary, persisted activation, reference UX, discover output, and context metadata.
-- [`docs/24_SAFETY_RISK_POLICY.md`](docs/24_SAFETY_RISK_POLICY.md) — surface-neutral safety decisions, approval boundary, risk events, audit trail, and tool compatibility bridge.
-- [`docs/25_PERSISTENCE_THREAD_MODEL.md`](docs/25_PERSISTENCE_THREAD_MODEL.md) — durable thread event foundation, event schema versions, harness event inspection, and replay coverage.
-- [`docs/26_COMPACTION_MEMORY.md`](docs/26_COMPACTION_MEMORY.md) — default-on percentage-based compaction policy, opt-out, lifecycle visibility, summary streaming, and persistence conventions.
-- [`docs/27_DISCOVER_INTROSPECTION.md`](docs/27_DISCOVER_INTROSPECTION.md) — human and machine-readable discovery output for resources, descriptors, plugins, capabilities, and diagnostics.
-- [`docs/28_BUILDER_PRODUCT.md`](docs/28_BUILDER_PRODUCT.md) — first-party builder dogfood app, `agentsdk build`, cwd project context, tester role, and safety boundaries.
-- [`docs/29_RELEASE_READINESS.md`](docs/29_RELEASE_READINESS.md) — pre-1.0 internal checkpoint boundaries, intentional breakage notes, CI guards, and release cadence.
-- [`docs/30_USAGE_READINESS_GATES.md`](docs/30_USAGE_READINESS_GATES.md) — internal dogfood readiness decision, manual checks, automated coverage, and deferred public-facing gates.
+- [`docs/architecture/01_OVERVIEW.md`](docs/architecture/01_OVERVIEW.md) — architecture overview and subsystem ownership map.
+- [`docs/architecture/02_AGENT_INSTANCE.md`](docs/architecture/02_AGENT_INSTANCE.md) — `agent` package / `agent.Instance` responsibility problem and cleanup path.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 

@@ -44,7 +44,7 @@ Status: complete.
 Deliverables:
 
 - `docs/01_VISION.md`
-- `docs/02_ARCHITECTURE.md`
+- `docs/architecture/01_OVERVIEW.md`
 - `docs/03_ROADMAP.md`
 
 Acceptance criteria:
@@ -557,7 +557,7 @@ Acceptance criteria:
 
 Open-question checkpoint:
 
-- See [`docs/14_DAEMON_TRIGGER_SCHEDULING.md`](14_DAEMON_TRIGGER_SCHEDULING.md) for settled decisions and remaining implementation notes around CLI shape, daemon wrapper, session modes, targets, config, persistence, overlap, safety, observability, and REPL jobs.
+- See [`docs/architecture/10_DAEMON_TRIGGER_SCHEDULING.md`](architecture/10_DAEMON_TRIGGER_SCHEDULING.md) for settled decisions and remaining implementation notes around CLI shape, daemon wrapper, session modes, targets, config, persistence, overlap, safety, observability, and REPL jobs.
 
 Verification:
 

@@ -1,4 +1,4 @@
-# 02 — agentsdk Architecture
+# Architecture overview
 
 ## Purpose
 
