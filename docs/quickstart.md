@@ -226,13 +226,13 @@ agentsdk run --sessions-dir .agentsdk/sessions --continue . /workflow run run_ab
 These seams are intentionally still marked unstable while the architecture is
 being shaped:
 
-- `agent.Instance` is a lifecycle façade and still owns several transitional
-  responsibilities around model policy, runtime construction, thread/session
-  opening, context setup, skill state, usage tracking, and writer output.
-- Writer output options such as `agent.WithOutput` and
-  `harness.SessionLoadConfig.App.Output` are transitional. The intended
-  direction is structured event/publication/displayable output, not arbitrary
-  writer spillage.
+- `agent.Instance` is a lifecycle façade. Model routing, spec metadata, and
+  baseline context providers have been extracted into focused types. Session
+  store ownership is in harness. Remaining session init and capability setup
+  are the next extraction candidates.
+- Diagnostic output uses structured `agent.DiagnosticHandler` →
+  `SessionEventDiagnostic`. Session owns its terminal writer via
+  `SessionOpenRequest.Out`. `agent.WithOutput` has been removed.
 - Workflow execution is currently synchronous. The run store can record and
   query runs from thread-backed sessions, but asynchronous lifecycle, queued and
   canceled states, richer metadata, pagination, and cancellation remain future

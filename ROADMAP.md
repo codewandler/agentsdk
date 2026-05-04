@@ -17,13 +17,17 @@ drift.
   - `terminal/ui` no longer imports `agent`; event handler factory uses
     `runner.EventHandlerContext` instead of `*agent.Instance`.
 
-- **Continue shrinking `agent.Instance` only when a slice deletes code**
-  - Candidate areas: context provider lifecycle, capability registry/session
-    ownership, workflow recording.
-  - Do not add new façade methods unless they remove older ownership paths.
+- ~~Continue shrinking `agent.Instance`~~ ✅ Done (current round).
+  - `WithOutput`, `WithVerbose`, `WithSessionStoreDir`, `WithSessionStorePath`
+    deleted (no legacy shims). `SessionStorePath()` moved to `harness.Session`.
+  - Baseline context provider assembly extracted into pluggable `BaselineProviderFactory`.
+  - 9 `spec*` fields replaced with single embedded `Spec`.
+  - 11 model routing fields extracted into `modelRoute` struct.
+  - Instance: 53 → 32 fields. `agent.go`: ~1200 → ~985 lines.
+  - `agent.go` no longer imports `conversation`, `adapterconfig`, `compatibility`.
 
 - ~~Route diagnostics, usage, compaction, and notices through structured session/channel events~~ ✅ Done.
-  - `agent.WithOutput` deprecated (no-op). `out io.Writer` removed from `agent.Instance`.
+  - `agent.WithOutput` and `out io.Writer` deleted from `agent.Instance`.
   - `compact_render.go` deleted — compaction events already flow through `CompactionEventHandler`.
   - Usage persistence errors routed through `agent.DiagnosticHandler` → `SessionEventDiagnostic`.
   - Session owns its terminal writer via `SessionOpenRequest.Out`; `Session.Out()` no longer delegates to agent.

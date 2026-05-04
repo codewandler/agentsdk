@@ -371,8 +371,8 @@ passes a writer to the agent.
 ~~Current role: writer for usage persistence diagnostics and auto-compaction
 messages.~~
 
-Done: `WithOutput` is deprecated (no-op). `out io.Writer` removed from
-`agent.Instance`. Usage persistence errors route through `DiagnosticHandler` →
+Done: `WithOutput` deleted. `out io.Writer` removed from `agent.Instance`.
+Usage persistence errors route through `DiagnosticHandler` →
 `SessionEventDiagnostic`. Compaction rendering deleted — events already flow
 through `CompactionEventHandler` → `SessionEventCompaction`.
 

@@ -29,23 +29,21 @@ policy. The cleanup rule for now is:
 | Runtime construction | `agent.Instance.initRuntime`, `runtimeOptions`, `baseRuntimeOptions` | Keep façade, runtime remains execution owner | `agentruntime.Engine` owns turn execution. `agent.Instance` should continue translating agent options/spec state into runtime options until harness/session owns more lifecycle. |
 | Session/thread setup | `agent.Instance.initSession`, `startPersistentSession`, `startEphemeralCapabilitySession` | Candidate for harness/session after lifecycle API lands | JSONL-backed session open/resume is real lifecycle work, but today it is not duplicated enough to justify a new abstraction. Move it only alongside stable harness open/list/resume/close APIs. |
 | Skill repository/state | `agent.Instance.initSkills`, activation methods, replay helpers | Keep in `agent` for now | Skill inventory affects materialized system prompt and context providers. It can move outward only if session lifecycle starts owning skill activation persistence. |
-| Context provider setup | `agent.Instance.runContextProviderFactories`, `contextProviders`, `initThreadRuntime` registration | Keep helper-level seam in `agent` | Context providers need per-agent state and thread-runtime registration. Current helper keeps duplicate registration out of runtime options. Revisit when app/plugin/session provider lifecycle is clarified. |
+| Context provider setup | `agent.Instance.runContextProviderFactories`, `contextProviders`, `initThreadRuntime` registration | Partially extracted | Baseline provider assembly extracted into pluggable `BaselineProviderFactory`. Plugin/extra providers still assembled in `agent.contextProviders()`. |
 | Capability registry/session setup | `agent.Instance.ensureCapabilityRegistry`, `initThreadRuntime`, capability specs in runtime options | Keep explicit and host-owned | Capabilities intentionally have no hidden default registry. Setup belongs near thread runtime because capability events are thread-backed. A new seam is useful only if harness/session owns thread runtime lifecycle. |
 | Usage tracking | `usage.Tracker` in `agent.Instance`, `recordEvent`, `persistUsageEvent`, `replayUsageEvents` | Keep until event publication model exists | Usage is sourced from runner events and persisted to thread events when available. Extract when structured event/displayable publication replaces writer/event side paths. |
-| Writer output | `WithOutput`, `Out`, verbose diagnostics, compaction/debug paths | Mark unstable; do not expand | Writer output is a known pre-1.0 seam. Do not move opportunistically. Replace after the structured output/event model is designed. |
+| ~~Writer output~~ | ~~`WithOutput`, `Out`, verbose diagnostics~~ | **Done** | `WithOutput`, `WithVerbose`, `Out()`, `verbose` deleted. Diagnostics routed through `DiagnosticHandler`. `compact_render.go` deleted. Session owns terminal writer via `SessionOpenRequest.Out`. |
 | Event handling | `newEventHandler`, `recordEvent`, optional `WithEventHandlerFactory` | Keep façade hook | The façade needs to update route/usage state before host handlers see events. Preserve this ordering. Broader event subscription belongs in harness/session lifecycle work. |
 
 ## Decisions from this audit
 
 ### Session/thread opening
 
-No extraction in this round.
-
-`initSession` still contains JSONL store knowledge (`thread/jsonlstore`) and both
-persistent and in-memory capability thread paths. That is not ideal, but moving it
-now would create an abstraction before the harness API has stable open/list/resume
-semantics. The better next owner is likely a harness/session lifecycle component
-that can also serve CLI resume and non-terminal channels.
+Partially done. JSONL store knowledge (`thread/jsonlstore`) removed from agent
+production code. Harness opens the store and passes it via `WithThreadStore`.
+`WithSessionStoreDir` and `SessionStorePath()` deleted from agent;
+`SessionStorePath()` moved to `harness.Session`. `initSession` still owns
+persistent and ephemeral capability thread paths.
 
 ### Context provider lifecycle
 
@@ -64,29 +62,17 @@ capability events. It should move only if thread runtime lifecycle moves with it
 
 ### JSONL store knowledge
 
-Keep in `agent` temporarily.
-
-Direct `threadjsonlstore.Open(...)` calls are limited to agent session open/resume
-paths. Reducing that knowledge is desirable, but the cleaner owner is the future
-harness/session lifecycle API. Introducing a separate store resolver now would add
-indirection without changing behavior.
+Done. Agent no longer imports `thread/jsonlstore`. Harness opens the store and
+passes it via `WithThreadStore`. `WithSessionStoreDir` deleted.
 
 ### Public façade/accessors
 
-Keep current public surfaces.
-
-Reviewed public accessors/options in `agent/agent.go`, `agent/options.go`,
-`agent/action.go`, and `agent/compact.go`. None are clearly stale enough to delete
-in this batch:
-
-- `SessionID`, `SessionStorePath`, and `LiveThread` are still used by harness/CLI
-  persistence and workflow run lookup paths.
-- `Tracker`, `Out`, `ParamsSummary`, `Spec`, `MaterializedSystem`, and
-  `ContextState` are still presentation/debug/introspection surfaces.
-- `RunTurn`, action-backed turn helpers, and compaction methods remain active
-  execution APIs.
-- `WithOutput` remains documented as unstable rather than removed because verbose
-  diagnostics and compaction still use it.
+Cleaned up. Deleted: `WithOutput`, `WithVerbose`, `WithSessionStoreDir`,
+`WithSessionStorePath`, `SessionStorePath()`, `Out()`. Added:
+`WithDiagnosticHandler`, `SetDiagnosticHandler`, `WithBaselineProviderFactory`.
+Remaining public surfaces (`SessionID`, `LiveThread`, `Tracker`, `ParamsSummary`,
+`Spec`, `MaterializedSystem`, `ContextState`, `RunTurn`, compaction methods) are
+all active.
 
 ## Follow-up triggers
 

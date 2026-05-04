@@ -150,9 +150,9 @@ High fan-out packages are acceptable when they are top-level hosts or explicit a
 
 - `plugins/localcli`: expected named terminal-local aggregation; must not become hidden standard composition.
 - `harness`: expected live-session coordinator; should own session lifecycle, not product policy.
-- `agent`: main architecture smell; still owns too many runtime/session/state concerns.
+- `agent`: reduced from 53 to 32 Instance fields; model routing, spec, and baseline providers extracted. Remaining session init is the next candidate.
 - `cmd/agentsdk` and `terminal/cli`: expected host/product aggregation; should stay orchestration/policy/presentation only.
-- `app`: expected composition hub; should stop caching live instances when harness/session construction can replace it.
+- `app`: expected composition hub; live instance cache removed. `InstantiateAgent` returns without caching.
 
 High fan-in packages are expected foundations or projections:
 
