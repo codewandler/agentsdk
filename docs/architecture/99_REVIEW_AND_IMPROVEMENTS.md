@@ -26,10 +26,11 @@ Current high-level dependency direction:
 5. **Tooling projection:** `tool`, `toolactivation`, `toolmw`, `tools/*`.
 6. **Execution/orchestration primitives:** `action`, `actionmw`, `command`, `workflow`.
 7. **Turn runtime:** `runtime`, `runner`.
-8. **Agent façade:** `agent`.
-9. **Composition:** `app`, `resource`, `agentdir`, `plugins/*`.
-10. **Harness/session:** `harness`, `trigger`.
-11. **Hosts/products/channels:** `cmd/agentsdk`, `terminal/*`, `daemon`, `channel/*`, `apps/*`, `examples/*`.
+8. **Agent config:** `agentconfig` (pure spec/config types, no runtime).
+9. **Agent façade:** `agent` (re-exports `agentconfig`, owns runtime/session).
+10. **Composition:** `app`, `resource`, `agentdir`, `plugins/*`.
+11. **Harness/session:** `harness`, `trigger`.
+12. **Hosts/products/channels:** `cmd/agentsdk`, `terminal/*`, `daemon`, `channel/*`, `apps/*`, `examples/*`.
 
 This is not yet a strict acyclic architecture. Some edges are accepted while the SDK is pre-1.0 and while `action`, `workflow`, command resources, capabilities, and agent/session ownership are still settling. The cleanup rule is: do not add compatibility shims or parallel runtimes; move ownership only when doing so deletes coupling. We are the only consumers — when an API is replaced, delete the old one in the same change.
 
@@ -101,18 +102,20 @@ Rules:
 
 - `runner` must not own app composition, harness sessions, persistence store selection, terminal rendering, or channel behavior.
 - `runtime` must not import `agent`, `app`, `harness`, terminal, daemon, channel, or cmd packages.
-- `agent` may own `agent.Spec`, model/source API policy, inference defaults, and construction options.
-- Long-term live session/thread ownership should not remain concentrated in `agent.Instance`.
+- `agentconfig` owns `Spec`, `InferenceOptions`, `ModelPolicy`, `ThinkingMode`, `AutoCompactionConfig`, and parse/format helpers. These are pure config types with no runtime dependencies.
+- `agent` re-exports `agentconfig` types as aliases and owns `Option`, `Instance`, runtime construction, and turn execution.
+- Long-term live session/thread ownership should not remain concentrated in `agent.Instance`, but at 32 fields the remaining responsibilities are genuinely runtime-coupled.
 
-The main architecture problem remains `agent.Instance` breadth. It currently combines spec/options normalization, model policy, runtime construction, session IDs, skill repository/state, context providers, capability setup, usage, compaction, output hooks, and turn façade APIs. JSONL store ownership and live instance caching have been moved out.
+`agent.Instance` is now at 32 fields after extracting model routing (11 sub-fields in `modelRoute`), spec embed, baseline provider factory, JSONL store ownership, live instance caching, output/diagnostics, and config types. The remaining fields are: runtime engine, usage tracker, tool activation, inference config, session state (ID/history/thread runtime/store), skill state, capability state, context providers, event handlers, compaction pub/sub, and construction helpers. Further field extraction has diminishing returns — the remaining fields are tightly coupled to turn execution.
 
 Improvement backlog:
 
-- Split spec/config from live instance behavior.
+- ~~Split spec/config from live instance behavior.~~ Done: `agentconfig` package extracted. `resource`, `agentdir`, `plugins/localcli`, `terminal/cli/groups`, `examples/devops-cli` no longer import `agent`. `terminal/cli/cobra`, `terminal/cli/load`, `cmd/agentsdk`, `examples/research-desk` import `agentconfig` for config types alongside `agent` for runtime.
 - ~~Move JSONL store selection and open/resume lifecycle to harness/session.~~ Done.
 - ~~Move live session registry/cache ownership out of `app.App` and `agent.Instance`.~~ Done.
-- ~~Route diagnostics, usage, compaction, and notices through structured session/channel events.~~ Done: `agent.WithOutput` deprecated, `compact_render.go` deleted, usage persistence errors routed through `DiagnosticHandler` → `SessionEventDiagnostic`, session owns terminal writer.
+- ~~Route diagnostics, usage, compaction, and notices through structured session/channel events.~~ Done.
 - Make skill/capability/context activation and projection state session-aware where possible.
+- Consider defining a narrower harness→agent interface to reduce coupling surface (currently 15+ accessor methods used by harness).
 
 ### Execution primitives
 
@@ -150,7 +153,7 @@ High fan-out packages are acceptable when they are top-level hosts or explicit a
 
 - `plugins/localcli`: expected named terminal-local aggregation; must not become hidden standard composition.
 - `harness`: expected live-session coordinator; should own session lifecycle, not product policy.
-- `agent`: reduced from 53 to 32 Instance fields; model routing, spec, and baseline providers extracted. Remaining session init is the next candidate.
+- `agent`: reduced from 53 to 32 Instance fields; model routing, spec embed, baseline providers, and config types extracted to `modelRoute`, `Spec` embed, `BaselineProviderFactory`, and `agentconfig`. Further field extraction has diminishing returns.
 - `cmd/agentsdk` and `terminal/cli`: expected host/product aggregation; should stay orchestration/policy/presentation only.
 - `app`: expected composition hub; live instance cache removed. `InstantiateAgent` returns without caching.
 
@@ -167,7 +170,7 @@ High fan-in packages are expected foundations or projections:
 1. ~~Centralize harness/session thread opening and resume behavior.~~ Done.
 2. ~~Move one concrete `agent.Instance` session/thread responsibility to that harness-owned path.~~ Done.
 3. ~~Remove the old path instead of keeping compatibility fallback.~~ Done: agent no longer imports `thread/jsonlstore`.
-4. ~~Reduce terminal direct `agent` dependencies.~~ Done for `terminal/ui`; `terminal/cli` still imports `agent` for options/spec types.
+4. ~~Reduce terminal direct `agent` dependencies.~~ Done: `terminal/ui` no longer imports `agent`; `terminal/cli/groups` switched to `agentconfig`; `terminal/cli/cobra` and `terminal/cli/load` use `agentconfig` for config types, `agent` only for `Option`.
 5. ~~Move output, usage, compaction, and diagnostics toward structured session/channel events.~~ Done.
 6. ~~Re-check app live instance caching after harness owns enough runtime construction.~~ Done: cache removed.
 7. Revisit datasource runtime expansion only after at least one agent/session ownership cleanup slice has been dogfooded.

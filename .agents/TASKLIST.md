@@ -514,6 +514,10 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Extract model routing into `modelRoute` struct — 11 fields → 1 `route modelRoute` field.
 - [x] Move `selectModelForPolicy`, all policy/routing methods to `agent/model_route.go`.
 - [x] Remove `conversation`, `adapterconfig`, `compatibility` imports from `agent/agent.go`.
+- [x] Extract `agentconfig` package with `Spec`, `InferenceOptions`, `ModelPolicy`, `ThinkingMode`, `AutoCompactionConfig`, and parse/format helpers.
+- [x] `agent` re-exports all `agentconfig` types as aliases; `ModelPolicy.llmUseCase()` promoted to exported `LLMUseCase()`.
+- [x] Migrate 8 packages from `agent` to `agentconfig` for config-only imports; 6 dropped `agent` import entirely.
+- [x] Instance at 32 fields: further field extraction assessed as diminishing returns.
 
 ## 31. Datasource work — deferred
 
@@ -549,6 +553,10 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Remove `app.App` live instance cache after harness owns session construction.
 - [x] Reduce `terminal/ui` → `agent` dependency after harness event APIs exist.
 - [x] Route diagnostics/output through structured session/channel events.
-- [ ] Continue shrinking `agent.Instance` — context provider lifecycle, capability ownership.
-- [ ] Reduce `terminal/cli` → `agent` as spec/config types stabilize.
+- [x] Extract `agentconfig` package — `Spec`, `InferenceOptions`, `ModelPolicy`, `ThinkingMode`, `AutoCompactionConfig`, parse/format helpers.
+- [x] Migrate `resource`, `agentdir`, `plugins/localcli`, `terminal/cli/groups`, `examples/devops-cli` to `agentconfig` (dropped `agent` import).
+- [x] Migrate `terminal/cli/cobra`, `terminal/cli/load`, `cmd/agentsdk`, `examples/research-desk` to `agentconfig` for config types.
+- [x] Analyze Instance at 32 fields — remaining fields are genuinely runtime-coupled; further field extraction has diminishing returns.
+- [ ] Define narrower harness→agent interface to reduce coupling surface (when dogfood finds friction).
+- [ ] Make skill/capability/context activation state session-aware (when dogfood finds friction).
 - [ ] Resume deeper cleanup only where dogfooding exposes friction.

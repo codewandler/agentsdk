@@ -14,10 +14,11 @@ From lower-level to higher-level:
 4. **State and context:** `agentcontext`, `capability`, `capabilities/*`, `skill`.
 5. **Execution primitives and projections:** `action`, `actionmw`, `workflow`, `command`, `tool`, `toolactivation`, `toolmw`, `tools/*`.
 6. **Turn runtime:** `runtime`, `runner`.
-7. **Agent façade/config:** `agent`.
-8. **Composition and resource loading:** `app`, `resource`, `agentdir`, `plugins/*`.
-9. **Session/daemon orchestration:** `harness`, `trigger`, `daemon`.
-10. **Channels/products/examples:** `terminal/*`, `channel/*`, `cmd/agentsdk`, `apps/*`, `examples/*`.
+7. **Agent config:** `agentconfig` (pure spec/config types, no runtime dependencies).
+8. **Agent façade:** `agent` (re-exports `agentconfig`, owns runtime/session).
+9. **Composition and resource loading:** `app`, `resource`, `agentdir`, `plugins/*`.
+10. **Session/daemon orchestration:** `harness`, `trigger`, `daemon`.
+11. **Channels/products/examples:** `terminal/*`, `channel/*`, `cmd/agentsdk`, `apps/*`, `examples/*`.
 
 The graph is not perfectly layered yet. That is acceptable pre-1.0 as long as ownership moves toward these layers and old paths are deleted instead of preserved as compatibility shims.
 
@@ -36,9 +37,9 @@ The graph is not perfectly layered yet. That is acceptable pre-1.0 as long as ow
 
 ## Known current pressure points
 
-- `agent.Instance` still owns too many live runtime/session concerns.
-- `app.App` still caches live `agent.Instance` values.
-- `terminal/cli` and `terminal/ui` still depend directly on `agent` in places that should shrink as harness/session events mature.
+- `agent.Instance` is at 32 fields after successive extractions. The remaining fields are genuinely runtime-coupled; further field extraction has diminishing returns. A narrower harness→agent interface would reduce coupling surface.
+- ~~`app.App` still caches live `agent.Instance` values.~~ Done: cache removed.
+- ~~`terminal/ui` depends directly on `agent`.~~ Done: uses `runner.EventHandlerContext`. `terminal/cli` uses `agentconfig` for config types; only `agent.Option` requires the `agent` import.
 - `command -> tool` remains as an older projection path; prefer harness `session_command` for agent-facing command execution.
 
 See [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPROVEMENTS.md) for the consolidated review findings and cleanup backlog.

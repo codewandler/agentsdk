@@ -27,16 +27,23 @@ Already present and actively dogfooded:
 
 ### 1. Continue dogfood-driven ownership cleanup
 
-The main architecture pressure is still `agent.Instance`: it owns too much live session/runtime state. The next improvements should move one responsibility at a time toward clearer owners.
+`agent.Instance` has been reduced from 53 to 32 fields through successive extractions (model routing, spec embed, baseline providers, JSONL store ownership, live instance cache, output/diagnostics, config types). The remaining fields are genuinely runtime-coupled; further field extraction has diminishing returns.
 
-Preferred cleanup order:
+Completed cleanup:
 
-1. centralize harness/session thread opening and resume behavior;
-2. move one concrete `agent.Instance` session/thread responsibility to that harness-owned path;
-3. remove the old path instead of keeping a compatibility fallback;
-4. reduce terminal direct `agent` dependencies after equivalent harness/session APIs exist;
-5. move output, usage, compaction, and diagnostics toward structured session/channel events;
-6. re-check app live instance caching after harness owns enough runtime construction.
+1. ~~centralize harness/session thread opening and resume behavior;~~ Done.
+2. ~~move session/thread responsibility to harness-owned path;~~ Done.
+3. ~~remove old paths instead of keeping compatibility fallbacks;~~ Done.
+4. ~~reduce terminal direct `agent` dependencies;~~ Done: `terminal/ui` dropped `agent`; `terminal/cli` uses `agentconfig` for config types.
+5. ~~move output, usage, compaction, and diagnostics toward structured session/channel events;~~ Done.
+6. ~~re-check app live instance caching;~~ Done: cache removed.
+7. ~~split spec/config types from agent runtime;~~ Done: `agentconfig` package.
+
+Next candidates (diminishing returns — pick only when dogfood finds friction):
+
+- Define a narrower harness→agent interface to reduce coupling surface.
+- Make skill/capability/context activation state session-aware.
+- Revisit datasource runtime expansion after concrete case study.
 
 ### 2. Keep docs publishable
 
@@ -104,11 +111,13 @@ The following foundations are already in place:
 
 ## Next concrete work
 
-Use [`architecture/99_REVIEW_AND_IMPROVEMENTS.md`](architecture/99_REVIEW_AND_IMPROVEMENTS.md) as the active improvement backlog. The next code slice should be small and should delete coupling rather than add a new abstraction.
+Use [`architecture/99_REVIEW_AND_IMPROVEMENTS.md`](architecture/99_REVIEW_AND_IMPROVEMENTS.md) as the active improvement backlog. The agent ownership cleanup sequence is largely complete; further improvements should be dogfood-driven.
 
-Recommended first slice:
+Recommended next slices (pick when friction appears):
 
-> Move one session/thread lifecycle responsibility out of `agent.Instance` and into harness/session, keep tests green, then delete the old path.
+- Define a narrower harness→agent interface to formalize the 15+ accessor methods harness uses today.
+- Make skill/capability/context activation state session-aware where dogfood finds gaps.
+- Pick one concrete datasource case study when daemon/triggers are stable.
 
 ## Deferred work
 
