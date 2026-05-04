@@ -1,0 +1,7 @@
+name: test_target_agent
+description: Load the current project as an isolated target app and run non-destructive session checks.
+steps:
+  - id: discover
+    action: builder_discover_target
+  - id: smoke
+    action: builder_run_target_smoke

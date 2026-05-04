@@ -1,0 +1,5 @@
+name: new-app
+description: Start the builder new app workflow.
+path: [new-app]
+target:
+  workflow: new_app

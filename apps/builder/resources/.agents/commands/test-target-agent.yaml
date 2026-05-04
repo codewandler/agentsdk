@@ -1,0 +1,5 @@
+name: test-target-agent
+description: Run isolated target app smoke checks.
+path: [test-target-agent]
+target:
+  workflow: test_target_agent

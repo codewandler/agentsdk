@@ -1,0 +1,9 @@
+name: verify_app
+description: Inspect and smoke-test the current project as an agentsdk target app.
+steps:
+  - id: inspect
+    action: builder_inspect_project
+  - id: discover
+    action: builder_discover_target
+  - id: smoke
+    action: builder_run_target_smoke

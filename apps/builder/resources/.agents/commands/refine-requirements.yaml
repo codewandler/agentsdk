@@ -1,0 +1,5 @@
+name: refine-requirements
+description: Start requirements refinement for the current project.
+path: [refine-requirements]
+target:
+  workflow: refine_requirements

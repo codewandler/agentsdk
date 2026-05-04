@@ -1,0 +1,7 @@
+name: refine_requirements
+description: Inspect the current project and prepare requirements refinement context.
+steps:
+  - id: inspect
+    action: builder_inspect_project
+  - id: discover
+    action: builder_discover_target

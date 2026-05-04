@@ -24,6 +24,10 @@ func TestRootCommandRegistersRun(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, serve)
 	require.Equal(t, "serve", serve.Name())
+	build, _, err := cmd.Find([]string{"build"})
+	require.NoError(t, err)
+	require.NotNil(t, build)
+	require.Equal(t, "build", build.Name())
 	discover, _, err := cmd.Find([]string{"discover"})
 	require.NoError(t, err)
 	require.NotNil(t, discover)
@@ -78,6 +82,26 @@ func TestServeStatusRunsIntervalWorkflowTrigger(t *testing.T) {
 	require.Contains(t, text, "job cli-interval")
 	require.Contains(t, text, "target=workflow:echo_flow")
 	require.Contains(t, text, "matched=1")
+}
+
+func TestBuildCommandStartsEmbeddedBuilderFromWorkingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("/quit\n"))
+	cmd.SetArgs([]string{"build"})
+
+	require.NoError(t, cmd.Execute())
+	text := out.String()
+	require.Contains(t, text, "agentsdk builder")
+	require.Contains(t, text, "project: "+dir)
+	require.Contains(t, text, filepath.Join(dir, ".agentsdk", "builder", "sessions"))
+	require.Contains(t, text, filepath.Join(dir, ".agentsdk", "builder", "target-sessions"))
+	require.Contains(t, text, "verify_app")
 }
 
 func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {

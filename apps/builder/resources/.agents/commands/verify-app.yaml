@@ -1,0 +1,5 @@
+name: verify-app
+description: Inspect and smoke-test the current project.
+path: [verify-app]
+target:
+  workflow: verify_app

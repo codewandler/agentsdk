@@ -20,6 +20,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	builderapp "github.com/codewandler/agentsdk/apps/builder"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
@@ -63,9 +64,59 @@ func rootCmd() *cobra.Command {
 		AgentFlag:   true,
 	}))
 	cmd.AddCommand(serveCmd())
+	cmd.AddCommand(buildCmd())
 	cmd.AddCommand(discoverCmd())
 	cmd.AddCommand(modelsCmd())
 	cmd.AddCommand(toolCmd())
+	return cmd
+}
+
+func buildCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "build",
+		Short:         "Start the first-party agentsdk builder app",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			workspace, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			workspace, err = filepath.Abs(workspace)
+			if err != nil {
+				return err
+			}
+			builderCfg, err := builderapp.NormalizeConfig(builderapp.Config{ProjectDir: workspace})
+			if err != nil {
+				return err
+			}
+			appOpts, err := builderapp.AppOptions(builderCfg)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "agentsdk builder")
+			fmt.Fprintf(out, "project: %s\n", builderCfg.ProjectDir)
+			fmt.Fprintf(out, "builder_sessions: %s\n", builderCfg.SessionsDir)
+			fmt.Fprintf(out, "target_test_sessions: %s\n", builderCfg.TargetSessionsDir)
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "Try /workflow list, /workflow start verify_app, or /workflow start test_target_agent.")
+			fmt.Fprintln(out)
+			return cli.Run(cmd.Context(), cli.Config{
+				Resources:        cli.EmbeddedResources(builderapp.Resources(), builderapp.ResourcesRoot),
+				AgentName:        "builder",
+				Workspace:        builderCfg.ProjectDir,
+				SessionsDir:      builderCfg.SessionsDir,
+				NoDefaultPlugins: true,
+				AppOptions:       appOpts,
+				Prompt:           "builder> ",
+				In:               cmd.InOrStdin(),
+				Out:              out,
+				Err:              cmd.ErrOrStderr(),
+			})
+		},
+	}
 	return cmd
 }
 

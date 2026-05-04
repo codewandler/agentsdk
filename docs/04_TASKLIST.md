@@ -409,23 +409,25 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 24. Builder product
 
-- [ ] Design `agentsdk build`.
-- [ ] Make builder dogfood agentsdk itself.
-- [ ] Builder interviews users about use cases.
-- [ ] Builder generates agent specs.
-- [ ] Builder generates workflows.
-- [ ] Builder generates actions.
-- [ ] Builder generates plugins.
-- [ ] Builder generates datasources/connectors.
-- [ ] Builder generates tests.
-- [ ] Builder generates manifests.
-- [ ] Builder generates deployment assets.
-- [ ] Add resource-only app template.
-- [ ] Add hybrid app template.
-- [ ] Add full Go app template.
-- [ ] Add deployment-ready app template.
-- [ ] Add validation loop: generate, test, inspect diagnostics, refine.
-- [ ] Use workflow engine for builder steps once workflow lifecycle is stronger.
+- [x] Redesign builder as first-party dogfood app under `apps/builder`.
+- [x] Add importable builder app package with embedded builder resources.
+- [x] Add builder `agentsdk.app.json` and `.agents/` resource tree.
+- [x] Add main builder agent initialized from builder resources, not cwd resources.
+- [x] Make `agentsdk build` launch the embedded builder app from the current working directory.
+- [x] Keep current working directory as project-under-construction context.
+- [x] Add builder context provider exposing project dir, builder sessions dir, and target sessions dir.
+- [x] Add builder session storage conventions under `.agentsdk/builder/sessions`.
+- [x] Add isolated target test session storage under `.agentsdk/builder/target-sessions`.
+- [x] Add markdown skills for requirements, app architecture, SDK conventions, scaffolding, testing, and deployment guidance.
+- [x] Add constrained builder helper actions/tools for target project inspection, target discovery, scoped scaffolding, scoped file writes, and verification.
+- [x] Add target-app tester helper that loads the cwd app as isolated system under test.
+- [x] Keep builder session/runtime separate from target app test sessions.
+- [x] Add declarative workflows for new app scaffolding, requirements refinement, app verification, and target-agent smoke testing.
+- [x] Add declarative command resources that point users toward builder workflows.
+- [x] Keep product routing inside the builder app, not CLI flags/subcommands.
+- [x] Ensure `agentsdk discover apps/builder/resources` and `agentsdk discover --json apps/builder/resources` expose builder resources.
+- [x] Add smoke coverage for builder resource discovery, `agentsdk build` command wiring, and target-app tester initialization.
+- [x] Document builder architecture, cwd/project context, tester role, safety boundaries, and dogfood conventions.
 
 ## 25. Examples / dogfood apps
 

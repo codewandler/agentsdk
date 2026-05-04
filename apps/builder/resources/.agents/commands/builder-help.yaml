@@ -1,0 +1,6 @@
+name: builder-help
+description: Explain builder workflows and testing helpers.
+path: [builder, help]
+target:
+  prompt: |
+    Explain that agentsdk build starts the embedded builder app from the current working directory. List the available workflows: new_app, refine_requirements, verify_app, and test_target_agent.
