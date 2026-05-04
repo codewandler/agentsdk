@@ -205,7 +205,7 @@ func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
-	first.providerIdentity = providerIdentity
+	first.route.providerIdentity = providerIdentity
 	require.NoError(t, first.RunTurn(context.Background(), 1, "first task"))
 
 	secondClient := runnertest.NewClient(runnertest.TextStream("second response", "resp_text2"))
@@ -217,7 +217,7 @@ func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
-	second.providerIdentity = providerIdentity
+	second.route.providerIdentity = providerIdentity
 	require.NoError(t, second.RunTurn(context.Background(), 1, "second task"))
 	require.Len(t, secondClient.Requests(), 1)
 	require.Len(t, secondClient.RequestAt(0).Messages, 1)
@@ -718,7 +718,7 @@ func TestAgentAutoCompactionTriggersAboveThreshold(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	a.contextWindow = 100_000
+	a.route.contextWindow = 100_000
 	var events []CompactionEvent
 	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
 	defer cancel()
@@ -749,7 +749,7 @@ func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
-	a.contextWindow = 100_000
+	a.route.contextWindow = 100_000
 	var events []CompactionEvent
 	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
 	defer cancel()
@@ -789,7 +789,7 @@ func TestAgentAutoCompactionCanBeDisabled(t *testing.T) {
 
 func TestAgentAutoCompactionThresholdUsesContextWindow(t *testing.T) {
 	a := &Instance{
-		contextWindow:  200_000,
+		route:          modelRoute{contextWindow: 200_000},
 		autoCompaction: AutoCompactionConfig{Enabled: true},
 	}
 	require.Equal(t, 170_000, a.autoCompactionThreshold())
@@ -797,7 +797,7 @@ func TestAgentAutoCompactionThresholdUsesContextWindow(t *testing.T) {
 
 func TestAgentAutoCompactionThresholdUsesConfiguredContextWindowRatio(t *testing.T) {
 	a := &Instance{
-		contextWindow:  200_000,
+		route:          modelRoute{contextWindow: 200_000},
 		autoCompaction: AutoCompactionConfig{Enabled: true, ContextWindowRatio: 0.5},
 	}
 	require.Equal(t, 100_000, a.autoCompactionThreshold())
@@ -805,14 +805,14 @@ func TestAgentAutoCompactionThresholdUsesConfiguredContextWindowRatio(t *testing
 
 func TestAgentAutoCompactionThresholdClampsContextWindowRatio(t *testing.T) {
 	a := &Instance{
-		contextWindow:  200_000,
+		route:          modelRoute{contextWindow: 200_000},
 		autoCompaction: AutoCompactionConfig{Enabled: true, ContextWindowRatio: 1.2},
 	}
 	require.Equal(t, 200_000, a.autoCompactionThreshold())
 }
 func TestAgentAutoCompactionIgnoresDeprecatedAbsoluteThreshold(t *testing.T) {
 	a := &Instance{
-		contextWindow:  200_000,
+		route:          modelRoute{contextWindow: 200_000},
 		autoCompaction: AutoCompactionConfig{Enabled: true, TokenThreshold: 50_000, ContextWindowRatio: 0.5},
 	}
 	require.Equal(t, 100_000, a.autoCompactionThreshold())

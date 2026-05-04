@@ -93,7 +93,7 @@ func (a *Instance) CompactWithOptions(ctx context.Context, opts CompactOptions) 
 	if a == nil || a.runtime == nil {
 		return CompactionResult{}, fmt.Errorf("agent: runtime is not initialized")
 	}
-	if a.client == nil {
+	if a.route.client == nil {
 		return CompactionResult{}, fmt.Errorf("agent: client is not initialized")
 	}
 	trigger := opts.Trigger
@@ -263,7 +263,7 @@ func (a *Instance) generateCompactionSummary(ctx context.Context, trigger Compac
 		a.requestObserver(ctx, req)
 	}
 
-	events, err := a.client.Request(ctx, req)
+	events, err := a.route.client.Request(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -311,7 +311,7 @@ func (a *Instance) CompactionPolicy() CompactionPolicy {
 	if ratio > 1 {
 		ratio = 1
 	}
-	contextWindow := a.contextWindow
+	contextWindow := a.route.contextWindow
 	source := "modeldb"
 	fallback := false
 	if contextWindow <= 0 {
@@ -400,7 +400,7 @@ func (a *Instance) recordCompactionUsage(u unified.Usage) {
 	if a == nil || a.tracker == nil {
 		return
 	}
-	record := usage.FromUnified(u, usage.Dims{Provider: a.resolvedProvider, Model: a.resolvedModel, SessionID: a.sessionID, Labels: map[string]string{"operation": "compaction"}})
+	record := usage.FromUnified(u, usage.Dims{Provider: a.route.resolvedProvider, Model: a.route.resolvedModel, SessionID: a.sessionID, Labels: map[string]string{"operation": "compaction"}})
 	record.Source = "compaction"
 	a.tracker.Record(record)
 	a.persistUsageEvent(record)

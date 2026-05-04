@@ -53,14 +53,14 @@ func TestApprovedOnlyModelPolicyPinsSelectedRoute(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, "anthropic", a.resolvedProvider)
-	require.Equal(t, "claude-haiku-test", a.resolvedModel)
-	require.Equal(t, adapt.ApiAnthropicMessages, a.sourceAPI)
-	require.Equal(t, compatibility.StatusApproved, a.modelCompatibility.Status)
-	require.True(t, a.modelCompatibility.Pinned)
+	require.Equal(t, "anthropic", a.route.resolvedProvider)
+	require.Equal(t, "claude-haiku-test", a.route.resolvedModel)
+	require.Equal(t, adapt.ApiAnthropicMessages, a.route.sourceAPI)
+	require.Equal(t, compatibility.StatusApproved, a.route.compatibility.Status)
+	require.True(t, a.route.compatibility.Pinned)
 	require.Contains(t, a.ParamsSummary(), "compatibility: approved")
-	require.Len(t, a.autoResult.Config.Routes, 1)
-	require.False(t, a.autoResult.Config.Routes[0].DynamicModels)
+	require.Len(t, a.route.autoResult.Config.Routes, 1)
+	require.False(t, a.route.autoResult.Config.Routes[0].DynamicModels)
 }
 
 func TestApprovedOnlyModelPolicyPinsQualifiedRequestModel(t *testing.T) {
@@ -81,9 +81,9 @@ func TestApprovedOnlyModelPolicyPinsQualifiedRequestModel(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, "provider/haiku", a.autoResult.Config.Routes[0].Model)
-	require.Equal(t, "claude-haiku-test", a.autoResult.Config.Routes[0].NativeModel)
-	require.Equal(t, compatibility.StatusApproved, a.modelCompatibility.Status)
+	require.Equal(t, "provider/haiku", a.route.autoResult.Config.Routes[0].Model)
+	require.Equal(t, "claude-haiku-test", a.route.autoResult.Config.Routes[0].NativeModel)
+	require.Equal(t, compatibility.StatusApproved, a.route.compatibility.Status)
 }
 
 func TestEvaluationOnlyModelPolicyUsesEvidenceForQualifiedModel(t *testing.T) {
@@ -103,7 +103,7 @@ func TestEvaluationOnlyModelPolicyUsesEvidenceForQualifiedModel(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, compatibility.StatusApproved, a.modelCompatibility.Status)
+	require.Equal(t, compatibility.StatusApproved, a.route.compatibility.Status)
 	require.Contains(t, a.ParamsSummary(), "compatibility: approved")
 }
 
@@ -142,8 +142,8 @@ func TestEvaluationOnlyModelPolicyUsesEvidenceWithoutPinning(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, compatibility.StatusApproved, a.modelCompatibility.Status)
-	require.False(t, a.modelCompatibility.Pinned)
+	require.Equal(t, compatibility.StatusApproved, a.route.compatibility.Status)
+	require.False(t, a.route.compatibility.Pinned)
 	require.Contains(t, a.ParamsSummary(), "compatibility: approved")
 }
 
@@ -161,7 +161,7 @@ func TestEvaluationOnlyModelPolicyRecordsMissingEvidenceDiagnostic(t *testing.T)
 		WithModelPolicy(ModelPolicy{UseCase: ModelUseCaseSummarization}),
 	)
 	require.NoError(t, err)
-	require.Contains(t, a.modelCompatibility.Diagnostic, "no embedded compatibility evidence")
+	require.Contains(t, a.route.compatibility.Diagnostic, "no embedded compatibility evidence")
 	require.Contains(t, a.ParamsSummary(), "compatibility:")
 }
 
@@ -173,7 +173,7 @@ func TestEvaluationOnlyModelPolicyDoesNotFailCustomClient(t *testing.T) {
 		WithModelPolicy(ModelPolicy{UseCase: ModelUseCaseAgenticCoding}),
 	)
 	require.NoError(t, err)
-	require.Equal(t, compatibility.StatusUnavailable, a.modelCompatibility.Status)
+	require.Equal(t, compatibility.StatusUnavailable, a.route.compatibility.Status)
 	require.Contains(t, a.ParamsSummary(), "custom client")
 }
 

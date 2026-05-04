@@ -16,7 +16,6 @@ import (
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
-	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/skill"
@@ -25,8 +24,6 @@ import (
 	"github.com/codewandler/agentsdk/toolactivation"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/llmadapter/adapt"
-	"github.com/codewandler/llmadapter/adapterconfig"
-	"github.com/codewandler/llmadapter/compatibility"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -59,16 +56,7 @@ type Spec struct {
 // Instance is a running session-backed agent built from a Spec and runtime
 // options.
 type Instance struct {
-	client                   unified.Client
-	autoMux                  func(adapterconfig.AutoOptions) (adapterconfig.AutoResult, error)
-	autoResult               adapterconfig.AutoResult
-	providerIdentity         conversation.ProviderIdentity
-	resolvedProvider         string
-	resolvedModel            string
-	sourceAPI                adapt.ApiKind
-	sourceAPIExplicit        bool
-	modelPolicy              ModelPolicy
-	modelCompatibility       modelCompatibilityState
+	route                    modelRoute
 	runtime                  *agentruntime.Engine
 	tracker                  *usage.Tracker
 	toolActivation           *toolactivation.Manager
@@ -86,15 +74,7 @@ type Instance struct {
 	eventHandlerFactory      func(runner.EventHandlerContext) runner.EventHandler
 	requestObserver          runner.RequestObserver
 	toolCtxFactory           func(context.Context) tool.Ctx
-	specName                 string
-	specDescription          string
-	specTools                []string
-	specSkills               []string
-	specSkillSources         []skill.Source
-	specCommands             []string
-	specInstructionPaths     []string
-	specResourceID           string
-	specResourceFrom         string
+	spec                     Spec
 	skillRepo                *skill.Repository
 	skillState               *skill.ActivationState
 	materializedSystem       string
@@ -105,7 +85,6 @@ type Instance struct {
 	contextProviderFactories []ContextProviderFactory
 	baselineProviderFactory  BaselineProviderFactory
 	threadStore              thread.Store
-	contextWindow            int
 	autoCompaction           AutoCompactionConfig
 	compactionEventsMu       sync.Mutex
 	compactionEvents         map[int]CompactionEventHandler
@@ -122,7 +101,7 @@ func New(opts ...Option) (*Instance, error) {
 		maxSteps:       30,
 		toolTimeout:    30 * time.Second,
 		sessionID:      sessionID,
-		sourceAPI:      adapt.ApiOpenAIResponses,
+		route:         modelRoute{sourceAPI: adapt.ApiOpenAIResponses},
 		autoCompaction: AutoCompactionConfig{Enabled: true},
 		systemBuilder:  func(_ string, prompt string) string { return prompt },
 	}
@@ -249,9 +228,9 @@ func (a *Instance) ParamsSummary() string {
 	if a == nil {
 		return ""
 	}
-	compatibility := a.modelCompatibilitySummary()
-	if a.resolvedProvider != "" || a.resolvedModel != "" {
-		return strings.TrimSpace(fmt.Sprintf("model: %s  resolved_instance: %s  resolved_model: %s  thinking: %s  effort: %s%s", a.inference.Model, a.resolvedProvider, a.resolvedModel, a.inference.Thinking, a.inference.Effort, compatibility))
+	compatibility := a.route.compatibilitySummary()
+	if a.route.resolvedProvider != "" || a.route.resolvedModel != "" {
+		return strings.TrimSpace(fmt.Sprintf("model: %s  resolved_instance: %s  resolved_model: %s  thinking: %s  effort: %s%s", a.inference.Model, a.route.resolvedProvider, a.route.resolvedModel, a.inference.Thinking, a.inference.Effort, compatibility))
 	}
 	return strings.TrimSpace(fmt.Sprintf("model: %s  thinking: %s  effort: %s%s", a.inference.Model, a.inference.Thinking, a.inference.Effort, compatibility))
 }
@@ -261,18 +240,18 @@ func (a *Instance) Spec() Spec {
 		return Spec{}
 	}
 	return Spec{
-		Name:             a.specName,
-		Description:      a.specDescription,
+		Name:             a.spec.Name,
+		Description:      a.spec.Description,
 		System:           a.system,
 		Inference:        a.inference,
 		MaxSteps:         a.maxSteps,
-		Tools:            append([]string(nil), a.specTools...),
-		Skills:           append([]string(nil), a.specSkills...),
-		SkillSources:     append([]skill.Source(nil), a.specSkillSources...),
-		Commands:         append([]string(nil), a.specCommands...),
-		InstructionPaths: append([]string(nil), a.specInstructionPaths...),
-		ResourceID:       a.specResourceID,
-		ResourceFrom:     a.specResourceFrom,
+		Tools:            append([]string(nil), a.spec.Tools...),
+		Skills:           append([]string(nil), a.spec.Skills...),
+		SkillSources:     append([]skill.Source(nil), a.spec.SkillSources...),
+		Commands:         append([]string(nil), a.spec.Commands...),
+		InstructionPaths: append([]string(nil), a.spec.InstructionPaths...),
+		ResourceID:       a.spec.ResourceID,
+		ResourceFrom:     a.spec.ResourceFrom,
 		Capabilities:     append([]capability.AttachSpec(nil), a.capabilitySpecs...),
 	}
 }
@@ -354,29 +333,29 @@ func (a *Instance) RegisterContextProviders(providers ...agentcontext.Provider) 
 }
 
 func (a *Instance) applySpecTools() {
-	if a == nil || a.toolActivation == nil || len(a.specTools) == 0 {
+	if a == nil || a.toolActivation == nil || len(a.spec.Tools) == 0 {
 		return
 	}
 	a.toolActivation.Deactivate("*")
-	a.toolActivation.Activate(a.specTools...)
+	a.toolActivation.Activate(a.spec.Tools...)
 }
 
 func (a *Instance) initSkills() error {
 	if a.skillRepo == nil {
-		repo, err := skill.NewRepository(a.specSkillSources, a.specSkills)
+		repo, err := skill.NewRepository(a.spec.SkillSources, a.spec.Skills)
 		if err != nil {
-			if len(a.specSkillSources) > 0 || len(a.specSkills) == 0 {
+			if len(a.spec.SkillSources) > 0 || len(a.spec.Skills) == 0 {
 				return err
 			}
-			repo, err = skill.NewRepository(a.specSkillSources, nil)
+			repo, err = skill.NewRepository(a.spec.SkillSources, nil)
 			if err != nil {
 				return err
 			}
 		}
 		a.skillRepo = repo
 	} else {
-		for _, name := range a.specSkills {
-			if err := a.skillRepo.Load(name); err != nil && len(a.specSkillSources) > 0 {
+		for _, name := range a.spec.Skills {
+			if err := a.skillRepo.Load(name); err != nil && len(a.spec.SkillSources) > 0 {
 				return err
 			}
 		}
@@ -484,14 +463,14 @@ func (a *Instance) Reset() {
 	}
 	if a.threadStore != nil {
 		if err := a.startPersistentSession(time.Now()); err == nil {
-			if runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...); err == nil {
+			if runtimeAgent, err := agentruntime.New(a.route.client, a.runtimeOptions()...); err == nil {
 				a.runtime = runtimeAgent
 				return
 			}
 		}
 	} else if len(a.capabilitySpecs) > 0 {
 		if err := a.startEphemeralCapabilitySession(context.Background()); err == nil {
-			if runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...); err == nil {
+			if runtimeAgent, err := agentruntime.New(a.route.client, a.runtimeOptions()...); err == nil {
 				a.runtime = runtimeAgent
 				return
 			}
@@ -512,11 +491,11 @@ func (a *Instance) RunTurn(ctx context.Context, turnID int, task string) error {
 		task,
 		agentruntime.WithTurnMaxSteps(a.maxSteps),
 		agentruntime.WithTurnTools(a.activeTools()),
-		agentruntime.WithTurnProviderIdentity(a.providerIdentity),
+		agentruntime.WithTurnProviderIdentity(a.route.providerIdentity),
 		agentruntime.WithTurnEventHandler(handler),
 	)
 	if err != nil {
-		return fmt.Errorf("provider=%s model=%s: %w", a.resolvedProvider, a.resolvedModel, err)
+		return fmt.Errorf("provider=%s model=%s: %w", a.route.resolvedProvider, a.route.resolvedModel, err)
 	}
 	a.maybeAutoCompact(ctx)
 	return nil
@@ -530,220 +509,31 @@ func (a *Instance) ContextState() string {
 }
 
 func (a *Instance) initRuntime() error {
-	if a.client == nil {
-		result, err := agentruntime.AutoMuxClient(a.inference.Model, a.autoMuxSourceAPI(), a.autoMux)
+	if a.route.client == nil {
+		result, err := agentruntime.AutoMuxClient(a.inference.Model, a.route.autoMuxSourceAPI(), a.route.autoMux)
 		if err != nil {
 			return err
 		}
-		a.client = result.Client
-		a.autoResult = result
-		if err := a.applyModelPolicy(); err != nil {
+		a.route.client = result.Client
+		a.route.autoResult = result
+		if err := a.route.applyModelPolicy(a.inference.Model); err != nil {
 			return err
 		}
-	} else if a.modelPolicy.Configured() {
-		if err := a.applyModelPolicyWithoutAutoResult(); err != nil {
+	} else if a.route.modelPolicy.Configured() {
+		if err := a.route.applyModelPolicyWithoutAutoResult(); err != nil {
 			return err
 		}
 	}
-	a.resolveRouteIdentity()
+	a.route.resolveRouteIdentity(a.inference.Model)
 	if err := a.initSession(context.Background()); err != nil {
 		return err
 	}
-	runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...)
+	runtimeAgent, err := agentruntime.New(a.route.client, a.runtimeOptions()...)
 	if err != nil {
 		return err
 	}
 	a.runtime = runtimeAgent
 	return nil
-}
-
-func (a *Instance) autoMuxSourceAPI() adapt.ApiKind {
-	if a == nil {
-		return adapt.ApiOpenAIResponses
-	}
-	if a.modelPolicy.Configured() {
-		if a.modelPolicy.SourceAPI != "" {
-			return a.modelPolicy.SourceAPI
-		}
-		if !a.sourceAPIExplicit {
-			return ""
-		}
-	}
-	return a.sourceAPI
-}
-
-func (a *Instance) policySourceAPI() adapt.ApiKind {
-	if a == nil {
-		return ""
-	}
-	if a.modelPolicy.SourceAPI != "" {
-		return a.modelPolicy.SourceAPI
-	}
-	if a.sourceAPIExplicit {
-		return a.sourceAPI
-	}
-	if a.modelPolicy.Configured() {
-		return ""
-	}
-	return a.sourceAPI
-}
-
-func (a *Instance) applyModelPolicyWithoutAutoResult() error {
-	useCase, err := a.modelPolicy.llmUseCase()
-	if err != nil {
-		return err
-	}
-	if useCase == "" {
-		return nil
-	}
-	if a.modelPolicy.ApprovedOnly {
-		return fmt.Errorf("agent: approved-only model policy requires auto mux routing")
-	}
-	a.modelCompatibility = modelCompatibilityState{
-		UseCase:    useCase,
-		Status:     compatibility.StatusUnavailable,
-		Diagnostic: "custom client has no llmadapter route config",
-	}
-	return nil
-}
-
-func (a *Instance) applyModelPolicy() error {
-	if a == nil || !a.modelPolicy.Configured() {
-		return nil
-	}
-	useCase, err := a.modelPolicy.llmUseCase()
-	if err != nil {
-		return err
-	}
-	if useCase == "" {
-		return nil
-	}
-	sourceAPI := a.policySourceAPI()
-	if a.modelPolicy.ApprovedOnly {
-		return a.applyApprovedOnlyModelPolicy(useCase, sourceAPI)
-	}
-	return a.applyEvaluationModelPolicy(useCase, sourceAPI)
-}
-
-func (a *Instance) applyApprovedOnlyModelPolicy(useCase compatibility.UseCase, sourceAPI adapt.ApiKind) error {
-	evidence, evidenceSource, err := LoadCompatibilityEvidence(a.modelPolicy)
-	if err != nil {
-		return err
-	}
-	selection, err := selectModelForPolicy(a.autoResult, a.inference.Model, sourceAPI, adapterconfig.UseCaseSelectionOptions{
-		UseCase:       useCase,
-		Evidence:      evidence,
-		AllowDegraded: a.modelPolicy.AllowDegraded,
-		AllowUntested: a.modelPolicy.AllowUntested,
-	})
-	if err != nil {
-		return err
-	}
-	pinnedConfig, err := pinnedConfigForSelection(a.autoResult.Config, selection, a.inference.Model)
-	if err != nil {
-		return err
-	}
-	client, err := adapterconfig.NewMuxClient(pinnedConfig, adapterconfig.WithSourceAPI(selection.Resolution.SourceAPI), adapterconfig.WithFallback(false))
-	if err != nil {
-		return err
-	}
-	a.client = client
-	a.autoResult.Config = pinnedConfig
-	a.autoResult.Client = client
-	a.sourceAPI = selection.Resolution.SourceAPI
-	a.sourceAPIExplicit = true
-	a.modelCompatibility = modelCompatibilityFromEvaluation(selection.Evaluation, evidenceSource, true)
-	a.modelCompatibility.SourceAPI = selection.Resolution.SourceAPI
-	a.modelCompatibility.ProviderAPI = selection.Resolution.ProviderAPI
-	return nil
-}
-
-func (a *Instance) applyEvaluationModelPolicy(useCase compatibility.UseCase, sourceAPI adapt.ApiKind) error {
-	evidenceDiagnostic := ""
-	if evidence, evidenceSource, err := LoadCompatibilityEvidence(a.modelPolicy); err == nil {
-		selection, err := selectModelForPolicy(a.autoResult, a.inference.Model, sourceAPI, adapterconfig.UseCaseSelectionOptions{
-			UseCase:       useCase,
-			Evidence:      evidence,
-			AllowDegraded: true,
-			AllowUntested: true,
-		})
-		if err == nil {
-			a.modelCompatibility = modelCompatibilityFromEvaluation(selection.Evaluation, evidenceSource, false)
-			a.modelCompatibility.SourceAPI = selection.Resolution.SourceAPI
-			a.modelCompatibility.ProviderAPI = selection.Resolution.ProviderAPI
-			return nil
-		}
-	} else {
-		evidenceDiagnostic = err.Error()
-	}
-	evaluations, err := adapterconfig.EvaluateCompatibilityCandidates(a.autoResult.Config, a.inference.Model, sourceAPI, useCase)
-	if err != nil {
-		a.modelCompatibility = modelCompatibilityState{
-			UseCase:    useCase,
-			Status:     compatibility.StatusUnavailable,
-			Diagnostic: err.Error(),
-		}
-		return nil
-	}
-	if len(evaluations) == 0 {
-		a.modelCompatibility = modelCompatibilityState{
-			UseCase:    useCase,
-			Status:     compatibility.StatusUnavailable,
-			Diagnostic: "no compatibility candidates",
-		}
-		return nil
-	}
-	a.modelCompatibility = modelCompatibilityFromEvaluation(evaluations[0], "", false)
-	a.modelCompatibility.Diagnostic = evidenceDiagnostic
-	return nil
-}
-
-func selectModelForPolicy(result adapterconfig.AutoResult, model string, sourceAPI adapt.ApiKind, opts adapterconfig.UseCaseSelectionOptions) (adapterconfig.UseCaseModelSelection, error) {
-	var lastErr error
-	for _, candidate := range modelPolicyLookupNames(model) {
-		selection, err := result.SelectModelForUseCase(candidate, sourceAPI, opts)
-		if err == nil {
-			return selection, nil
-		}
-		lastErr = err
-	}
-	return adapterconfig.UseCaseModelSelection{}, lastErr
-}
-
-func (a *Instance) modelCompatibilitySummary() string {
-	if a == nil || !a.modelCompatibility.configured() {
-		return ""
-	}
-	state := a.modelCompatibility
-	parts := []string{}
-	if state.SourceAPI != "" {
-		parts = append(parts, "source_api: "+string(state.SourceAPI))
-	}
-	if state.ProviderAPI != "" {
-		parts = append(parts, "provider_api: "+string(state.ProviderAPI))
-	}
-	if state.UseCase != "" {
-		parts = append(parts, "use_case: "+string(state.UseCase))
-	}
-	if state.Status != "" {
-		parts = append(parts, "compatibility: "+string(state.Status))
-	}
-	if missing := featureNames(state.MissingRequired); missing != "" {
-		parts = append(parts, "missing_required: "+missing)
-	}
-	if untested := featureNames(state.UntestedRequired); untested != "" {
-		parts = append(parts, "untested_required: "+untested)
-	}
-	if degraded := featureNames(state.DegradedPreferred); degraded != "" {
-		parts = append(parts, "degraded_preferred: "+degraded)
-	}
-	if state.Diagnostic != "" {
-		parts = append(parts, "reason: "+state.Diagnostic)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "  " + strings.Join(parts, "  ")
 }
 
 func (a *Instance) runtimeOptions() []agentruntime.Option {
@@ -773,7 +563,7 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 		agentruntime.WithCachePolicy(unified.CachePolicyOn),
 		agentruntime.WithMaxSteps(a.maxSteps),
 		agentruntime.WithToolTimeout(a.toolTimeout),
-		agentruntime.WithProviderIdentity(a.providerIdentity),
+		agentruntime.WithProviderIdentity(a.route.providerIdentity),
 		agentruntime.WithToolContextFactory(func(ctx context.Context) tool.Ctx {
 			if a.toolCtxFactory != nil {
 				return a.toolCtxFactory(ctx)
@@ -802,19 +592,6 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 	return opts
 }
 
-func (a *Instance) resolveRouteIdentity() {
-	a.providerIdentity = conversation.ProviderIdentity{}
-	a.resolvedProvider = ""
-	a.resolvedModel = ""
-	identity, summary, ok := agentruntime.RouteIdentity(a.autoResult, a.sourceAPI, a.inference.Model)
-	if !ok {
-		return
-	}
-	a.resolvedProvider = summary.Provider
-	a.resolvedModel = summary.NativeModel
-	a.contextWindow = summary.ContextWindow
-	a.providerIdentity = identity
-}
 
 // resolveThreadStore returns the thread store to use for session persistence.
 // The store must be provided by the caller (typically harness) via
@@ -1062,14 +839,14 @@ func (a *Instance) contextProviders() []agentcontext.Provider {
 	}
 	baseline := factory(BaselineProviderState{
 		Workspace:        a.workspace,
-		ResolvedModel:    a.resolvedModel,
-		ResolvedProvider: a.resolvedProvider,
-		ContextWindow:    a.contextWindow,
+		ResolvedModel:    a.route.resolvedModel,
+		ResolvedProvider: a.route.resolvedProvider,
+		ContextWindow:    a.route.contextWindow,
 		Effort:           string(a.inference.Effort),
 		ActiveTools:      activeTools,
 		SkillRepo:        a.skillRepo,
 		SkillState:       a.skillState,
-		InstructionPaths: a.specInstructionPaths,
+		InstructionPaths: a.spec.InstructionPaths,
 	})
 	var providers []agentcontext.Provider
 	for _, p := range baseline {
@@ -1136,17 +913,17 @@ func (a *Instance) newEventHandler(turnID int) runner.EventHandler {
 func (a *Instance) recordEvent(turnID int, event runner.Event) {
 	switch ev := event.(type) {
 	case runner.RouteEvent:
-		a.providerIdentity = ev.ProviderIdentity
-		a.resolvedProvider = ev.ProviderIdentity.ProviderName
-		a.resolvedModel = ev.ProviderIdentity.NativeModel
+		a.route.providerIdentity = ev.ProviderIdentity
+		a.route.resolvedProvider = ev.ProviderIdentity.ProviderName
+		a.route.resolvedModel = ev.ProviderIdentity.NativeModel
 	case runner.UsageEvent:
 		record := usage.FromRunnerEvent(ev, usage.RunnerEventOptions{
 			TurnID:        strconv.Itoa(turnID),
 			SessionID:     a.sessionID,
 			FallbackModel: a.inference.Model,
 			RouteState: usage.RouteState{
-				Provider: a.resolvedProvider,
-				Model:    a.resolvedModel,
+				Provider: a.route.resolvedProvider,
+				Model:    a.route.resolvedModel,
 			},
 		})
 		a.tracker.Record(record)

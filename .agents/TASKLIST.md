@@ -510,6 +510,10 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Add "no legacy fallbacks" rule to architecture docs.
 - [x] Remove `sessionStoreDir`, `sessionStorePath`, `WithSessionStoreDir`, `WithSessionStorePath`, `SessionStorePath()` from agent.
 - [x] Move `SessionStorePath()` to `harness.Session` (computes from `storeDir` + `SessionID()`).
+- [x] Embed `Spec` in `Instance` — replace 9 `spec*` fields with single `spec Spec` field.
+- [x] Extract model routing into `modelRoute` struct — 11 fields → 1 `route modelRoute` field.
+- [x] Move `selectModelForPolicy`, all policy/routing methods to `agent/model_route.go`.
+- [x] Remove `conversation`, `adapterconfig`, `compatibility` imports from `agent/agent.go`.
 
 ## 31. Datasource work — deferred
 

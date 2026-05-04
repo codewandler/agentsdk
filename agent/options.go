@@ -52,15 +52,17 @@ func WithInferenceOptions(opts InferenceOptions) Option {
 
 func WithSpec(spec Spec) Option {
 	return func(a *Instance) {
-		a.specName = spec.Name
-		a.specDescription = spec.Description
-		a.specTools = append([]string(nil), spec.Tools...)
-		a.specSkills = append([]string(nil), spec.Skills...)
-		a.specSkillSources = append([]skill.Source(nil), spec.SkillSources...)
-		a.specCommands = append([]string(nil), spec.Commands...)
-		a.specInstructionPaths = append([]string(nil), spec.InstructionPaths...)
-		a.specResourceID = spec.ResourceID
-		a.specResourceFrom = spec.ResourceFrom
+		a.spec = Spec{
+			Name:             spec.Name,
+			Description:      spec.Description,
+			Tools:            append([]string(nil), spec.Tools...),
+			Skills:           append([]string(nil), spec.Skills...),
+			SkillSources:     append([]skill.Source(nil), spec.SkillSources...),
+			Commands:         append([]string(nil), spec.Commands...),
+			InstructionPaths: append([]string(nil), spec.InstructionPaths...),
+			ResourceID:       spec.ResourceID,
+			ResourceFrom:     spec.ResourceFrom,
+		}
 		if len(spec.Capabilities) > 0 {
 			a.capabilitySpecs = append([]capability.AttachSpec(nil), spec.Capabilities...)
 		}
@@ -127,22 +129,22 @@ func WithThreadStore(store thread.Store) Option {
 }
 
 func WithClient(client unified.Client) Option {
-	return func(a *Instance) { a.client = client }
+	return func(a *Instance) { a.route.client = client }
 }
 
 func WithAutoMux(autoMux func(adapterconfig.AutoOptions) (adapterconfig.AutoResult, error)) Option {
-	return func(a *Instance) { a.autoMux = autoMux }
+	return func(a *Instance) { a.route.autoMux = autoMux }
 }
 
 func WithSourceAPI(api adapt.ApiKind) Option {
 	return func(a *Instance) {
-		a.sourceAPI = api
-		a.sourceAPIExplicit = true
+		a.route.sourceAPI = api
+		a.route.sourceAPIExplicit = true
 	}
 }
 
 func WithModelPolicy(policy ModelPolicy) Option {
-	return func(a *Instance) { a.modelPolicy = policy }
+	return func(a *Instance) { a.route.modelPolicy = policy }
 }
 
 func WithTools(tools []tool.Tool) Option {
