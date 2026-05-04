@@ -12,26 +12,41 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- **`agentsdk dev` subcommand** — runs the embedded engineer agent with the
+  current working directory as a discovery root. Supports all standard flags
+  (model, session, runtime, inference, etc.).
+- **`-d/--discover` flag** on `run`, `dev`, and `build` — repeatable flag to
+  specify multiple discovery root directories. Defaults to CWD when omitted.
+- `MultiDirResources` and `EmbeddedWithDirResources` in `terminal/cli` for
+  resolving multiple discovery roots and merging embedded + directory sources.
+- `apps/engineer` is now an embedded Go package with `resources.go` and
+  `//go:embed` directive, mirroring the `apps/builder` pattern.
 - Added `agentsdk models --thinking` to filter compatibility-backed model
   listings to rows with live reasoning evidence.
 - Added release-readiness checkpoint documentation for the pre-1.0 internal
   dogfood boundary, intentional breakage notes, CI guards, and deferred external
   release cadence.
 
-### Removed
-
-- Deleted stale standard-bundle assumptions from current docs/checkpoint guidance.
-  `tools/standard` and `plugins/standard` remain intentionally removed; use
-  named plugins and resource-selected tools instead.
-
 ### Changed
 
+- **Breaking:** `agentsdk run` no longer takes a positional directory argument.
+  Use `-d <path>` instead. All positional arguments are now treated as the task.
+  Old: `agentsdk run ./myapp "do something"`. New: `agentsdk run -d ./myapp do something`.
+- **`agentsdk build`** now uses the standard `cli.NewCommand` pattern and
+  supports all flags available to `run` and `dev` (model, session, runtime,
+  debug, etc.).
 - Updated llmadapter to `v1.0.0-rc.32` and modeldb to `v0.15.0`, refreshing
   embedded agentic-coding evidence with Qwen, expanded OpenRouter, and Bedrock
   Converse rows.
 - Added local modeldb aliases for OpenRouter `qwen3-coder` and
   `qwen3-coder-next` so the refreshed compatibility evidence can resolve them
   in auto model listings.
+
+### Removed
+
+- Deleted stale standard-bundle assumptions from current docs/checkpoint guidance.
+  `tools/standard` and `plugins/standard` remain intentionally removed; use
+  named plugins and resource-selected tools instead.
 
 ## [0.33.0] - 2026-05-03
 
