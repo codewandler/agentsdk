@@ -487,7 +487,17 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Keep this batch docs/review-only with no code changes.
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 
-## 30. Datasource work — deferred
+## 30. App/resource/plugin composition boundary review
+
+- [x] Review `app`, `resource`, `agentdir`, and `plugins/*` imports.
+- [x] Confirm `resource` and `agentdir` remain metadata/spec loaders.
+- [x] Confirm `app` remains the reusable definition/registry composition root.
+- [x] Confirm plugins remain named app-level contribution bundles, not a harness/session/channel plugin system.
+- [x] Document that `app.App` still caching live `agent.Instance` values is a cleanup candidate.
+- [x] Keep datasource work postponed until core ownership cleanup is clearer.
+- [x] Keep this batch docs/review-only with no code changes.
+
+## 31. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.

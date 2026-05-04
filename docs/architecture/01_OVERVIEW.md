@@ -11,14 +11,14 @@ The goal is not to replace the current packages with a theoretical architecture.
 Use the detailed aspect docs in this order when reviewing architecture from high level to low level:
 
 1. Product and docs surface: `README.md`, `docs/README.md`, vision, roadmap, tasklist.
-2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*`.
+2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*` ([`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md)).
 3. Harness/session/channel hosts: `harness`, `daemon`, `channel/*`, `terminal/*`.
 4. Agent/runtime boundary: `agent`, `runtime`, `runner`.
 5. Execution primitives: `action`, `tool`, `command`, `workflow`.
 6. Persistence/state/context: `thread`, `conversation`, `agentcontext`, `capability`, `skill`.
 7. Policy/observability/memory: `safety`, `usage`, compaction paths.
 
-The package-level import review lives in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md). Its current conclusion is that there are no blocking low-level-to-host dependency violations, but `agent.Instance` remains the main fan-in/fan-out ownership problem.
+The package-level import review lives in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md), and the app/resource/plugin composition review lives in [`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md). Their current conclusion is that there are no blocking low-level-to-host dependency violations, but `agent.Instance` remains the main fan-in/fan-out ownership problem.
 
 ## Current architecture summary
 

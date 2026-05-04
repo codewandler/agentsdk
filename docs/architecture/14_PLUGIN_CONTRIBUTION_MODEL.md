@@ -167,3 +167,10 @@ resource.CommandContribution -> harness command binding -> Session target execut
 This preserves the current hierarchy: resource/app define and retain metadata;
 harness/session binds that metadata to live execution; terminal, daemon, and
 future channels present it.
+
+
+## Composition boundary review
+
+The docs-only review in [`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md) confirms the plugin model remains sound: plugins are app-level named contribution bundles, resources are declarative metadata, and session projections are not a plugin system.
+
+The important cleanup candidate is not a new plugin facet. It is reducing live runtime/session state in `app.App` and `agent.Instance` once harness/session can own that lifecycle directly.

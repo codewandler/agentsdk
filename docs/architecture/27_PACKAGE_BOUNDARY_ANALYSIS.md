@@ -181,7 +181,7 @@ The main issue is not an import cycle or a forbidden high-level dependency. The 
 Use this order for future docs/code review passes:
 
 1. Product and docs surface: `README.md`, `docs/README.md`, vision, roadmap, tasklist.
-2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*`.
+2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*` ([`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md)).
 3. Harness/session/channel hosts: `harness`, `daemon`, `channel/*`, `terminal/*`.
 4. Agent/runtime boundary: `agent`, `runtime`, `runner`.
 5. Execution primitives: `action`, `tool`, `command`, `workflow`.

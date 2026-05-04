@@ -67,3 +67,9 @@ Added examples:
 ## Datasource ordering
 
 Datasource resource expansion remains intentionally deferred. Existing datasource discovery stays in place, but new runtime behavior should wait until daemon/triggers produce a concrete background ingestion/synchronization case study.
+
+## Composition boundary review
+
+The follow-up boundary review in [`28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](28_APP_RESOURCE_PLUGIN_BOUNDARY.md) confirms this resource/app model is still acceptable: `resource` and `agentdir` stay metadata/spec loaders, `app` remains the reusable definition/registry composition root, and `harness.Session` remains the live execution boundary.
+
+The main watch item is that `app.App` still stores live `*agent.Instance` values. That is a current bridge, not the desired end state. When the `agent.Instance` cleanup starts, keep app definitions/registries in `app` and move live session/runtime ownership toward harness/session.
