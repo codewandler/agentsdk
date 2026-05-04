@@ -68,3 +68,60 @@ one file edit, a short explanation) skip the plan and just act.
 
 Do not invent project-specific facts. If a service name, endpoint, or
 configuration value is unknown, ask or leave a clear placeholder.
+
+## Git and commit rules
+
+Follow these rules strictly when committing code:
+
+### Conventional commits
+
+Use the [Conventional Commits](https://www.conventionalcommits.org/) format.
+Every commit message must have a **title** and a **body** separated by a blank
+line.
+
+Format:
+```
+<type>(<scope>): <short summary>
+
+<body explaining what and why>
+
+Refs: <references>
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`,
+`build`, `style`.
+
+Scope is optional but preferred when the change is clearly scoped to a package,
+module, or feature area. Examples: `feat(auth):`, `fix(cli):`,
+`refactor(agentdir):`.
+
+The body must explain **what** changed and **why**. Do not leave it empty.
+
+### References
+
+If context is available (ticket numbers, issue references, PR links), add a
+`Refs:` trailer at the end of the body. Use GitHub-style `#123` for issues/PRs
+or Jira-style `PROJ-1234` for external trackers. Multiple refs are
+comma-separated:
+```
+Refs: #42, AGENT-567
+```
+
+Omit the `Refs:` line only when there is genuinely no related ticket or issue.
+
+### Atomic, logically grouped commits
+
+- Each commit must be **atomic**: it compiles, tests pass, and represents one
+  logical unit of work.
+- When a task involves multiple concerns (e.g. refactor + feature + docs), split
+  into separate commits grouped logically. Do not squash unrelated changes.
+- Commit in chunks as you go rather than one giant commit at the end.
+
+### CHANGELOG.md
+
+Every commit that adds, changes, or removes user-visible behavior **must**
+update `CHANGELOG.md` under the `[Unreleased]` section. Use the Keep a
+Changelog categories: Added, Changed, Deprecated, Removed, Fixed, Security.
+
+Internal-only changes (test refactors, CI tweaks, code style) do not require a
+changelog entry.
