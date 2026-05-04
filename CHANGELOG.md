@@ -14,6 +14,15 @@ match these entries as the project starts publishing releases.
 
 - Added `agentsdk models --thinking` to filter compatibility-backed model
   listings to rows with live reasoning evidence.
+- Added release-readiness checkpoint documentation for the pre-1.0 internal
+  dogfood boundary, intentional breakage notes, CI guards, and deferred external
+  release cadence.
+
+### Removed
+
+- Deleted stale standard-bundle assumptions from current docs/checkpoint guidance.
+  `tools/standard` and `plugins/standard` remain intentionally removed; use
+  named plugins and resource-selected tools instead.
 
 ### Changed
 
@@ -52,7 +61,7 @@ match these entries as the project starts publishing releases.
 - Added a project inventory context provider that summarizes repository root,
   language counts, package-manager files, key directories, test patterns, and
   entrypoints.
-- Enabled project inventory in the default standard plugin set.
+- Added project inventory support for the then-current default plugin set. This historical default plugin set has since been deleted in favor of named plugins.
 
 ## [0.31.0] - 2026-04-30
 
@@ -72,9 +81,7 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
-- Added `git_add` and `git_commit` tools to the git tool bundle and default
-  standard toolset for explicit staging and commit creation without shelling out
-  to `bash`.
+- Added `git_add` and `git_commit` tools to the git tool bundle for explicit staging and commit creation without shelling out to `bash`.
 - Added `summary` mode to the git context provider with changed-file, staged,
   unstaged, and untracked counts.
 - Added `show_lines` support to `dir_tree` so directory exploration can include
@@ -84,8 +91,7 @@ match these entries as the project starts publishing releases.
 
 ### Changed
 
-- Enabled git tools in the default standard toolset and the `examples/engineer`
-  resource bundle.
+- Enabled git tools in the then-current default toolset and engineer resource bundle. The current blessed dogfood app is `apps/engineer`, and generic standard bundles have been deleted.
 - Improved planner single-plan lifecycle errors and guidance when `create_plan`
   is called after a plan already exists.
 - Improved `bash` multi-command output with a compact success/failure summary.
@@ -104,9 +110,7 @@ match these entries as the project starts publishing releases.
   `caller_id`, custom SIP headers, `username:password` credentials, audio
   modes (`none`, `echo`, `device` with app-provided `AudioDevice`), and
   `debug` SIP response diagnostics.
-- Added `PhoneConfig` option to `tools/standard.Options` for wiring the
-  phone tool into standard bundles, and included a phone placeholder in the
-  standard catalog so resource specs can select it.
+- Added phone tool configuration for the then-current standard bundle model. The current path is explicit named plugin/tool composition; generic standard bundles have been deleted.
 - Added live terminal Markdown rendering using
   `github.com/codewandler/markdown` v0.41.0 with GFM autolinks, OSC8
   clickable URLs, live table redraws, and Markdown rendering for reasoning
@@ -123,12 +127,10 @@ match these entries as the project starts publishing releases.
 - Added `bashIntent` in `tools/shell` — typed `DeclareIntent` for the bash
   tool with per-command cmdrisk analysis, worst-case multi-command merging,
   and pre-computed assessment passthrough via `Intent.Extra`.
-- Added `RiskAnalyzer` and `NoDefaultRiskAnalyzer` options to
-  `tools/standard.Options`. Default tool bundles now automatically create a
-  cmdrisk analyzer; explicit analyzer injection and opt-out are supported.
+- Added cmdrisk analyzer wiring for the then-current standard bundle model. Current risk/safety wiring is explicit through named plugins, tool middleware, and safety primitives.
 - Added comprehensive tests for shell intent declaration, risk context
   threading, multi-command assessment merging, and standard toolset wiring
-  (`tools/shell/intent_test.go`, `tools/standard/standard_test.go`,
+  (`tools/shell/intent_test.go`, former standard-bundle tests,
   `toolmw/cmdrisk_test.go`, `toolmw/riskgate_test.go`).
 
 ### Changed
@@ -199,9 +201,8 @@ match these entries as the project starts publishing releases.
 - Added `plugins/visionplugin` — `app.Plugin` wrapper for the vision tool with
   `WithClient` and `WithAPIKey` options and env-based auto-detection
   (`OPENROUTER_API_KEY` / `VISION_OPENROUTER_API_KEY`).
-- Added `IncludeVision` to `tools/standard.Options` and enabled it in
-  `CatalogOptions` so YAML agent specs can reference `vision` by name.
-- Added `vision` tool to the engineer example agent.
+- Added vision tool catalog support for resource specs. Current apps select `vision` through explicit tool/plugin composition.
+- Added `vision` tool to the engineer dogfood agent.
 - Added `internal/htmlconvert` package to centralize HTML-to-Markdown conversion
   logic, providing a clean integration point for `tools/web` and future HTML
   processing needs.

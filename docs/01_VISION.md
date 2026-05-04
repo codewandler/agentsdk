@@ -68,7 +68,7 @@ The current repository already provides the foundation for the vision:
 - `app` composes resource bundles, commands, plugins, tools, skills, context providers, middleware, and agent specs into running app instances.
 - `plugins/*` define first-party plugin bundles for local CLI composition, git, skills, tool management, vision, planner, and other concrete contribution sets. Generic “standard” plugin/tool bundles have been removed; named plugins own composition.
 - `terminal/cli`, `terminal/repl`, and `terminal/ui` provide the current terminal channel and `agentsdk run` experience.
-- `apps/engineer` is a practical dogfood resource bundle used as a coding/architecture/devops agent; `examples/engineer` remains as a compatibility copy during the transition.
+- `apps/engineer` is the practical dogfood resource bundle used as a coding/architecture/devops agent; the stale `examples/engineer` compatibility copy has been deleted.
 
 The product vision is therefore evolutionary: clarify boundaries, reuse these foundations, and add missing concepts only where the current model cannot express the future product.
 
@@ -309,7 +309,7 @@ A command is a human/app/channel-facing trigger surface around an action, workfl
 
 Commands should wrap actions where they perform typed work, adding command-specific metadata such as aliases, argument hints, caller policy, slash-command wiring, and channel/user visibility. Command parsing and command results are UX/channel concerns: a command may ask the channel to render text, reset or exit an interactive loop, start an agent turn from a rendered prompt, or dispatch typed work.
 
-Today `command.Command` uses descriptor-first metadata, `Params`, structured `Result`, `command.Tree`, and registry-backed structured execution. Harness sessions expose agent-callable commands through the `session_command` projection plus catalog context; the older `command_run` bridge remains as a compatibility surface but should not be expanded. The target direction is not to delete commands, and not every command should become a model-callable tool. Instead, make executable command cores action-backed where useful while preserving command-specific policy, parsing, and channel result semantics.
+Today `command.Command` uses descriptor-first metadata, `Params`, structured `Result`, `command.Tree`, and registry-backed structured execution. Harness sessions expose agent-callable commands through the `session_command` projection plus catalog context. Do not expand older slash-string command bridges; there are no external users requiring compatibility. The target direction is not to delete commands, and not every command should become a model-callable tool. Instead, make executable command cores action-backed where useful while preserving command-specific policy, parsing, and channel result semantics.
 
 ### Channel
 

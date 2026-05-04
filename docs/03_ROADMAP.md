@@ -86,7 +86,7 @@ Goal: distinguish real first-party agentic apps from small examples without brea
 Current state:
 
 - `apps/engineer` is the first-party dogfood coding/architecture/devops app.
-- `examples/engineer` remains available as a compatibility copy during the transition.
+- The stale `examples/engineer` compatibility copy has been deleted; examples stay instructional, apps stay durable dogfood products.
 - It uses current agentdir/app manifest/resource behavior.
 
 Tasks:
@@ -98,7 +98,7 @@ Tasks:
    apps/engineer/
    ```
 
-3. Keep compatibility documentation for the old example path. ✅
+3. Delete stale compatibility documentation for the old example path. ✅
 4. Add or reserve: ✅
 
    ```text
@@ -113,7 +113,7 @@ Acceptance criteria:
 - `agentsdk run apps/engineer` works.
 - The engineer app remains resource-only unless/until it needs Go extensions.
 - Documentation explains why engineer is a dogfood app, not just a tiny example.
-- Existing examples continue to run or have clear migration notes.
+- Existing examples continue to run or have clear current-path notes.
 
 Verification:
 

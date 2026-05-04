@@ -444,21 +444,21 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 26. Release readiness
 
-- [ ] Decide pre-1.0 public API boundaries.
-- [ ] Mark unstable packages/docs clearly.
-- [ ] Remove stale changelog references to deleted APIs or add migration notes.
-- [ ] Add migration guide for no standard tools.
-- [ ] Add migration guide for local CLI plugin.
-- [ ] Add migration guide for app vs harness responsibilities.
-- [ ] Add migration guide for workflow options moved to `workflow`.
-- [ ] Add migration guide for command descriptors through registry/catalog.
-- [ ] Add migration guide for agent projection path.
-- [ ] Add CI check for `go test ./...`.
-- [ ] Add CI guard for no `tools/standard`.
-- [ ] Add CI guard for no `plugins/standard`.
-- [ ] Add CI guard for no ignored command results at terminal boundary if feasible.
-- [ ] Tag an internal dogfood checkpoint.
-- [ ] Decide external release cadence.
+- [x] Decide pre-1.0 public API boundaries.
+- [x] Mark unstable packages/docs clearly.
+- [x] Remove stale changelog references to deleted APIs or add migration notes.
+- [x] Add migration guide for no standard tools.
+- [x] Add migration guide for local CLI plugin.
+- [x] Add migration guide for app vs harness responsibilities.
+- [x] Add migration guide for workflow options moved to `workflow`.
+- [x] Add migration guide for command descriptors through registry/catalog.
+- [x] Add migration guide for agent projection path.
+- [x] Add CI check for `go test ./...`.
+- [x] Add CI guard for no `tools/standard`.
+- [x] Add CI guard for no `plugins/standard`.
+- [x] Add CI guard for no ignored command results at terminal boundary if feasible.
+- [x] Document the internal dogfood checkpoint tag command.
+- [x] Decide external release cadence.
 
 ## 27. Usage readiness gates
 
