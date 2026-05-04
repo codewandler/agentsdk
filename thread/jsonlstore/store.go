@@ -29,6 +29,7 @@ type record struct {
 	ParentNodeID  thread.NodeID      `json:"parent_node_id,omitempty"`
 	Seq           int64              `json:"seq"`
 	Kind          thread.EventKind   `json:"kind"`
+	SchemaVersion int                `json:"schema_version,omitempty"`
 	Payload       json.RawMessage    `json:"payload,omitempty"`
 	At            time.Time          `json:"at"`
 	Source        thread.EventSource `json:"source,omitempty"`
@@ -362,6 +363,7 @@ func encode(event thread.Event) record {
 		ParentNodeID:  event.ParentNodeID,
 		Seq:           event.Seq,
 		Kind:          event.Kind,
+		SchemaVersion: normalizedEventSchemaVersion(event.SchemaVersion),
 		Payload:       append(json.RawMessage(nil), event.Payload...),
 		At:            event.At,
 		Source:        event.Source,
@@ -379,6 +381,7 @@ func decode(rec record) thread.Event {
 		ParentNodeID:  rec.ParentNodeID,
 		Seq:           rec.Seq,
 		Kind:          rec.Kind,
+		SchemaVersion: normalizedEventSchemaVersion(rec.SchemaVersion),
 		Payload:       append(json.RawMessage(nil), rec.Payload...),
 		At:            rec.At,
 		Source:        rec.Source,
@@ -395,4 +398,11 @@ func nextSeq(events []thread.Event) int64 {
 		}
 	}
 	return maxSeq + 1
+}
+
+func normalizedEventSchemaVersion(version int) int {
+	if version <= 0 {
+		return thread.CurrentEventSchemaVersion
+	}
+	return version
 }

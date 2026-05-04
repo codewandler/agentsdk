@@ -118,3 +118,24 @@ func TestStoreValidatesRegisteredEventsOnLoad(t *testing.T) {
 		t.Fatal("expected load validation error")
 	}
 }
+
+func TestStorePersistsEventSchemaVersion(t *testing.T) {
+	ctx := context.Background()
+	store := Open(t.TempDir())
+	live, err := store.Create(ctx, thread.CreateParams{ID: "thread_schema_version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := live.Append(ctx, thread.Event{Kind: "test.event"}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range stored.Events {
+		if event.SchemaVersion != thread.CurrentEventSchemaVersion {
+			t.Fatalf("schema version = %d, want %d", event.SchemaVersion, thread.CurrentEventSchemaVersion)
+		}
+	}
+}

@@ -18,6 +18,7 @@ import (
 	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/workflow"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
@@ -1000,4 +1001,29 @@ func renderCommandResult(t *testing.T, result command.Result) string {
 	text, err := command.Render(result, command.DisplayTerminal)
 	require.NoError(t, err)
 	return text
+}
+
+func TestSessionThreadEventsExposesPersistedBranchEvents(t *testing.T) {
+	ctx := context.Background()
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	application, err := app.New(
+		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
+	)
+	require.NoError(t, err)
+	service := NewService(application)
+	session, err := service.OpenSession(ctx, SessionOpenRequest{Name: "coder", StoreDir: t.TempDir(), AgentOptions: []agent.Option{agent.WithClient(client)}})
+	require.NoError(t, err)
+
+	_, err = session.Send(ctx, "hello")
+	require.NoError(t, err)
+	events, ok, err := session.ThreadEvents(ctx)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotEmpty(t, events)
+	require.True(t, slices.ContainsFunc(events, func(event thread.Event) bool {
+		return event.Kind == thread.EventThreadCreated && event.SchemaVersion == thread.CurrentEventSchemaVersion
+	}))
+	require.True(t, slices.ContainsFunc(events, func(event thread.Event) bool {
+		return event.Kind == "conversation.user_message" && event.SchemaVersion == thread.CurrentEventSchemaVersion
+	}))
 }

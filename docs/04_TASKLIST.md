@@ -350,18 +350,18 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 21. Persistence / thread model
 
-- [ ] Keep thread as durable event foundation.
-- [ ] Improve workflow event persistence indexing only if needed.
-- [ ] Add session/thread lifecycle APIs in harness.
-- [ ] Add thread store abstraction choices beyond JSONL when needed.
-- [ ] Add migration/versioning for thread event schemas.
-- [ ] Add compaction event/read model improvements.
-- [ ] Add usage event attribution.
-- [ ] Add event replay tests for workflow runs.
-- [ ] Add event replay tests for context renders.
-- [ ] Add event replay tests for capabilities.
-- [ ] Add event replay tests for skills.
-- [ ] Add event replay tests for usage.
+- [x] Keep thread as durable event foundation.
+- [x] Improve workflow event persistence indexing only if needed.
+- [x] Add session/thread lifecycle APIs in harness.
+- [x] Add thread store abstraction choices beyond JSONL when needed.
+- [x] Add migration/versioning for thread event schemas.
+- [x] Add compaction event/read model improvements.
+- [x] Add usage event attribution.
+- [x] Add event replay tests for workflow runs.
+- [x] Add event replay tests for context renders.
+- [x] Add event replay tests for capabilities.
+- [x] Add event replay tests for skills.
+- [x] Add event replay tests for usage.
 
 ## 22. Compaction / memory
 

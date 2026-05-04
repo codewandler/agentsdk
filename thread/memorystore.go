@@ -61,6 +61,9 @@ func (s *MemoryStore) Import(ctx context.Context, events ...Event) error {
 		if event.Kind == "" {
 			return fmt.Errorf("thread: imported event kind is required")
 		}
+		if event.SchemaVersion == 0 {
+			event.SchemaVersion = CurrentEventSchemaVersion
+		}
 		if err := s.validateEvent(event); err != nil {
 			return err
 		}
@@ -177,14 +180,15 @@ func (s *MemoryStore) Create(ctx context.Context, params CreateParams) (Live, er
 		return nil, err
 	}
 	created := Event{
-		ID:       NewEventID(),
-		ThreadID: id,
-		BranchID: branchID,
-		Seq:      stored.nextSeq,
-		Kind:     EventThreadCreated,
-		Payload:  createdPayload,
-		At:       now,
-		Source:   params.Source,
+		ID:            NewEventID(),
+		ThreadID:      id,
+		BranchID:      branchID,
+		Seq:           stored.nextSeq,
+		SchemaVersion: CurrentEventSchemaVersion,
+		Kind:          EventThreadCreated,
+		Payload:       createdPayload,
+		At:            now,
+		Source:        params.Source,
 	}
 	if err := s.validateEvent(created); err != nil {
 		return nil, err
@@ -349,6 +353,9 @@ func (t *memoryThread) appendLocked(branchID BranchID, events ...Event) {
 		}
 		if event.BranchID == "" {
 			event.BranchID = t.branchID
+		}
+		if event.SchemaVersion == 0 {
+			event.SchemaVersion = CurrentEventSchemaVersion
 		}
 		event.Seq = t.nextSeq
 		t.nextSeq++

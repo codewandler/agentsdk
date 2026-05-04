@@ -7,6 +7,8 @@ import (
 
 type EventKind string
 
+const CurrentEventSchemaVersion = 1
+
 const (
 	EventThreadCreated    EventKind = "thread.created"
 	EventMetadataUpdated  EventKind = "thread.metadata_updated"
@@ -29,6 +31,7 @@ type Event struct {
 	BranchID      BranchID        `json:"branch_id"`
 	NodeID        NodeID          `json:"node_id,omitempty"`
 	ParentNodeID  NodeID          `json:"parent_node_id,omitempty"`
+	SchemaVersion int             `json:"schema_version,omitempty"`
 	Seq           int64           `json:"seq"`
 	Kind          EventKind       `json:"kind"`
 	Payload       json.RawMessage `json:"payload,omitempty"`

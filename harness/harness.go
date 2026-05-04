@@ -17,6 +17,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/thread"
 	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/trigger"
 	"github.com/codewandler/agentsdk/usage"
@@ -512,6 +513,36 @@ func (s *Session) WorkflowRunStore() (*workflow.ThreadRunStore, bool) {
 	}
 	store := threadjsonlstore.Open(filepath.Dir(path))
 	return &workflow.ThreadRunStore{Store: store, Live: live, ThreadID: live.ID(), BranchID: live.BranchID()}, true
+}
+
+// ThreadEvents returns the persisted events for the session's live thread and
+// active branch. It is intended for harness/channel inspection and replay tests;
+// callers should treat the returned events as immutable snapshots.
+func (s *Session) ThreadEvents(ctx context.Context) ([]thread.Event, bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if s == nil || s.Agent == nil || s.Agent.LiveThread() == nil {
+		return nil, false, nil
+	}
+	path := s.Agent.SessionStorePath()
+	if strings.TrimSpace(path) == "" {
+		return nil, false, nil
+	}
+	live := s.Agent.LiveThread()
+	store := threadjsonlstore.Open(filepath.Dir(path))
+	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
+	if err != nil {
+		return nil, false, err
+	}
+	events, err := stored.EventsForBranch(live.BranchID())
+	if err != nil {
+		return nil, false, err
+	}
+	return events, true, nil
 }
 
 func (s *Session) WorkflowRunState(ctx context.Context, runID workflow.RunID) (workflow.RunState, bool, error) {

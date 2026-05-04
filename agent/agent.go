@@ -1137,7 +1137,8 @@ func (a *Instance) recordEvent(turnID int, event runner.Event) {
 // persistUsageEvent appends a usage record to the thread event log so it
 // survives session resume.
 func (a *Instance) persistUsageEvent(record usage.Record) {
-	if a.threadRuntime == nil || a.threadRuntime.Live() == nil {
+	live := a.LiveThread()
+	if live == nil {
 		return
 	}
 	raw, err := json.Marshal(record)
@@ -1147,7 +1148,7 @@ func (a *Instance) persistUsageEvent(record usage.Record) {
 		}
 		return
 	}
-	if err := a.threadRuntime.Live().Append(context.Background(), thread.Event{
+	if err := live.Append(context.Background(), thread.Event{
 		Kind:    EventUsageRecorded,
 		Payload: raw,
 		Source:  thread.EventSource{Type: "session", SessionID: a.sessionID},

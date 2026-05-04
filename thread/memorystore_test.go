@@ -168,3 +168,24 @@ func TestStoredEventsForBranchUsesForkWindows(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryStoreDefaultsEventSchemaVersion(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	live, err := store.Create(ctx, CreateParams{ID: "thread_schema_version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := live.Append(ctx, Event{Kind: "test.event"}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.Read(ctx, ReadParams{ID: live.ID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range stored.Events {
+		if event.SchemaVersion != CurrentEventSchemaVersion {
+			t.Fatalf("schema version = %d, want %d", event.SchemaVersion, CurrentEventSchemaVersion)
+		}
+	}
+}

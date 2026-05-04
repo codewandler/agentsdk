@@ -746,3 +746,35 @@ func TestAgentAutoCompactionThresholdFallback(t *testing.T) {
 	}
 	require.Equal(t, defaultAutoCompactionThreshold, a.autoCompactionThreshold())
 }
+
+func TestAgentReplaysUsageEventsAcrossSession(t *testing.T) {
+	dir := t.TempDir()
+	client := runnertest.NewClient([]unified.Event{
+		unified.TextDeltaEvent{Text: "ok"},
+		unified.UsageEvent{Tokens: unified.TokenItems{{Kind: unified.TokenKindInputNew, Count: 7}, {Kind: unified.TokenKindOutput, Count: 3}}},
+		unified.CompletedEvent{FinishReason: unified.FinishReasonStop, MessageID: "msg_usage"},
+	})
+	first, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithSessionStoreDir(dir),
+		WithSpec(Spec{Name: "coder", Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}}),
+	)
+	require.NoError(t, err)
+	require.NoError(t, first.RunTurn(context.Background(), 1, "hello"))
+	require.Len(t, first.Tracker().Records(), 1)
+
+	second, err := New(
+		WithClient(runnertest.NewClient(runnertest.TextStream("ok"))),
+		WithWorkspace(t.TempDir()),
+		WithSessionStoreDir(dir),
+		WithResumeSession(first.SessionStorePath()),
+		WithSpec(Spec{Name: "coder", Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}}),
+	)
+	require.NoError(t, err)
+	records := second.Tracker().Records()
+	require.Len(t, records, 1)
+	require.Equal(t, 7, records[0].Usage.Tokens.Count(unified.TokenKindInputNew))
+	require.Equal(t, 3, records[0].Usage.Tokens.Count(unified.TokenKindOutput))
+	require.Equal(t, second.SessionID(), records[0].Dims.SessionID)
+}
