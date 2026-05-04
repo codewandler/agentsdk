@@ -6,6 +6,20 @@ This document describes a target architecture for agentsdk that grows out of the
 
 The goal is not to replace the current packages with a theoretical architecture. The goal is to make existing responsibilities explicit, move them gradually to clearer homes, and add missing concepts such as workflows, actions, channels, triggers, and harness lifecycle where the current model does not yet express them.
 
+## Review order
+
+Use the detailed aspect docs in this order when reviewing architecture from high level to low level:
+
+1. Product and docs surface: `README.md`, `docs/README.md`, vision, roadmap, tasklist.
+2. App/resource/plugin composition: `app`, `resource`, `agentdir`, `plugins/*`.
+3. Harness/session/channel hosts: `harness`, `daemon`, `channel/*`, `terminal/*`.
+4. Agent/runtime boundary: `agent`, `runtime`, `runner`.
+5. Execution primitives: `action`, `tool`, `command`, `workflow`.
+6. Persistence/state/context: `thread`, `conversation`, `agentcontext`, `capability`, `skill`.
+7. Policy/observability/memory: `safety`, `usage`, compaction paths.
+
+The package-level import review lives in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md). Its current conclusion is that there are no blocking low-level-to-host dependency violations, but `agent.Instance` remains the main fan-in/fan-out ownership problem.
+
 ## Current architecture summary
 
 agentsdk currently has these major subsystems:

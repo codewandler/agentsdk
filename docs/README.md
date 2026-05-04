@@ -39,6 +39,7 @@ The project currently has one real consumer: us. These docs should describe the 
 - [`architecture/24_BUILDER_PRODUCT.md`](architecture/24_BUILDER_PRODUCT.md) — first-party builder dogfood app and `agentsdk build`.
 - [`architecture/25_RELEASE_READINESS.md`](architecture/25_RELEASE_READINESS.md) — internal checkpoint boundaries and CI gates.
 - [`architecture/26_USAGE_READINESS_GATES.md`](architecture/26_USAGE_READINESS_GATES.md) — internal dogfood readiness decision and deferred public-facing gates.
+- [`architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md`](architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md) — package-level import graph review, intended dependency layers, boundary findings, and cleanup candidates.
 
 ## Reference docs
 
@@ -47,7 +48,9 @@ The project currently has one real consumer: us. These docs should describe the 
 
 ## Current architecture review findings
 
-The detailed aspect docs now cover the architecture in smaller files. The main remaining architecture problem is the size and ownership breadth of the `agent` package, especially `agent.Instance`. It still combines model policy, runtime construction, thread/session setup, skill activation, context/capability wiring, usage, compaction, and event/output plumbing.
+The detailed aspect docs now cover the architecture in smaller files. Review from high level to low level: product/docs, app/resource/plugin composition, harness/session/channels, agent/runtime, execution primitives, persistence/state/context, and finally policy/observability/memory.
+
+The package-level import analysis in [`architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md`](architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md) found no blocking low-level-to-host dependency violations. It does confirm the main remaining architecture problem: the size and ownership breadth of the `agent` package, especially `agent.Instance`. It still combines model policy, runtime construction, thread/session setup, skill activation, context/capability wiring, usage, compaction, and event/output plumbing.
 
 The preferred cleanup is not a compatibility shim or a second runtime. The cleanup path is to move ownership to already-proven homes when doing so deletes coupling:
 

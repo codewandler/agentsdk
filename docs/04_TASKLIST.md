@@ -476,7 +476,18 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Review and document the remaining `agent` package / `agent.Instance` architecture problem.
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 
-## 29. Datasource work — deferred
+## 29. Architecture docs review and package boundary analysis
+
+- [x] Review docs from high level to low level.
+- [x] Add package-level import boundary analysis.
+- [x] Classify intended dependency layers.
+- [x] Identify package fan-in/fan-out hotspots.
+- [x] Compare package imports against architecture boundaries.
+- [x] Document suspicious edges and cleanup candidates.
+- [x] Keep this batch docs/review-only with no code changes.
+- [x] Keep datasource work postponed until core ownership cleanup is clearer.
+
+## 30. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.

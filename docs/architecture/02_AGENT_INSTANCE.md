@@ -106,6 +106,8 @@ not be replaced abruptly.
 
 ## Current architecture problem after the docs split
 
+The package-level import review in [`27_PACKAGE_BOUNDARY_ANALYSIS.md`](27_PACKAGE_BOUNDARY_ANALYSIS.md) confirms this file's main claim: `agent.Instance` is the largest remaining ownership concentration, not because of a blocking import violation, but because too many subsystems still meet at this façade.
+
 The earlier audit was intentionally conservative because the harness/session boundary was not yet proven. That has changed: `harness.Service`, `harness.Session`, session subscriptions, workflow lifecycle, daemon/service mode, HTTP/SSE channel hosting, trigger scheduling, thread inspection, and compaction visibility now exist.
 
 That means the remaining `agent.Instance` breadth is no longer just a temporary convenience. It is now the main architecture smell:
