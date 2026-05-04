@@ -9,11 +9,16 @@ import (
 	"strings"
 )
 
-// Policy describes who may invoke a command.
+// Policy describes who may invoke a command and the minimum safety metadata
+// channels should preserve when a command can trigger actions, tools, workflows,
+// or prompts. It is descriptive by itself; execution gates live at the
+// harness/session/action/tool boundary.
 type Policy struct {
-	UserCallable  bool `json:"userCallable,omitempty"`
-	AgentCallable bool `json:"agentCallable,omitempty"`
-	Internal      bool `json:"internal,omitempty"`
+	UserCallable     bool   `json:"userCallable,omitempty"`
+	AgentCallable    bool   `json:"agentCallable,omitempty"`
+	Internal         bool   `json:"internal,omitempty"`
+	SafetyClass      string `json:"safetyClass,omitempty"`
+	RequiresApproval bool   `json:"requiresApproval,omitempty"`
 }
 
 func UserPolicy() Policy { return Policy{UserCallable: true} }

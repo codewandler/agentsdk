@@ -338,15 +338,15 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 20. Safety / risk policy
 
-- [ ] Do not migrate risk logging opportunistically.
-- [ ] Design safety policy model separately.
-- [ ] Generalize safety beyond tool-only risk.
-- [ ] Define approval gates at harness/session boundary.
-- [ ] Define risk events/publications.
-- [ ] Define channel-specific approval UX.
-- [ ] Integrate shell/tool risk analyzer through named plugins/config.
-- [ ] Add tests for approval policy enforcement.
-- [ ] Add audit trail for approved/rejected operations.
+- [x] Do not migrate risk logging opportunistically.
+- [x] Design safety policy model separately.
+- [x] Generalize safety beyond tool-only risk.
+- [x] Define approval gates at harness/session boundary.
+- [x] Define risk events/publications.
+- [x] Define channel-specific approval UX.
+- [x] Integrate shell/tool risk analyzer through named plugins/config.
+- [x] Add tests for approval policy enforcement.
+- [x] Add audit trail for approved/rejected operations.
 
 ## 21. Persistence / thread model
 

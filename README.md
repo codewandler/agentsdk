@@ -480,6 +480,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md`](docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md) — context provider lifecycle, descriptors, state snapshots, and non-terminal inspection surfaces.
 - [`docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md`](docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md) — explicit capability registry ownership, projection facets, planner dogfood use, and harness inspection.
 - [`docs/23_SKILL_SYSTEM_FOLLOWUPS.md`](docs/23_SKILL_SYSTEM_FOLLOWUPS.md) — skill ownership boundary, persisted activation, reference UX, discover output, and context metadata.
+- [`docs/24_SAFETY_RISK_POLICY.md`](docs/24_SAFETY_RISK_POLICY.md) — surface-neutral safety decisions, approval boundary, risk events, audit trail, and tool compatibility bridge.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
