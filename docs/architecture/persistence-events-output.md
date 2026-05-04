@@ -2,7 +2,6 @@
 
 ## Output event model
 
-This note completes the section-5 writer/output replacement design from
 This section defines the target model for replacing remaining
 writer fields. The implementation rule is intentionally conservative: new code
 should target these shapes, while existing writer paths are migrated only in
@@ -426,8 +425,8 @@ The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPRO
 
 ## Persistence and thread model
 
-Section 21 keeps `thread` as the durable event foundation and tightens the
-inspection/replay contracts around it.
+The `thread` package remains the durable event foundation with tightened
+inspection/replay contracts.
 
 ## Foundation
 
@@ -506,8 +505,8 @@ need it.
 
 ## Context system
 
-Section 17 keeps `agentcontext.Manager` as the render/replay owner and tightens the
-inspection/lifecycle seams around it. The goal is not to move context rendering
+`agentcontext.Manager` remains the render/replay owner with tightened
+inspection/lifecycle seams. The goal is not to move context rendering
 into channels or plugins; channels inspect context state and plugins contribute
 providers.
 
@@ -589,7 +588,7 @@ existing manager replay/diff behavior.
 
 ## Capability system
 
-Section 18 keeps capabilities as explicit, replayable session/runtime extensions rather than hidden agent defaults.
+Capabilities are explicit, replayable session/runtime extensions rather than hidden agent defaults.
 
 ## Ownership
 
@@ -664,7 +663,7 @@ Capabilities attach through explicit `capability.AttachSpec` values on an agent 
 
 ## Skill system
 
-Section 19 keeps skill ownership deliberately boring while tightening the runtime and CLI surfaces around it.
+Skill ownership is deliberately boring while the runtime and CLI surfaces are tightened around it.
 
 ## Ownership boundary
 

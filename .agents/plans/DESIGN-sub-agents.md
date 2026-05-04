@@ -647,14 +647,14 @@ Dogfood tests:
 
 ## Alignment With Existing Docs
 
-- `docs/01_VISION.md`: sub-agents fit the harness/runtime product role and the
+- `docs/vision.md`: sub-agents fit the harness/runtime product role and the
   "agentic applications boring to build" goal. They are not product-specific
   integrations.
 - `docs/02_ARCHITECTURE.md`: the design keeps `runtime` focused on turns,
   `conversation/thread` focused on durable state, `app` focused on composition,
   and `harness` focused on lifecycle. It uses session projections rather than a
   second plugin system.
-- `docs/05_QUICKSTART.md`: sub-agent support should be surfaced through
+- `docs/quickstart.md`: sub-agent support should be surfaced through
   `harness.Session`, like sends, commands, and workflows.
 - `docs/07_HARNESS_SESSION_LIFECYCLE.md`: sub-agent lifecycle belongs in
   `harness.Service` and `harness.Session`, not in terminal or `agent.Instance`.

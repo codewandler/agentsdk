@@ -49,6 +49,10 @@ The `examples/` directory contains small instructional agent applications:
 - `examples/action-tool-adapter/` — Action/tool adapter example.
 - `examples/devops-cli/` — CLI agent with custom tool wiring.
 - `examples/research-desk/` — Multi-source research agent with resource bundles.
+- `examples/hybrid-app/` — Manifest plus `.agents` resources with structured plugin config.
+- `examples/resource-only-app/` — Resource-only workflow, command, and trigger sample.
+- `examples/release-notes-agent/` — Resource-only prompt sketch for release notes.
+- `examples/repo-maintainer/` — Resource-only repo maintenance sketch.
 
 When adding or changing SDK APIs, check whether an existing app or example should
 be updated to reflect the change.
@@ -108,6 +112,7 @@ context providers, and skill sources behind the `app.Plugin` interface.
 - `plugins/skillplugin` — skill tool + discovery + skill inventory context.
 - `plugins/toolmgmtplugin` — tool management tools + active-tools context.
 - `plugins/plannerplugin` — planner capability factory.
+- `plugins/visionplugin` — vision tool for image understanding.
 
 Named host/plugin composition lives under `plugins/`; for example, `plugins/localcli` assembles the local terminal plugin.
 

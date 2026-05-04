@@ -110,7 +110,7 @@ GitHub Actions runs the same script from `.github/workflows/ci.yml`.
 Use an internal dogfood checkpoint tag after this release-readiness batch is reviewed and committed:
 
 ```bash
-git tag dogfood-2026-05-04
+git tag dogfood-YYYY-MM-DD
 ```
 
 Do not create an external semver release yet. External release cadence remains deferred until daily dogfood of `apps/engineer`, `agentsdk build`, daemon/triggers, and examples exposes no blocking friction.

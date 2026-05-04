@@ -1,7 +1,6 @@
-# 05 — Refactored SDK Quickstart
+# Quickstart
 
-This quickstart shows the current recommended path after the app/agent/harness
-cleanup: compose behavior explicitly with named plugins, open a harness session,
+Compose behavior explicitly with named plugins, open a harness session,
 and send turns, commands, or workflows through that session boundary.
 
 ## Recommended shape

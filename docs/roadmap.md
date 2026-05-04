@@ -1,4 +1,4 @@
-# agentsdk roadmap
+# Roadmap
 
 This roadmap is the public sequencing view. It intentionally omits task-level history; detailed internal planning lives under `.agents/`, and architecture cleanup backlog lives in [`architecture/99_REVIEW_AND_IMPROVEMENTS.md`](architecture/99_REVIEW_AND_IMPROVEMENTS.md).
 

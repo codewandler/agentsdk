@@ -43,9 +43,9 @@ Status: complete.
 
 Deliverables:
 
-- `docs/01_VISION.md`
+- `docs/vision.md`
 - `docs/architecture/overview.md`
-- `docs/03_ROADMAP.md`
+- `docs/roadmap.md`
 
 Acceptance criteria:
 

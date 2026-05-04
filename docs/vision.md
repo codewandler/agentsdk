@@ -1,4 +1,4 @@
-# agentsdk vision
+# Vision
 
 agentsdk is a Go SDK for building secure, observable, and deployable agentic applications.
 

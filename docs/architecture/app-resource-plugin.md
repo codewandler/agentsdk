@@ -2,7 +2,7 @@
 
 ## Resource and manifest model
 
-Section 13 completes the next resource/app-manifest slice after daemon and triggers.
+Resource and manifest discovery now covers workflows, actions, triggers, and structured commands.
 
 ## Resource bundle coverage
 
@@ -78,12 +78,12 @@ The main watch item is that `app.App` still stores live `*agent.Instance` values
 
 ## Plugin contribution model
 
-Section 14 keeps Agents SDK on one contribution model instead of adding parallel
+The SDK uses one contribution model instead of adding parallel
 plugin systems for harnesses, sessions, channels, or triggers.
 
 ## Boundary decision
 
-Section 14 does not move every contribution into `harness`. The boundary is:
+Not every contribution lives in `harness`. The boundary is:
 
 - `app` composes app-level, reusable definitions and runtime registries.
 - `harness` owns live session execution, lifecycle, and projections.
@@ -151,9 +151,8 @@ Optional facets live beside it:
 - `ToolMiddlewarePlugin`
 - `ToolTargetedMiddlewarePlugin`
 
-This is enough for current app-level Go/runtime contributions. Section 14 does
-not add app/session/channel/trigger plugin facets because there is no concrete
-need yet.
+This is enough for current app-level Go/runtime contributions. There are no
+app/session/channel/trigger plugin facets because there is no concrete need yet.
 
 ## Resource contributions are not plugins
 

@@ -1,10 +1,10 @@
 # Roadmap
 
 This file is the short, root-level backlog for contributors. The canonical
-architecture roadmap lives in [`docs/03_ROADMAP.md`](docs/03_ROADMAP.md).
+architecture roadmap lives in [`docs/roadmap.md`](docs/roadmap.md).
 
 Keep this file focused on near-term, concrete follow-ups. Move broader product
-or architecture sequencing into `docs/03_ROADMAP.md` so the two roadmaps do not
+or architecture sequencing into `docs/roadmap.md` so the two roadmaps do not
 drift.
 
 ## Near-term cleanup

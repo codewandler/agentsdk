@@ -2,8 +2,7 @@
 
 ## Harness session lifecycle
 
-This note records the section-4 harness/session lifecycle decisions from
-`.agents/TASKLIST.md`.
+This section records the harness/session lifecycle decisions.
 
 ## Long-term shape
 
@@ -98,7 +97,7 @@ The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPRO
 
 ## Terminal CLI channel
 
-Section 15 keeps the terminal package as a channel and presentation boundary. It
+The terminal package is a channel and presentation boundary. It
 should adapt resources, app composition, harness sessions, and command results to
 CLI behavior without becoming the canonical runtime owner.
 
@@ -253,7 +252,7 @@ agentsdk run . /workflow events <run-id>
 agentsdk run . /workflow cancel <run-id>
 ```
 
-## Section 15 decisions
+## Terminal CLI decisions
 
 - Keep `terminal/cli.Load` as the shared CLI prelude unless another extraction
   deletes duplicated code.
@@ -271,7 +270,7 @@ The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPRO
 
 ## HTTP/SSE channel
 
-Section 16 adds a small HTTP/SSE channel over `harness.Service` while keeping the
+The HTTP/SSE channel runs over `harness.Service` while keeping the
 harness core protocol-neutral.
 
 ## Protocol namespaces

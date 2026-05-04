@@ -2,7 +2,7 @@
 
 ## Safety and risk policy
 
-Section 20 defines the safety policy seam without moving the existing terminal
+The safety policy seam is defined without moving the existing terminal
 risk log opportunistically.
 
 ## Ownership
@@ -105,7 +105,7 @@ The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPRO
 
 ## Compaction and memory
 
-Section 22 makes compaction a default, visible memory-management behavior rather than a hidden maintenance operation.
+Compaction is a default, visible memory-management behavior rather than a hidden maintenance operation.
 
 ## Goals
 
@@ -208,7 +208,7 @@ The durable state split is:
 - `conversation.auto_compaction` — diagnostic/metrics event for automatic compaction decisions
 - live summary delta events — transient presentation stream, not persisted by default
 
-Compaction floor and resume behavior remain runtime/conversation concerns. Section 22 should preserve existing floor behavior and add tests that thread-backed sessions still replay compacted memory correctly after resume.
+Compaction floor and resume behavior remain runtime/conversation concerns. Existing floor behavior is preserved and tested so that thread-backed sessions still replay compacted memory correctly after resume.
 
 ## Tests
 

@@ -353,7 +353,7 @@ Decision: no. Build daemon/service lifecycle and interval trigger with in-proces
 
 ## Daemon service mode
 
-Section 11 establishes daemon mode as a deployment shape for the existing harness runtime, not a second SDK runtime.
+Daemon mode is a deployment shape for the existing harness runtime, not a second SDK runtime.
 
 ## Decision summary
 
@@ -473,7 +473,7 @@ Covered by tests for:
 
 ## Follow-up boundary
 
-Section 12 should add triggers/scheduling on top of this shape. Trigger loops should target `daemon.Host` / `harness.Service` APIs and publish trigger-caused session/workflow metadata rather than creating a separate scheduler runtime.
+Triggers and scheduling run on top of this shape. Trigger loops target `daemon.Host` / `harness.Service` APIs and publish trigger-caused session/workflow metadata rather than creating a separate scheduler runtime.
 
 ## Host boundary review
 
@@ -481,7 +481,7 @@ The consolidated review in [`99_REVIEW_AND_IMPROVEMENTS.md`](99_REVIEW_AND_IMPRO
 
 ## Triggers and scheduling
 
-Section 12 adds the first trigger/scheduler layer on top of daemon/service mode. The core design is intentionally event-based:
+The trigger/scheduler layer runs on top of daemon/service mode. The core design is intentionally event-based:
 
 ```text
 source emits event -> matcher accepts event -> executor starts workflow/session work

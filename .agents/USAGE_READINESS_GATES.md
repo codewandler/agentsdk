@@ -47,7 +47,7 @@ These verify that the terminal default local CLI plugin path opens a harness-bac
 
 Broader pre-1.0 usage is documented through:
 
-- [`docs/05_QUICKSTART.md`](../docs/05_QUICKSTART.md)
+- [`docs/quickstart.md`](../docs/quickstart.md)
 - [`examples/README.md`](../examples/README.md)
 - [`RELEASE_READINESS.md`](RELEASE_READINESS.md)
 - first-party dogfood app docs under [`apps/engineer`](../apps/engineer) and [`apps/builder`](../apps/builder)

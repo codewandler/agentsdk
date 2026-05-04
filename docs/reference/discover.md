@@ -1,6 +1,6 @@
 # Discover / introspection
 
-Section 23 keeps `agentsdk discover` as the debugging surface for understanding what a resource directory, app manifest, and plugin set contribute before anything is run.
+`agentsdk discover` is the debugging surface for understanding what a resource directory, app manifest, and plugin set contribute before anything is run.
 
 ## Human-readable discovery
 

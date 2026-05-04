@@ -1,6 +1,6 @@
 # Builder product
 
-Section 24 turns the builder from a placeholder into the first real first-party dogfood application.
+The builder is the first real first-party dogfood application.
 
 ## Product boundary
 

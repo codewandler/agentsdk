@@ -1,4 +1,4 @@
-# 04 — Remaining Work Tasklist
+# Remaining Work Tasklist
 
 Use this as the living checklist for the post-refactor path. Keep items checked only when the work is implemented, verified, and documented where needed.
 

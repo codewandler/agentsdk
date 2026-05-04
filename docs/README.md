@@ -4,10 +4,10 @@ This is the documentation entrypoint for agentsdk. The docs directory is intende
 
 ## Start here
 
-- [`05_QUICKSTART.md`](05_QUICKSTART.md) — build and run the current app/harness/CLI path.
+- [`quickstart.md`](quickstart.md) — compose an app, open a harness session, and run turns/commands/workflows.
 - [`../examples/README.md`](../examples/README.md) — runnable examples and dogfood app conventions.
-- [`01_VISION.md`](01_VISION.md) — product direction and long-term boundaries.
-- [`03_ROADMAP.md`](03_ROADMAP.md) — public roadmap and sequencing.
+- [`vision.md`](vision.md) — product direction and long-term boundaries.
+- [`roadmap.md`](roadmap.md) — public roadmap and sequencing.
 
 ## Guides
 
