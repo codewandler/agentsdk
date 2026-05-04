@@ -462,10 +462,10 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 27. Usage readiness gates
 
-- [ ] Local/internal dogfooding through `agentsdk run` is confirmed manually.
-- [ ] Default internal SDK path is confirmed by one end-to-end harness/local CLI test.
-- [ ] Broader pre-1.0 usage is documented with quickstart and examples.
-- [ ] More stable public-facing use waits for displayable/output design, async workflow lifecycle, and better examples.
+- [x] Local/internal dogfooding through `agentsdk run` is confirmed manually.
+- [x] Default internal SDK path is confirmed by one end-to-end harness/local CLI test.
+- [x] Broader pre-1.0 usage is documented with quickstart and examples.
+- [x] More stable public-facing use waits for displayable/output design, async workflow lifecycle, and better examples.
 
 ## 28. Datasource work — deferred
 

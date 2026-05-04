@@ -484,6 +484,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/27_DISCOVER_INTROSPECTION.md`](docs/27_DISCOVER_INTROSPECTION.md) — human and machine-readable discovery output for resources, descriptors, plugins, capabilities, and diagnostics.
 - [`docs/28_BUILDER_PRODUCT.md`](docs/28_BUILDER_PRODUCT.md) — first-party builder dogfood app, `agentsdk build`, cwd project context, tester role, and safety boundaries.
 - [`docs/29_RELEASE_READINESS.md`](docs/29_RELEASE_READINESS.md) — pre-1.0 internal checkpoint boundaries, intentional breakage notes, CI guards, and release cadence.
+- [`docs/30_USAGE_READINESS_GATES.md`](docs/30_USAGE_READINESS_GATES.md) — internal dogfood readiness decision, manual checks, automated coverage, and deferred public-facing gates.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
