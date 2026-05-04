@@ -154,7 +154,8 @@ func TestSessionSkillCommandReportsAlreadyActiveDynamicSkill(t *testing.T) {
 		Name:      "coder",
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 		SkillSources: []skill.Source{skill.FSSource("skills", "skills", fstest.MapFS{
-			"skills/architecture/SKILL.md": {Data: []byte("---\nname: architecture\ndescription: Architecture\n---\n# Architecture")},
+			"skills/architecture/SKILL.md":                {Data: []byte("---\nname: architecture\ndescription: Architecture\n---\n# Architecture")},
+			"skills/architecture/references/tradeoffs.md": {Data: []byte("---\ntrigger: tradeoffs\n---\nTradeoffs reference")},
 		}, "skills", skill.SourceEmbedded, 0)},
 	}))
 	require.NoError(t, err)
@@ -164,9 +165,26 @@ func TestSessionSkillCommandReportsAlreadyActiveDynamicSkill(t *testing.T) {
 	require.NoError(t, err)
 	session := &Session{App: application, Agent: inst}
 
-	result, err := session.Send(context.Background(), "/skill architecture")
+	result, err := session.Send(context.Background(), "/skill activate architecture")
 	require.NoError(t, err)
 	require.Contains(t, renderCommandResult(t, result), "already active (dynamic)")
+
+	result, err = session.Send(context.Background(), "/skills")
+	require.NoError(t, err)
+	skillsText := renderCommandResult(t, result)
+	require.Contains(t, skillsText, "architecture (dynamic)")
+	require.Contains(t, skillsText, "source=skills")
+
+	result, err = session.Send(context.Background(), "/skill refs architecture")
+	require.NoError(t, err)
+	refsText := renderCommandResult(t, result)
+	require.Contains(t, refsText, "Skill references for architecture")
+	require.Contains(t, refsText, "references/tradeoffs.md")
+	require.Contains(t, refsText, "triggers=tradeoffs")
+
+	result, err = session.Send(context.Background(), "/skill ref architecture references/tradeoffs.md")
+	require.NoError(t, err)
+	require.Contains(t, renderCommandResult(t, result), `skill ref: activated "references/tradeoffs.md" for "architecture"`)
 }
 
 func TestSessionCompactCommand(t *testing.T) {
@@ -272,7 +290,10 @@ func TestSessionCommandCatalogIncludesExecutableCommandsWithSchemas(t *testing.T
 	require.NoError(t, err)
 
 	catalog := session.CommandCatalog()
-	require.Len(t, catalog, 9)
+	require.Len(t, catalog, 12)
+	requireCatalogPath(t, catalog, "skill", "activate")
+	requireCatalogPath(t, catalog, "skill", "refs")
+	requireCatalogPath(t, catalog, "skill", "ref")
 	requireCatalogPath(t, catalog, "workflow", "list")
 	requireCatalogPath(t, catalog, "workflow", "show")
 	start := requireCatalogPath(t, catalog, "workflow", "start")

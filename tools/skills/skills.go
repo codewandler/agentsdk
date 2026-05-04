@@ -34,7 +34,14 @@ type result struct {
 	ActiveSkills []string       `json:"active_skills,omitempty"`
 }
 
-func (r result) IsError() bool { return false }
+func (r result) IsError() bool {
+	for _, item := range r.Results {
+		if item.Error != "" {
+			return true
+		}
+	}
+	return false
+}
 func (r result) String() string {
 	var lines []string
 	for _, item := range r.Results {
@@ -81,6 +88,7 @@ func skillTool() tool.Tool {
 			if err != nil {
 				return tool.Error(err.Error()), nil
 			}
+			activator := activationOwner(ctx)
 			out := result{Results: make([]actionResult, 0, len(p.Actions))}
 			for _, action := range p.Actions {
 				res := actionResult{Action: action.Action, Skill: strings.TrimSpace(action.Skill)}
@@ -97,7 +105,7 @@ func skillTool() tool.Tool {
 						out.Results = append(out.Results, res)
 						continue
 					}
-					status, err := state.ActivateSkill(res.Skill)
+					status, err := activateSkill(activator, state, res.Skill)
 					if err != nil {
 						res.Error = err.Error()
 						out.Results = append(out.Results, res)
@@ -106,7 +114,7 @@ func skillTool() tool.Tool {
 					res.SkillStatus = string(status)
 					if len(action.References) > 0 {
 						before := activeRefSet(state.ActiveReferences(res.Skill))
-						activated, err := state.ActivateReferences(res.Skill, action.References)
+						activated, err := activateReferences(activator, state, res.Skill, action.References)
 						if err != nil {
 							res.Error = err.Error()
 							out.Results = append(out.Results, res)
@@ -142,6 +150,29 @@ func activationState(ctx tool.Ctx) (*skill.ActivationState, error) {
 		return nil, fmt.Errorf("%q has unexpected type %T", skill.ContextKey, v)
 	}
 	return state, nil
+}
+
+func activationOwner(ctx tool.Ctx) skill.Activator {
+	v, ok := ctx.Extra()[skill.ActivatorContextKey]
+	if !ok {
+		return nil
+	}
+	activator, _ := v.(skill.Activator)
+	return activator
+}
+
+func activateSkill(activator skill.Activator, state *skill.ActivationState, name string) (skill.Status, error) {
+	if activator != nil {
+		return activator.ActivateSkill(name)
+	}
+	return state.ActivateSkill(name)
+}
+
+func activateReferences(activator skill.Activator, state *skill.ActivationState, name string, refs []string) ([]string, error) {
+	if activator != nil {
+		return activator.ActivateSkillReferences(name, refs)
+	}
+	return state.ActivateReferences(name, refs)
 }
 
 func activeRefSet(refs []skill.Reference) map[string]bool {

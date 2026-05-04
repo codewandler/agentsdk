@@ -81,19 +81,37 @@ func (p SkillsPayload) Display(command.DisplayMode) (string, error) {
 	if p.Unavailable != "" {
 		return p.Unavailable, nil
 	}
-	if p.State == nil {
+	if p.State == nil || p.State.Repository() == nil {
 		return "skills: unavailable", nil
 	}
-	active := p.State.ActiveSkills()
-	if len(active) == 0 {
-		return "No active skills.", nil
+	catalog := p.State.Repository().List()
+	if len(catalog) == 0 {
+		return "No skills discovered.", nil
 	}
 	var b strings.Builder
 	b.WriteString("Skills:")
-	for _, item := range active {
-		fmt.Fprintf(&b, "\n- %s (%s)", item.Name, p.State.Status(item.Name))
+	for _, item := range catalog {
+		status := p.State.Status(item.Name)
+		fmt.Fprintf(&b, "\n- %s (%s)", item.Name, status)
 		if item.Description != "" {
 			fmt.Fprintf(&b, ": %s", item.Description)
+		}
+		if item.SourceID != "" {
+			fmt.Fprintf(&b, " [source=%s]", item.SourceID)
+		}
+		refs := p.State.ActiveReferences(item.Name)
+		if len(refs) > 0 {
+			paths := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				paths = append(paths, ref.Path)
+			}
+			fmt.Fprintf(&b, " active_refs=%s", strings.Join(paths, ", "))
+		}
+	}
+	if diagnostics := p.State.Diagnostics(); len(diagnostics) > 0 {
+		b.WriteString("\nDiagnostics:")
+		for _, diagnostic := range diagnostics {
+			fmt.Fprintf(&b, "\n- %s", diagnostic)
 		}
 	}
 	return b.String(), nil
@@ -124,6 +142,73 @@ func (p SkillActivationPayload) Display(command.DisplayMode) (string, error) {
 		return fmt.Sprintf("skill: %q already active (dynamic)", p.Skill), nil
 	}
 	return fmt.Sprintf("skill: activated %q", p.Skill), nil
+}
+
+type SkillReferencesPayload struct {
+	Skill            string
+	Status           skill.Status
+	References       []skill.Reference
+	ActiveReferences []skill.Reference
+	Message          string
+}
+
+func (p SkillReferencesPayload) Display(command.DisplayMode) (string, error) {
+	if p.Message != "" {
+		return p.Message, nil
+	}
+	if p.Skill == "" {
+		return "skill refs: no skill", nil
+	}
+	if len(p.References) == 0 {
+		return fmt.Sprintf("skill refs: %q has no references", p.Skill), nil
+	}
+	active := skillReferencePathSet(p.ActiveReferences)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Skill references for %s (%s):", p.Skill, p.Status)
+	for _, ref := range p.References {
+		mark := " "
+		if active[ref.Path] {
+			mark = "*"
+		}
+		fmt.Fprintf(&b, "\n%s %s", mark, ref.Path)
+		if triggers := ref.Metadata.AllTriggers(); len(triggers) > 0 {
+			fmt.Fprintf(&b, " [triggers=%s]", strings.Join(triggers, ", "))
+		}
+	}
+	return b.String(), nil
+}
+
+type SkillReferenceActivationPayload struct {
+	Skill         string
+	Path          string
+	Activated     []string
+	AlreadyActive bool
+	Message       string
+	Error         string
+}
+
+func (p SkillReferenceActivationPayload) Display(command.DisplayMode) (string, error) {
+	if p.Message != "" {
+		return p.Message, nil
+	}
+	if p.Error != "" {
+		return "skill ref: " + p.Error, nil
+	}
+	if p.Skill == "" || p.Path == "" {
+		return "skill ref: missing skill or path", nil
+	}
+	if p.AlreadyActive {
+		return fmt.Sprintf("skill ref: %q for %q already active", p.Path, p.Skill), nil
+	}
+	return fmt.Sprintf("skill ref: activated %q for %q", p.Path, p.Skill), nil
+}
+
+func skillReferencePathSet(refs []skill.Reference) map[string]bool {
+	out := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		out[ref.Path] = true
+	}
+	return out
 }
 
 type CompactPayload struct {

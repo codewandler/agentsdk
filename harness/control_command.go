@@ -21,6 +21,15 @@ type skillActivateCommandInput struct {
 	Name string `command:"arg=name"`
 }
 
+type skillReferenceListCommandInput struct {
+	Name string `command:"arg=name"`
+}
+
+type skillReferenceActivateCommandInput struct {
+	Name string `command:"arg=name"`
+	Path string `command:"arg=path"`
+}
+
 func newHelpCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("help",
@@ -110,12 +119,33 @@ func newSkillsCommand(session *Session) (*command.Tree, error) {
 func newSkillCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("skill",
-		command.Description("Activate a skill on the current agent"),
+		command.Description("Inspect and activate skills on the current agent"),
 		command.WithPolicy(command.Policy{Internal: true}),
 	).
 		Handle(command.Typed(h.skillCommand),
+			command.Description("Activate a skill by name"),
 			command.TypedInput[skillActivateCommandInput](),
 			command.Arg("name").Required(),
+			command.Output(outputDescriptor("harness.skill.activate", "Skill activation result")),
+		).
+		Sub("activate", command.Typed(h.skillCommand),
+			command.Description("Activate a skill by name"),
+			command.TypedInput[skillActivateCommandInput](),
+			command.Arg("name").Required(),
+			command.Output(outputDescriptor("harness.skill.activate", "Skill activation result")),
+		).
+		Sub("refs", command.Typed(h.skillReferenceListCommand),
+			command.Description("List references for a skill"),
+			command.TypedInput[skillReferenceListCommandInput](),
+			command.Arg("name").Required(),
+			command.Output(outputDescriptor("harness.skill.references", "Skill reference list")),
+		).
+		Sub("ref", command.Typed(h.skillReferenceActivateCommand),
+			command.Description("Activate one exact skill reference"),
+			command.TypedInput[skillReferenceActivateCommandInput](),
+			command.Arg("name").Required(),
+			command.Arg("path").Required(),
+			command.Output(outputDescriptor("harness.skill.reference.activate", "Skill reference activation result")),
 		).
 		Build()
 }
@@ -225,6 +255,36 @@ func (h controlCommandHandler) skillCommand(_ context.Context, input skillActiva
 	}
 	payload := SkillActivationPayload{Skill: input.Name, Before: before, Status: status}
 	return command.Display(payload), nil
+}
+
+func (h controlCommandHandler) skillReferenceListCommand(_ context.Context, input skillReferenceListCommandInput) (command.Result, error) {
+	inst, ok := h.currentAgent()
+	if !ok {
+		return command.Display(SkillReferencesPayload{Message: "skill refs: no current agent"}), nil
+	}
+	state := inst.SkillActivationState()
+	if state == nil || state.Repository() == nil {
+		return command.Display(SkillReferencesPayload{Message: "skill refs: unavailable"}), nil
+	}
+	refs := state.Repository().ListReferences(input.Name)
+	return command.Display(SkillReferencesPayload{Skill: input.Name, Status: state.Status(input.Name), References: refs, ActiveReferences: state.ActiveReferences(input.Name)}), nil
+}
+
+func (h controlCommandHandler) skillReferenceActivateCommand(_ context.Context, input skillReferenceActivateCommandInput) (command.Result, error) {
+	inst, ok := h.currentAgent()
+	if !ok {
+		return command.Display(SkillReferenceActivationPayload{Message: "skill ref: no current agent"}), nil
+	}
+	before := map[string]bool{}
+	if state := inst.SkillActivationState(); state != nil {
+		before = skillReferencePathSet(state.ActiveReferences(input.Name))
+	}
+	activated, err := inst.ActivateSkillReferences(input.Name, []string{input.Path})
+	if err != nil {
+		return command.Display(SkillReferenceActivationPayload{Skill: input.Name, Path: input.Path, Error: err.Error()}), nil
+	}
+	alreadyActive := before[input.Path] && len(activated) == 0
+	return command.Display(SkillReferenceActivationPayload{Skill: input.Name, Path: input.Path, Activated: activated, AlreadyActive: alreadyActive}), nil
 }
 
 func (h controlCommandHandler) compactCommand(ctx context.Context, _ command.Invocation) (command.Result, error) {

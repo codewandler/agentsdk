@@ -300,9 +300,24 @@ func renderSkillMetadata(s skill.Skill, status skill.Status) string {
 	writeLine(&b, "skill", s.Name)
 	writeLine(&b, "description", s.Description)
 	writeLine(&b, "source", s.SourceLabel)
+	writeLine(&b, "source_id", s.SourceID)
+	writeLine(&b, "directory", s.Dir)
 	writeLine(&b, "status", string(status))
+	writeLine(&b, "domain", s.Metadata.Domain)
+	writeLine(&b, "role", s.Metadata.Role)
+	writeLine(&b, "risk", s.Metadata.Risk)
+	writeLine(&b, "compatibility", s.Metadata.Compatibility)
+	if len(s.Metadata.AllowedTools) > 0 {
+		writeLine(&b, "allowed_tools", strings.Join(s.Metadata.AllowedTools, ", "))
+	}
 	if len(s.References) > 0 {
 		writeLine(&b, "references", fmt.Sprintf("%d discovered", len(s.References)))
+		paths := make([]string, 0, len(s.References))
+		for _, ref := range s.References {
+			paths = append(paths, ref.Path)
+		}
+		sort.Strings(paths)
+		writeLine(&b, "reference_paths", strings.Join(paths, ", "))
 	}
 	return b.String()
 }

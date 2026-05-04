@@ -23,6 +23,7 @@ import (
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
+	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/terminal/cli"
 	"github.com/codewandler/agentsdk/trigger"
 	"github.com/codewandler/llmadapter/adapt"
@@ -719,6 +720,7 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 	for _, skill := range skills {
 		fmt.Fprintf(out, "  %s  %s  %s\n", skill.Name, displayDescription(skill.Description), skill.ID)
 	}
+	printDiscoverySkillReferences(out, imported.SkillSources())
 	printDiscoveryDataSources(out, resolved.Bundle.DataSources)
 	printDiscoveryWorkflows(out, resolved.Bundle.Workflows)
 	printDiscoveryActions(out, resolved.Bundle.Actions)
@@ -757,6 +759,35 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 		fmt.Fprintf(out, "  %s  %s  %s\n", diag.Severity, diag.Source.Label(), diag.Message)
 	}
 	return nil
+}
+
+func printDiscoverySkillReferences(out discoveryWriter, sources []skill.Source) {
+	if len(sources) == 0 {
+		return
+	}
+	repo, err := skill.NewRepository(sources, nil)
+	if err != nil {
+		fmt.Fprintf(out, "  references: unavailable (%v)\n", err)
+		return
+	}
+	wroteHeader := false
+	for _, item := range repo.List() {
+		refs := repo.ListReferences(item.Name)
+		if len(refs) == 0 {
+			continue
+		}
+		if !wroteHeader {
+			fmt.Fprintln(out, "  References:")
+			wroteHeader = true
+		}
+		for _, ref := range refs {
+			triggers := strings.Join(ref.Metadata.AllTriggers(), ",")
+			if triggers != "" {
+				triggers = "  triggers=" + triggers
+			}
+			fmt.Fprintf(out, "    %s/%s%s\n", item.Name, ref.Path, triggers)
+		}
+	}
 }
 
 func printDiscoveryDataSources(out discoveryWriter, datasources []resource.DataSourceContribution) {

@@ -54,6 +54,35 @@ func TestSkillToolRejectsInactiveSkillReferences(t *testing.T) {
 	require.Contains(t, result.String(), `references for "architecture" require the skill to be active first`)
 }
 
+func TestSkillToolUsesSessionAwareActivator(t *testing.T) {
+	state := testState(t)
+	activator := &recordingActivator{state: state}
+	ctx := testCtx{Context: context.Background(), extra: map[string]any{
+		skill.ContextKey:          state,
+		skill.ActivatorContextKey: activator,
+	}}
+	result, err := Tools()[0].Execute(ctx, json.RawMessage(`{"actions":[{"action":"activate","skill":"architecture"}]}`))
+	require.NoError(t, err)
+	require.False(t, result.IsError())
+	require.Equal(t, []string{"architecture"}, activator.skills)
+}
+
+type recordingActivator struct {
+	state  *skill.ActivationState
+	skills []string
+	refs   []string
+}
+
+func (a *recordingActivator) ActivateSkill(name string) (skill.Status, error) {
+	a.skills = append(a.skills, name)
+	return a.state.ActivateSkill(name)
+}
+
+func (a *recordingActivator) ActivateSkillReferences(name string, refs []string) ([]string, error) {
+	a.refs = append(a.refs, refs...)
+	return a.state.ActivateReferences(name, refs)
+}
+
 func testState(t *testing.T) *skill.ActivationState {
 	t.Helper()
 	fsys := fstest.MapFS{

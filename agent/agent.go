@@ -768,6 +768,7 @@ func (a *Instance) baseRuntimeOptions(includeSessionID bool) []agentruntime.Opti
 				agentruntime.WithToolSessionID(a.sessionID),
 				agentruntime.WithToolActivation(a.toolActivation),
 				agentruntime.WithToolSkillActivation(a.skillState),
+				agentruntime.WithToolExtra(skill.ActivatorContextKey, skill.Activator(a)),
 			)
 		}),
 	}

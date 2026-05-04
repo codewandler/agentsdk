@@ -328,13 +328,13 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 19. Skill system follow-ups
 
-- [ ] Keep skill repository construction in agent for now.
-- [ ] Revisit whether skill repository/state should move outward when session lifecycle clarifies.
-- [ ] Improve skill activation event persistence.
-- [ ] Improve skill reference activation UX.
-- [ ] Add command-tree-based skill commands if current control command code still has boilerplate.
-- [ ] Add discover output for skills/references.
-- [ ] Improve skill context rendering metadata.
+- [x] Keep skill repository construction in agent for now.
+- [x] Revisit whether skill repository/state should move outward when session lifecycle clarifies.
+- [x] Improve skill activation event persistence.
+- [x] Improve skill reference activation UX.
+- [x] Add command-tree-based skill commands if current control command code still has boilerplate.
+- [x] Add discover output for skills/references.
+- [x] Improve skill context rendering metadata.
 
 ## 20. Safety / risk policy
 
