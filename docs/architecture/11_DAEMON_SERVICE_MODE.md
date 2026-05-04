@@ -121,3 +121,7 @@ Covered by tests for:
 ## Follow-up boundary
 
 Section 12 should add triggers/scheduling on top of this shape. Trigger loops should target `daemon.Host` / `harness.Service` APIs and publish trigger-caused session/workflow metadata rather than creating a separate scheduler runtime.
+
+## Host boundary review
+
+The boundary review in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md) confirms daemon imports are intentionally thin: `daemon` depends on `harness` and `trigger`, not on a second app/runtime/plugin system. Future daemon behavior should continue to delegate reusable execution semantics to harness/session.

@@ -161,3 +161,7 @@ renderable payload shape.
   make this more structured.
 - Workflow run listing requires thread-backed sessions, as in the harness API.
 - SSE is session-scoped and does not yet multiplex service-wide events.
+
+## Host boundary review
+
+The boundary review in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md) confirms HTTP/SSE remains a thin channel adapter over `harness.Service` and `harness.Session`. Protocol-specific concepts, including future AG-UI/A2UI mappings, should stay in channel packages and not leak into core harness semantics.

@@ -166,3 +166,7 @@ agentsdk run . /workflow cancel <run-id>
 - Use "structured command resources" for resource YAML commands and "command
   descriptors" for executable catalog metadata. Avoid reviving the removed
   `command-descriptors/` resource directory concept.
+
+## Host boundary review
+
+The boundary review in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md) keeps terminal as a host/channel package but flags its direct `agent`, `runner`, and `tool` dependencies as cleanup candidates. Terminal should keep CLI policy, local fallback plugin policy, slash parsing, and rendering; live runtime/session state should move behind harness/session APIs as those APIs become sufficient.

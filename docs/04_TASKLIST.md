@@ -497,7 +497,17 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 - [x] Keep this batch docs/review-only with no code changes.
 
-## 31. Datasource work — deferred
+## 31. Harness/session/channel boundary review
+
+- [x] Review `harness`, `daemon`, `channel/*`, `terminal/*`, and `cmd/agentsdk` imports.
+- [x] Confirm `harness` remains the live session execution boundary.
+- [x] Confirm `daemon` remains a thin service/process wrapper over harness.
+- [x] Confirm HTTP/SSE remains a channel adapter over harness/session APIs.
+- [x] Document terminal direct `agent` dependency as a cleanup candidate.
+- [x] Document harness store/session ownership as a cleanup candidate.
+- [x] Keep this batch docs/review-only with no code changes.
+
+## 32. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.

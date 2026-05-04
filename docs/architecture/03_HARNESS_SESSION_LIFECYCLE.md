@@ -87,3 +87,9 @@ terminal pieces are CLI policy:
 Those should stay in terminal until another channel needs the same behavior. The
 generic lifecycle that other channels need is now exposed through `harness.Service`
 and `harness.Session`.
+
+## Host boundary review
+
+The docs-only host boundary review in [`29_HARNESS_CHANNEL_BOUNDARY.md`](29_HARNESS_CHANNEL_BOUNDARY.md) confirms `harness` is correctly the live session aggregation point. The important cleanup candidate is now explicit: centralize session/thread store selection and open/resume behavior in harness/session when that can remove duplicated `agent.Instance` lifecycle ownership.
+
+`harness.LoadSession` remains useful as a loading convenience, but core `harness.Service` should stay channel-neutral and avoid terminal-like policy.

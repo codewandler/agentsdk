@@ -465,6 +465,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/architecture/02_AGENT_INSTANCE.md`](docs/architecture/02_AGENT_INSTANCE.md) — `agent` package / `agent.Instance` responsibility problem and cleanup path.
 - [`docs/architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md`](docs/architecture/27_PACKAGE_BOUNDARY_ANALYSIS.md) — package-level import boundary analysis and cleanup candidates.
 - [`docs/architecture/28_APP_RESOURCE_PLUGIN_BOUNDARY.md`](docs/architecture/28_APP_RESOURCE_PLUGIN_BOUNDARY.md) — app/resource/plugin composition boundary review.
+- [`docs/architecture/29_HARNESS_CHANNEL_BOUNDARY.md`](docs/architecture/29_HARNESS_CHANNEL_BOUNDARY.md) — harness/session/channel host boundary review.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
