@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
@@ -113,6 +114,20 @@ func (e *Engine) RegisterContextProviders(providers ...agentcontext.Provider) er
 		e.threadContexts = manager
 	}
 	return e.threadContexts.Register(providers...)
+}
+
+func (e *Engine) CapabilityDescriptors() []capability.Descriptor {
+	if e == nil || e.threadRuntime == nil {
+		return nil
+	}
+	return e.threadRuntime.CapabilityDescriptors()
+}
+
+func (e *Engine) CapabilityActions() []action.Action {
+	if e == nil || e.threadRuntime == nil {
+		return nil
+	}
+	return e.threadRuntime.CapabilityActions()
 }
 
 // ContextDescriptors returns metadata for registered context providers without

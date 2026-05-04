@@ -317,14 +317,14 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 18. Capability system follow-ups
 
-- [ ] Keep planner as dogfood capability.
-- [ ] Clarify capability registry ownership.
-- [ ] Keep registry explicit; no hidden planner default.
-- [ ] Add capability action facet where useful.
-- [ ] Add capability tool projection where safe.
-- [ ] Add capability context provider facet where useful.
-- [ ] Improve capability replay tests.
-- [ ] Decide how capabilities attach through harness/session lifecycle.
+- [x] Keep planner as dogfood capability.
+- [x] Clarify capability registry ownership.
+- [x] Keep registry explicit; no hidden planner default.
+- [x] Add capability action facet where useful.
+- [x] Add capability tool projection where safe.
+- [x] Add capability context provider facet where useful.
+- [x] Improve capability replay tests.
+- [x] Decide how capabilities attach through harness/session lifecycle.
 
 ## 19. Skill system follow-ups
 

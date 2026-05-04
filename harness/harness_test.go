@@ -12,7 +12,10 @@ import (
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/capabilities/planner"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/workflow"
@@ -110,6 +113,41 @@ func TestSessionControlCommands(t *testing.T) {
 	require.Len(t, client.Requests(), 1)
 }
 
+func TestSessionCapabilitiesCommandReportsCapabilityProjections(t *testing.T) {
+	application, err := app.New(
+		app.WithAgentSpec(agent.Spec{
+			Name:      "planner_agent",
+			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+			Capabilities: []capability.AttachSpec{{
+				CapabilityName: planner.CapabilityName,
+				InstanceID:     "default",
+			}},
+		}),
+		app.WithPlugin(plannerplugin.New()),
+	)
+	require.NoError(t, err)
+	inst, err := application.InstantiateAgent("planner_agent", agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok"))), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	require.NoError(t, inst.RunTurn(context.Background(), 1, "attach planner"))
+	session, err := NewService(application).DefaultSession()
+	require.NoError(t, err)
+
+	state := session.CapabilityState()
+	require.Len(t, state.Capabilities, 1)
+	require.Equal(t, "planner", state.Capabilities[0].Name)
+	require.Equal(t, "default", state.Capabilities[0].InstanceID)
+	require.Contains(t, state.Capabilities[0].Tools, "plan")
+	require.Contains(t, state.Capabilities[0].Actions, planner.ActionApplyActions)
+	require.Equal(t, "planner/default", string(state.Capabilities[0].Context.Key))
+
+	result, err := session.Send(context.Background(), "/capabilities")
+	require.NoError(t, err)
+	text := renderCommandResult(t, result)
+	require.Contains(t, text, "capabilities:")
+	require.Contains(t, text, "instance: default (planner)")
+	require.Contains(t, text, "tools: plan")
+	require.Contains(t, text, "actions: planner.apply_actions")
+}
 func TestSessionSkillCommandReportsAlreadyActiveDynamicSkill(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	application, err := app.New(app.WithAgentSpec(agent.Spec{

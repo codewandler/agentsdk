@@ -362,6 +362,7 @@ func (s *Session) Commands() (*command.Registry, error) {
 		newQuitCommand,
 		newTurnCommand,
 		newContextCommand,
+		newCapabilitiesCommand,
 		newSkillsCommand,
 		newSkillCommand,
 		newCompactCommand,
@@ -568,6 +569,16 @@ func (s *Session) ContextState() ContextState {
 	state.Text = s.Agent.ContextState()
 	state.Descriptors = s.Agent.ContextDescriptors()
 	state.Snapshot = s.Agent.ContextSnapshot()
+	return state
+}
+
+func (s *Session) CapabilityState() CapabilityState {
+	state := CapabilityState{}
+	if s == nil || s.Agent == nil {
+		return state
+	}
+	state.Agent = s.Agent.Spec().Name
+	state.Capabilities = s.Agent.CapabilityDescriptors()
 	return state
 }
 

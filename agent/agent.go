@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
 	"github.com/codewandler/agentsdk/capability"
@@ -169,6 +170,19 @@ func (a *Instance) SessionStorePath() string {
 	return a.sessionStorePath
 }
 
+func (a *Instance) CapabilityDescriptors() []capability.Descriptor {
+	if a == nil || a.runtime == nil {
+		return nil
+	}
+	return a.runtime.CapabilityDescriptors()
+}
+
+func (a *Instance) CapabilityActions() []action.Action {
+	if a == nil || a.runtime == nil {
+		return nil
+	}
+	return a.runtime.CapabilityActions()
+}
 func (a *Instance) ContextDescriptors() []agentcontext.ProviderDescriptor {
 	if a == nil || a.runtime == nil {
 		return nil

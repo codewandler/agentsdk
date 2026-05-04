@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
@@ -144,6 +145,20 @@ func (r *ThreadRuntime) ContextManager() *agentcontext.Manager {
 		return nil
 	}
 	return r.contexts
+}
+
+func (r *ThreadRuntime) CapabilityDescriptors() []capability.Descriptor {
+	if r == nil || r.capabilities == nil {
+		return nil
+	}
+	return r.capabilities.Descriptors()
+}
+
+func (r *ThreadRuntime) CapabilityActions() []action.Action {
+	if r == nil || r.capabilities == nil {
+		return nil
+	}
+	return r.capabilities.Actions()
 }
 
 // ContextState returns a human-readable summary of the last committed context

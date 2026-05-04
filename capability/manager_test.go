@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
@@ -63,6 +64,22 @@ func TestManagerAttachAppendsEventAndExposesToolsAndContext(t *testing.T) {
 	}
 	if got := len(providerContext.Fragments); got != 1 {
 		t.Fatalf("fragments = %d, want 1", got)
+	}
+	descriptors := manager.Descriptors()
+	if got, want := len(descriptors), 1; got != want {
+		t.Fatalf("descriptors = %d, want %d", got, want)
+	}
+	if descriptors[0].Name != "fake" || descriptors[0].InstanceID != "fake_1" {
+		t.Fatalf("unexpected descriptor: %#v", descriptors[0])
+	}
+	if len(descriptors[0].Tools) != 1 || descriptors[0].Tools[0] != "fake_tool" {
+		t.Fatalf("unexpected descriptor tools: %#v", descriptors[0].Tools)
+	}
+	if len(descriptors[0].Actions) != 1 || descriptors[0].Actions[0] != "fake.action" {
+		t.Fatalf("unexpected descriptor actions: %#v", descriptors[0].Actions)
+	}
+	if len(manager.Actions()) != 1 || manager.Actions()[0].Spec().Name != "fake.action" {
+		t.Fatalf("unexpected manager actions: %#v", manager.Actions())
 	}
 }
 
@@ -193,6 +210,11 @@ func (c *fakeCapability) InstanceID() string { return c.instanceID }
 func (c *fakeCapability) Tools() []tool.Tool { return []tool.Tool{fakeTool{name: "fake_tool"}} }
 func (c *fakeCapability) ContextProvider() agentcontext.Provider {
 	return fakeContextProvider{key: agentcontext.ProviderKey(c.instanceID)}
+}
+func (c *fakeCapability) Actions() []action.Action {
+	return []action.Action{action.New(action.Spec{Name: "fake.action"}, func(action.Ctx, any) action.Result {
+		return action.OK("ok")
+	})}
 }
 func (c *fakeCapability) ApplyEvent(_ context.Context, event StateEvent) error {
 	c.applied = event.Name

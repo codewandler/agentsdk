@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
@@ -141,6 +142,27 @@ func (m *Manager) Tools() []tool.Tool {
 	return tools
 }
 
+func (m *Manager) Actions() []action.Action {
+	instances := m.sortedCapabilities()
+	var out []action.Action
+	for _, instance := range instances {
+		provider, ok := instance.(ActionsProvider)
+		if !ok {
+			continue
+		}
+		out = append(out, provider.Actions()...)
+	}
+	return out
+}
+
+func (m *Manager) Descriptors() []Descriptor {
+	instances := m.sortedCapabilities()
+	out := make([]Descriptor, 0, len(instances))
+	for _, instance := range instances {
+		out = append(out, Describe(instance))
+	}
+	return out
+}
 func (m *Manager) ContextProvider() agentcontext.Provider {
 	return managerProvider{manager: m}
 }

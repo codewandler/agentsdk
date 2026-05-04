@@ -87,6 +87,16 @@ func newContextCommand(session *Session) (*command.Tree, error) {
 		Build()
 }
 
+func newCapabilitiesCommand(session *Session) (*command.Tree, error) {
+	h := controlCommandHandler{Session: session}
+	return command.NewTree("capabilities",
+		command.Description("List attached capabilities and projections"),
+		command.WithPolicy(command.Policy{Internal: true}),
+	).
+		Handle(h.capabilitiesCommand).
+		Build()
+}
+
 func newSkillsCommand(session *Session) (*command.Tree, error) {
 	h := controlCommandHandler{Session: session}
 	return command.NewTree("skills",
@@ -182,6 +192,12 @@ func (h controlCommandHandler) contextCommand(context.Context, command.Invocatio
 	return command.Display(ContextStatePayload{State: state, Text: text}), nil
 }
 
+func (h controlCommandHandler) capabilitiesCommand(context.Context, command.Invocation) (command.Result, error) {
+	if h.Session == nil {
+		return command.Display(CapabilityStatePayload{}), nil
+	}
+	return command.Display(CapabilityStatePayload{State: h.Session.CapabilityState()}), nil
+}
 func (h controlCommandHandler) skillsCommand(context.Context, command.Invocation) (command.Result, error) {
 	inst, ok := h.currentAgent()
 	if !ok {

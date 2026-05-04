@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/agentcontext"
+	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/thread"
 )
@@ -28,6 +29,37 @@ type ContextState struct {
 	Descriptors []agentcontext.ProviderDescriptor `json:"descriptors,omitempty"`
 	Snapshot    agentcontext.StateSnapshot        `json:"snapshot"`
 }
+
+type CapabilityState struct {
+	Agent        string                  `json:"agent,omitempty"`
+	Capabilities []capability.Descriptor `json:"capabilities,omitempty"`
+}
+
+type CapabilityStatePayload struct {
+	State CapabilityState `json:"state"`
+}
+
+func (p CapabilityStatePayload) Display(command.DisplayMode) (string, error) {
+	if len(p.State.Capabilities) == 0 {
+		return "capabilities: none", nil
+	}
+	var b strings.Builder
+	b.WriteString("capabilities:")
+	for _, desc := range p.State.Capabilities {
+		writeSessionField(&b, "instance", fmt.Sprintf("%s (%s)", valueOrDash(desc.InstanceID), valueOrDash(desc.Name)))
+		if len(desc.Tools) > 0 {
+			writeSessionField(&b, "tools", strings.Join(desc.Tools, ", "))
+		}
+		if len(desc.Actions) > 0 {
+			writeSessionField(&b, "actions", strings.Join(desc.Actions, ", "))
+		}
+		if desc.Context.Key != "" {
+			writeSessionField(&b, "context", string(desc.Context.Key))
+		}
+	}
+	return b.String(), nil
+}
+
 type SessionInfoPayload struct {
 	Info SessionInfo
 }

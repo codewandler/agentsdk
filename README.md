@@ -478,6 +478,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/19_TERMINAL_CLI_POLISH.md`](docs/19_TERMINAL_CLI_POLISH.md) — terminal CLI boundary, plugin flags, model policy flags, command inspect surfaces, and workflow UX conventions.
 - [`docs/20_HTTP_SSE_AGUI_COMPATIBILITY.md`](docs/20_HTTP_SSE_AGUI_COMPATIBILITY.md) — native HTTP/SSE channel namespace, AG-UI compatibility boundary, and A2UI payload positioning.
 - [`docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md`](docs/21_CONTEXT_SYSTEM_FOLLOWUPS.md) — context provider lifecycle, descriptors, state snapshots, and non-terminal inspection surfaces.
+- [`docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md`](docs/22_CAPABILITY_SYSTEM_FOLLOWUPS.md) — explicit capability registry ownership, projection facets, planner dogfood use, and harness inspection.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 
