@@ -2,6 +2,8 @@ package builderapp
 
 import (
 	"context"
+	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,6 +21,15 @@ func TestEmbeddedResourcesResolveBuilderApp(t *testing.T) {
 	require.Equal(t, "builder", resolved.Bundle.AgentSpecs[0].Name)
 	require.NotEmpty(t, resolved.Bundle.Workflows)
 	require.NotEmpty(t, resolved.Bundle.CommandResources)
+
+	// Verify the agent spec selects the expected tool patterns.
+	spec := resolved.Bundle.AgentSpecs[0]
+	require.Contains(t, spec.Tools, "bash")
+	require.Contains(t, spec.Tools, "file_read")
+	require.Contains(t, spec.Tools, "file_edit")
+	require.Contains(t, spec.Tools, "builder_*")
+	require.Contains(t, spec.Tools, "tools_*")
+	require.Contains(t, spec.Tools, "skill")
 }
 
 func TestBuilderAppOptionsExposeActionsAndProjectContext(t *testing.T) {
@@ -36,10 +47,33 @@ func TestBuilderAppOptionsExposeActionsAndProjectContext(t *testing.T) {
 		names = append(names, a.Spec().Name)
 	}
 	require.Contains(t, names, "builder_inspect_project")
+
+	// Verify the full tool catalog includes filesystem, shell, git, and web tools.
 	catalog := loaded.ToolCatalog()
-	require.Contains(t, catalog.Names(), "web_fetch")
-	require.Contains(t, catalog.Names(), "web_search")
-	require.Contains(t, catalog.Names(), "tools_activate")
+	catalogNames := catalog.Names()
+	require.Contains(t, catalogNames, "bash")
+	require.Contains(t, catalogNames, "file_read")
+	require.Contains(t, catalogNames, "file_write")
+	require.Contains(t, catalogNames, "file_edit")
+	require.Contains(t, catalogNames, "file_stat")
+	require.Contains(t, catalogNames, "file_delete")
+	require.Contains(t, catalogNames, "grep")
+	require.Contains(t, catalogNames, "glob")
+	require.Contains(t, catalogNames, "dir_tree")
+	require.Contains(t, catalogNames, "dir_list")
+	require.Contains(t, catalogNames, "git_status")
+	require.Contains(t, catalogNames, "git_diff")
+	require.Contains(t, catalogNames, "git_add")
+	require.Contains(t, catalogNames, "git_commit")
+	require.Contains(t, catalogNames, "web_fetch")
+	require.Contains(t, catalogNames, "web_search")
+	require.Contains(t, catalogNames, "vision")
+	require.Contains(t, catalogNames, "skill")
+	require.Contains(t, catalogNames, "tools_activate")
+	require.Contains(t, catalogNames, "tools_deactivate")
+	require.Contains(t, catalogNames, "tools_list")
+	require.Contains(t, catalogNames, "builder_inspect_project")
+	require.Contains(t, catalogNames, "builder_discover_target")
 }
 
 func TestBuilderHelpersInspectDiscoverAndSmokeTarget(t *testing.T) {
@@ -86,4 +120,16 @@ func TestBuilderCLILoadsEmbeddedResourcesWithProjectWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "builder", loaded.AgentName)
 	require.Equal(t, dir, loaded.Workspace)
+}
+
+func TestBuilderManifestHasDefaultAgent(t *testing.T) {
+	// ResolveFS loads the resource bundle but not the manifest.
+	// Parse the embedded manifest directly to verify its content.
+	data, err := fs.ReadFile(Resources(), filepath.Join(ResourcesRoot, "agentsdk.app.json"))
+	require.NoError(t, err)
+	var manifest agentdir.AppManifest
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	require.Equal(t, "builder", manifest.DefaultAgent)
+	require.NotNil(t, manifest.Discovery.IncludeGlobalUserResources)
+	require.True(t, *manifest.Discovery.IncludeGlobalUserResources)
 }

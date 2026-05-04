@@ -15,11 +15,19 @@ import (
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/capability"
+	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/terminal/cli"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/codewandler/agentsdk/tools/filesystem"
+	"github.com/codewandler/agentsdk/tools/git"
+	"github.com/codewandler/agentsdk/tools/shell"
+	"github.com/codewandler/agentsdk/tools/skills"
 	"github.com/codewandler/agentsdk/tools/toolmgmt"
+	"github.com/codewandler/agentsdk/tools/vision"
 	"github.com/codewandler/agentsdk/tools/web"
+	"github.com/codewandler/cmdrisk"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -89,18 +97,48 @@ func (p Plugin) Name() string { return "builder" }
 
 func (p Plugin) Actions() []action.Action { return Actions(p.cfg) }
 
-func (p Plugin) CatalogTools() []tool.Tool { return p.DefaultTools() }
+func (p Plugin) CatalogTools() []tool.Tool {
+	analyzer := cmdrisk.New(cmdrisk.Config{})
+	var tools []tool.Tool
+	// Builder actions as tools.
+	for _, a := range Actions(p.cfg) {
+		tools = append(tools, tool.FromAction(a))
+	}
+	// Full local tool catalog: filesystem, shell, git, web, vision, skills, tool management.
+	searchProvider := web.DefaultSearchProviderFromEnv()
+	tools = append(tools, shell.Tools(shell.WithRiskAnalyzer(analyzer))...)
+	tools = append(tools, filesystem.Tools()...)
+	tools = append(tools, git.Tools()...)
+	tools = append(tools, web.Tools(searchProvider)...)
+	if searchProvider == nil {
+		// Ensure web_search is always in the catalog even without a configured provider.
+		tools = append(tools, web.SearchTool(nil))
+	}
+	tools = append(tools, vision.Tools(vision.ClientFromEnv())...)
+	tools = append(tools, skills.Tools()...)
+	tools = append(tools, toolmgmt.Tools()...)
+	return tools
+}
 
 func (p Plugin) DefaultTools() []tool.Tool {
+	// Default tools are the builder actions + tool management + web.
+	// The agent spec selects the full set from the catalog via tool patterns.
 	actions := Actions(p.cfg)
 	tools := make([]tool.Tool, 0, len(actions)+6)
 	for _, a := range actions {
 		tools = append(tools, tool.FromAction(a))
 	}
 	tools = append(tools, toolmgmt.Tools()...)
-	tools = append(tools, web.Tools(nil)...)
-	tools = append(tools, web.SearchTool(web.DefaultSearchProviderFromEnv()))
+	searchProvider := web.DefaultSearchProviderFromEnv()
+	tools = append(tools, web.Tools(searchProvider)...)
+	if searchProvider == nil {
+		tools = append(tools, web.SearchTool(nil))
+	}
 	return tools
+}
+
+func (p Plugin) CapabilityFactories() []capability.Factory {
+	return plannerplugin.New().CapabilityFactories()
 }
 
 func (p Plugin) ContextProviders() []agentcontext.Provider {

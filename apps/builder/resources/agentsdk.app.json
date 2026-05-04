@@ -1,1 +1,12 @@
-{"sources":[".agents"]}
+{
+  "default_agent": "builder",
+  "discovery": {
+    "include_global_user_resources": true,
+    "include_external_ecosystems": false,
+    "allow_remote": false,
+    "trust_store_dir": ".agentsdk"
+  },
+  "sources": [
+    ".agents"
+  ]
+}
