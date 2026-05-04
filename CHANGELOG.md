@@ -35,6 +35,9 @@ match these entries as the project starts publishing releases.
 - **`agentsdk build`** now uses the standard `cli.NewCommand` pattern and
   supports all flags available to `run` and `dev` (model, session, runtime,
   debug, etc.).
+- Engineer agent (`apps/engineer`) now has an explicit persona (direct, concise,
+  no sycophancy, ownership mentality) and strict git/commit rules (conventional
+  commits, atomic commits, mandatory CHANGELOG updates).
 - Updated llmadapter to `v1.0.0-rc.32` and modeldb to `v0.15.0`, refreshing
   embedded agentic-coding evidence with Qwen, expanded OpenRouter, and Bedrock
   Converse rows.
