@@ -365,12 +365,36 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 22. Compaction / memory
 
-- [ ] Keep current compaction APIs stable enough for dogfood.
-- [ ] Reduce writer output from compaction after displayable/event model exists.
-- [ ] Add compaction command payload improvements if needed.
-- [ ] Add better compaction policy config.
-- [ ] Add tests for auto-compaction with session/thread persistence.
-- [ ] Expose compaction state through session/harness if needed.
+- [x] Keep current `/compact`, `agent.Compact`, and runtime compaction APIs stable enough for dogfood.
+- [x] Keep auto-compaction enabled by default for normal agent sessions.
+- [x] Add an explicit opt-out path for auto-compaction.
+- [x] Replace absolute auto-compaction token threshold configuration with context-window percentage configuration.
+- [x] Default auto-compaction to trigger at 85% of the resolved model context window.
+- [x] Source max context window from resolved model metadata/modeldb when available.
+- [x] Add documented fallback behavior when model context window metadata is unavailable.
+- [x] Remove or deprecate absolute `TokenThreshold` as a public configuration path.
+- [x] Clamp/validate percentage configuration so invalid values cannot silently disable protection.
+- [x] Preserve compaction floor behavior and resume behavior after compaction.
+- [x] Improve compaction result payloads with reason, trigger, threshold percentage, context window, estimated tokens, replaced count, saved tokens, summary, and compaction node ID.
+- [x] Expose current compaction policy/state through agent/session/harness inspection surfaces.
+- [x] Publish compaction lifecycle events for started, summary delta, summary completed, committed, skipped, and failed.
+- [x] Stream generated compaction summary deltas to terminal users while `/compact` or auto-compaction is running.
+- [x] Bridge compaction lifecycle/summary events into `harness.Session.Subscribe` for HTTP/SSE and future channels.
+- [x] Keep the final committed `conversation.compaction` event as the authoritative persisted summary.
+- [x] Do not persist every live summary delta by default; persist the final summary once.
+- [x] Add visible terminal output showing why compaction happened and what summary will be used going forward.
+- [x] Make auto-compaction output clearly distinct from normal assistant output.
+- [x] Record compaction summary generation usage as compaction usage, not as a normal assistant turn.
+- [x] Add request/provider visibility for compaction summary generation where existing observers support it.
+- [x] Add tests for default-enabled auto-compaction at 85% of model context window.
+- [x] Add tests for explicit opt-out.
+- [x] Add tests that percentage config is used instead of absolute thresholds.
+- [x] Add tests for fallback behavior when context window metadata is unavailable.
+- [x] Add tests for auto-compaction with session/thread persistence and resume.
+- [x] Add tests for compaction lifecycle events and final persisted summary.
+- [x] Add tests for live summary streaming to harness/session subscribers.
+- [x] Add or update CLI/terminal smoke coverage for visible manual and auto compaction output.
+- [x] Document compaction policy, percentage configuration, opt-out, event visibility, streaming, and persistence conventions.
 
 ## 23. Discover / introspection
 

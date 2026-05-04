@@ -595,6 +595,8 @@ func TestAgentCompactReplacesOlderMessages(t *testing.T) {
 	summaryReq := client.RequestAt(3)
 	require.Len(t, summaryReq.Messages, 1)
 	require.Equal(t, unified.RoleUser, summaryReq.Messages[0].Role)
+	require.True(t, summaryReq.Stream)
+	require.Equal(t, "Summary of old conversation.", result.Summary)
 }
 
 func TestAgentCompactWithProvidedSummarySkipsLLMCall(t *testing.T) {
@@ -623,7 +625,56 @@ func TestAgentCompactWithProvidedSummarySkipsLLMCall(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, result.ReplacedCount)
 	// No extra LLM call — still only 3 requests.
+
 	require.Len(t, client.Requests(), 3)
+}
+
+func TestAgentCompactionLifecycleEventsStreamSummary(t *testing.T) {
+	client := runnertest.NewClient(
+		runnertest.TextStream("resp1"),
+		runnertest.TextStream("resp2"),
+		runnertest.TextStream("resp3"),
+		[]unified.Event{
+			unified.TextDeltaEvent{Text: "Summary "},
+			unified.TextDeltaEvent{Text: "stream."},
+			unified.UsageEvent{Tokens: unified.TokenItems{{Kind: unified.TokenKindInputNew, Count: 5}, {Kind: unified.TokenKindOutput, Count: 2}}},
+			unified.CompletedEvent{FinishReason: unified.FinishReasonStop, MessageID: "summary"},
+		},
+	)
+	var buf bytes.Buffer
+	a, err := New(
+		WithClient(client),
+		WithWorkspace(t.TempDir()),
+		WithOutput(&buf),
+		WithSystem("system"),
+		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
+	)
+	require.NoError(t, err)
+	var events []CompactionEvent
+	cancel := a.AddCompactionEventHandler(func(event CompactionEvent) { events = append(events, event) })
+	defer cancel()
+
+	ctx := context.Background()
+	require.NoError(t, a.RunTurn(ctx, 1, "old"))
+	require.NoError(t, a.RunTurn(ctx, 2, "old2"))
+	require.NoError(t, a.RunTurn(ctx, 3, "recent"))
+	result, err := a.CompactWithOptions(ctx, CompactOptions{KeepWindow: 4})
+	require.NoError(t, err)
+	require.Equal(t, "Summary stream.", result.Summary)
+	require.Contains(t, buf.String(), "Summary stream.")
+
+	types := make([]CompactionEventType, 0, len(events))
+	for _, event := range events {
+		types = append(types, event.Type)
+	}
+	require.Contains(t, types, CompactionEventStarted)
+	require.Contains(t, types, CompactionEventSummaryDelta)
+	require.Contains(t, types, CompactionEventSummaryCompleted)
+	require.Contains(t, types, CompactionEventCommitted)
+	records := a.Tracker().Records()
+	require.NotEmpty(t, records)
+	require.Equal(t, "compaction", records[len(records)-1].Source)
+	require.Equal(t, "compaction", records[len(records)-1].Dims.Labels["operation"])
 }
 
 func TestAgentCompactTooShortReturnsError(t *testing.T) {
@@ -655,17 +706,18 @@ func TestAgentAutoCompactionTriggersAboveThreshold(t *testing.T) {
 		WithOutput(&buf),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 		WithAutoCompaction(AutoCompactionConfig{
-			Enabled:        true,
-			TokenThreshold: 1000,
-			KeepWindow:     2,
+			Enabled:            true,
+			ContextWindowRatio: 0.01,
+			KeepWindow:         2,
 		}),
 	)
 	require.NoError(t, err)
+	a.contextWindow = 100_000
 
 	ctx := context.Background()
 	require.NoError(t, a.RunTurn(ctx, 1, "hello"))
 	require.NoError(t, a.RunTurn(ctx, 2, "generate large"))
-	require.Contains(t, buf.String(), "auto-compacted")
+	require.Contains(t, buf.String(), "auto-compaction committed")
 }
 
 func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
@@ -684,12 +736,13 @@ func TestAgentAutoCompactionEnabledByDefault(t *testing.T) {
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
+	a.contextWindow = 100_000
 
 	ctx := context.Background()
 	require.NoError(t, a.RunTurn(ctx, 1, "hello"))
 	require.NoError(t, a.RunTurn(ctx, 2, "continue"))
 	require.NoError(t, a.RunTurn(ctx, 3, "generate large"))
-	require.Contains(t, buf.String(), "auto-compacted")
+	require.Contains(t, buf.String(), "auto-compaction committed")
 }
 
 func TestAgentAutoCompactionCanBeDisabled(t *testing.T) {
@@ -714,7 +767,7 @@ func TestAgentAutoCompactionThresholdUsesContextWindow(t *testing.T) {
 		contextWindow:  200_000,
 		autoCompaction: AutoCompactionConfig{Enabled: true},
 	}
-	require.Equal(t, 160_000, a.autoCompactionThreshold())
+	require.Equal(t, 170_000, a.autoCompactionThreshold())
 }
 
 func TestAgentAutoCompactionThresholdUsesConfiguredContextWindowRatio(t *testing.T) {
@@ -732,19 +785,22 @@ func TestAgentAutoCompactionThresholdClampsContextWindowRatio(t *testing.T) {
 	}
 	require.Equal(t, 200_000, a.autoCompactionThreshold())
 }
-func TestAgentAutoCompactionThresholdExplicitOverride(t *testing.T) {
+func TestAgentAutoCompactionIgnoresDeprecatedAbsoluteThreshold(t *testing.T) {
 	a := &Instance{
 		contextWindow:  200_000,
 		autoCompaction: AutoCompactionConfig{Enabled: true, TokenThreshold: 50_000, ContextWindowRatio: 0.5},
 	}
-	require.Equal(t, 50_000, a.autoCompactionThreshold())
+	require.Equal(t, 100_000, a.autoCompactionThreshold())
 }
 
 func TestAgentAutoCompactionThresholdFallback(t *testing.T) {
 	a := &Instance{
 		autoCompaction: AutoCompactionConfig{Enabled: true},
 	}
-	require.Equal(t, defaultAutoCompactionThreshold, a.autoCompactionThreshold())
+	require.Equal(t, 85_000, a.autoCompactionThreshold())
+	policy := a.CompactionPolicy()
+	require.True(t, policy.Fallback)
+	require.Equal(t, "fallback", policy.ContextWindowSource)
 }
 
 func TestAgentReplaysUsageEventsAcrossSession(t *testing.T) {

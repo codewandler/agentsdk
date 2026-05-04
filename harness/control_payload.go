@@ -224,12 +224,17 @@ func (p CompactPayload) Display(command.DisplayMode) (string, error) {
 	if p.Error != "" {
 		return "compact: " + p.Error, nil
 	}
-	saved := p.Result.TokensBefore - p.Result.TokensAfter
 	return fmt.Sprintf(
-		"Compacted: replaced %d messages with summary\nEstimated tokens: before=%d after=%d (saved ~%d)",
+		"Compacted: replaced %d messages with summary\nEstimated tokens: before=%d after=%d (saved ~%d)\nPolicy: trigger=%s threshold=%d (%.0f%% of %d, source=%s)\nSummary:\n%s",
 		p.Result.ReplacedCount,
 		p.Result.TokensBefore,
 		p.Result.TokensAfter,
-		saved,
+		p.Result.SavedTokens,
+		p.Result.Trigger,
+		p.Result.ThresholdTokens,
+		p.Result.ContextWindowRatio*100,
+		p.Result.ContextWindow,
+		p.Result.ContextWindowSource,
+		p.Result.Summary,
 	), nil
 }

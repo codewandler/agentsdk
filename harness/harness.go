@@ -78,24 +78,26 @@ type ServiceStatus struct {
 type SessionEventType string
 
 const (
-	SessionEventOpened   SessionEventType = "opened"
-	SessionEventInput    SessionEventType = "input"
-	SessionEventCommand  SessionEventType = "command"
-	SessionEventWorkflow SessionEventType = "workflow"
-	SessionEventClosed   SessionEventType = "closed"
+	SessionEventOpened     SessionEventType = "opened"
+	SessionEventInput      SessionEventType = "input"
+	SessionEventCommand    SessionEventType = "command"
+	SessionEventWorkflow   SessionEventType = "workflow"
+	SessionEventCompaction SessionEventType = "compaction"
+	SessionEventClosed     SessionEventType = "closed"
 )
 
 type SessionEvent struct {
-	Type           SessionEventType
-	SessionName    string
-	SessionID      string
-	AgentName      string
-	Input          string
-	CommandPath    []string
-	WorkflowName   string
-	CommandResult  command.Result
-	WorkflowResult action.Result
-	Error          error
+	Type            SessionEventType
+	SessionName     string
+	SessionID       string
+	AgentName       string
+	Input           string
+	CommandPath     []string
+	WorkflowName    string
+	CommandResult   command.Result
+	WorkflowResult  action.Result
+	CompactionEvent agent.CompactionEvent
+	Error           error
 }
 
 func NewService(app *app.App) *Service {
@@ -177,6 +179,9 @@ func (s *Service) attachSession(name string, inst *agent.Instance) (*Session, er
 		name = inst.SessionID()
 	}
 	session := &Session{App: s.App, Agent: inst, Name: name, service: s, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
+	inst.AddCompactionEventHandler(func(event agent.CompactionEvent) {
+		session.publish(SessionEvent{Type: SessionEventCompaction, CompactionEvent: event})
+	})
 	if err := session.AttachAgentProjection(session.AgentCommandProjection()); err != nil {
 		return nil, err
 	}
@@ -611,6 +616,13 @@ func (s *Session) CapabilityState() CapabilityState {
 	state.Agent = s.Agent.Spec().Name
 	state.Capabilities = s.Agent.CapabilityDescriptors()
 	return state
+}
+
+func (s *Session) CompactionPolicy() agent.CompactionPolicy {
+	if s == nil || s.Agent == nil {
+		return agent.CompactionPolicy{}
+	}
+	return s.Agent.CompactionPolicy()
 }
 
 func (s *Session) ParamsSummary() string {

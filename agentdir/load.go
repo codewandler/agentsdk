@@ -41,7 +41,7 @@ type AgentFrontmatter struct {
 // filesystem-described agents. Omitted fields use agent defaults.
 type AutoCompactionFrontmatter struct {
 	Enabled            *bool   `yaml:"enabled"`
-	TokenThreshold     int     `yaml:"token-threshold"`
+	TokenThreshold     int     `yaml:"token-threshold"` // deprecated: use context-window-ratio
 	ContextWindowRatio float64 `yaml:"context-window-ratio"`
 	KeepWindow         int     `yaml:"keep-window"`
 }
@@ -56,7 +56,6 @@ func (fm *AutoCompactionFrontmatter) config() agent.AutoCompactionConfig {
 	}
 	return agent.AutoCompactionConfig{
 		Enabled:            enabled,
-		TokenThreshold:     fm.TokenThreshold,
 		ContextWindowRatio: fm.ContextWindowRatio,
 		KeepWindow:         fm.KeepWindow,
 	}
@@ -65,6 +64,9 @@ func (fm *AutoCompactionFrontmatter) config() agent.AutoCompactionConfig {
 func (fm *AutoCompactionFrontmatter) validate() error {
 	if fm == nil {
 		return nil
+	}
+	if fm.TokenThreshold > 0 {
+		return fmt.Errorf("auto-compaction.token-threshold is deprecated; use context-window-ratio")
 	}
 	if fm.TokenThreshold < 0 {
 		return fmt.Errorf("auto-compaction.token-threshold must be >= 0")

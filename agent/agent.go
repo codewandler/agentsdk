@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codewandler/agentsdk/action"
@@ -108,6 +109,9 @@ type Instance struct {
 	contextProviderFactories []ContextProviderFactory
 	contextWindow            int
 	autoCompaction           AutoCompactionConfig
+	compactionEventsMu       sync.Mutex
+	compactionEvents         map[int]CompactionEventHandler
+	nextCompactionEventSub   int
 }
 
 func New(opts ...Option) (*Instance, error) {

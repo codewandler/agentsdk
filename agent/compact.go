@@ -10,6 +10,7 @@ import (
 	"github.com/codewandler/agentsdk/conversation"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/thread"
+	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -20,28 +21,57 @@ var ErrNothingToCompact = errors.New("agent: nothing to compact")
 type CompactOptions struct {
 	KeepWindow int    // messages to preserve at the end; 0 = default (4)
 	Summary    string // if non-empty, skip LLM summarization
+	Trigger    CompactionTrigger
+	Reason     string
+
+	EstimatedTokens int
+	ThresholdTokens int
 }
 
 // CompactionResult describes the outcome of a compaction operation.
 type CompactionResult struct {
-	ReplacedCount    int
-	TokensBefore     int
-	TokensAfter      int
-	CompactionNodeID conversation.NodeID
+	ReplacedCount       int
+	TokensBefore        int
+	TokensAfter         int
+	SavedTokens         int
+	CompactionNodeID    conversation.NodeID
+	Summary             string
+	Trigger             CompactionTrigger
+	Reason              string
+	EstimatedTokens     int
+	ThresholdTokens     int
+	ContextWindow       int
+	ContextWindowRatio  float64
+	ContextWindowSource string
+	KeepWindow          int
+}
+
+// CompactionPolicy is the effective auto-compaction policy for an agent.
+type CompactionPolicy struct {
+	Enabled             bool
+	KeepWindow          int
+	ContextWindowRatio  float64
+	ContextWindow       int
+	ContextWindowSource string
+	ThresholdTokens     int
+	Fallback            bool
 }
 
 const defaultKeepWindow = 4
+const defaultAutoCompactionFallbackContextWindow = 100_000
+const defaultAutoCompactionContextWindowRatio = 0.85
 
 // AutoCompactionConfig controls automatic compaction between turns.
 type AutoCompactionConfig struct {
 	Enabled            bool
-	TokenThreshold     int     // explicit override; 0 = use model-aware default
-	ContextWindowRatio float64 // fraction of model context window; 0 = default (0.8)
+	ContextWindowRatio float64 // fraction of model context window; 0 = default (0.85)
 	KeepWindow         int     // messages to preserve; 0 = default (4)
-}
 
-const defaultAutoCompactionThreshold = 80_000
-const defaultAutoCompactionContextWindowRatio = 0.8
+	// Deprecated: absolute thresholds are no longer used. Configure
+	// ContextWindowRatio instead so compaction follows modeldb context-window
+	// metadata.
+	TokenThreshold int
+}
 
 const compactionSystemPrompt = `Summarize the following conversation concisely. Preserve:
 - Key decisions and conclusions
@@ -66,6 +96,17 @@ func (a *Instance) CompactWithOptions(ctx context.Context, opts CompactOptions) 
 	if a.client == nil {
 		return CompactionResult{}, fmt.Errorf("agent: client is not initialized")
 	}
+	trigger := opts.Trigger
+	if trigger == "" {
+		trigger = CompactionTriggerManual
+	}
+	reason := strings.TrimSpace(opts.Reason)
+	if reason == "" {
+		reason = "manual"
+		if trigger == CompactionTriggerAuto {
+			reason = "context_window_ratio"
+		}
+	}
 
 	keepWindow := opts.KeepWindow
 	if keepWindow <= 0 {
@@ -82,46 +123,69 @@ func (a *Instance) CompactWithOptions(ctx context.Context, opts CompactOptions) 
 		return CompactionResult{}, fmt.Errorf("agent: compact: %w", err)
 	}
 	tokensBefore := conversation.EstimateMessagesTokens(messagesBefore, nil)
+	policy := a.CompactionPolicy()
+	estimated := opts.EstimatedTokens
+	if estimated <= 0 {
+		estimated = tokensBefore
+	}
+	threshold := opts.ThresholdTokens
+	if threshold <= 0 {
+		threshold = policy.ThresholdTokens
+	}
 
 	replaceIDs, keepCount, err := selectCompactionNodes(history, keepWindow)
 	if err != nil {
 		return CompactionResult{}, err
 	}
 	if len(replaceIDs) == 0 {
+		a.emitCompactionEvent(CompactionEvent{Type: CompactionEventSkipped, Trigger: trigger, Reason: reason, EstimatedTokens: estimated, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: keepWindow})
 		return CompactionResult{}, ErrNothingToCompact
 	}
+
+	a.emitCompactionEvent(CompactionEvent{Type: CompactionEventStarted, Trigger: trigger, Reason: reason, EstimatedTokens: estimated, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: keepWindow, ReplacedCount: len(replaceIDs), TokensBefore: tokensBefore})
 
 	summary := strings.TrimSpace(opts.Summary)
 	if summary == "" {
 		toSummarize := compactionSummarizeMessages(messagesBefore, keepCount)
-		generated, err := a.generateCompactionSummary(ctx, toSummarize)
+		generated, err := a.generateCompactionSummary(ctx, trigger, reason, toSummarize)
 		if err != nil {
+			a.emitCompactionEvent(CompactionEvent{Type: CompactionEventFailed, Trigger: trigger, Reason: reason, Stage: "summary", Err: err, EstimatedTokens: estimated, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: keepWindow})
 			return CompactionResult{}, fmt.Errorf("agent: compact summary: %w", err)
 		}
 		summary = generated
+	} else {
+		a.emitCompactionEvent(CompactionEvent{Type: CompactionEventSummaryCompleted, Trigger: trigger, Reason: reason, Summary: summary, EstimatedTokens: estimated, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: keepWindow})
 	}
 
 	nodeID, err := a.runtime.Compact(ctx, summary, replaceIDs...)
 	if err != nil {
+		a.emitCompactionEvent(CompactionEvent{Type: CompactionEventFailed, Trigger: trigger, Reason: reason, Stage: "commit", Err: err, EstimatedTokens: estimated, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: keepWindow})
 		return CompactionResult{}, fmt.Errorf("agent: compact: %w", err)
 	}
 
 	messagesAfter, err := history.Messages()
-	if err != nil {
-		return CompactionResult{
-			ReplacedCount:    len(replaceIDs),
-			TokensBefore:     tokensBefore,
-			CompactionNodeID: nodeID,
-		}, nil
+	tokensAfter := 0
+	if err == nil {
+		tokensAfter = conversation.EstimateMessagesTokens(messagesAfter, nil)
 	}
-	tokensAfter := conversation.EstimateMessagesTokens(messagesAfter, nil)
-
-	return CompactionResult{
-		ReplacedCount:    len(replaceIDs),
-		TokensBefore:     tokensBefore,
-		TokensAfter:      tokensAfter,
-		CompactionNodeID: nodeID,
-	}, nil
+	result := CompactionResult{
+		ReplacedCount:       len(replaceIDs),
+		TokensBefore:        tokensBefore,
+		TokensAfter:         tokensAfter,
+		SavedTokens:         tokensBefore - tokensAfter,
+		CompactionNodeID:    nodeID,
+		Summary:             summary,
+		Trigger:             trigger,
+		Reason:              reason,
+		EstimatedTokens:     estimated,
+		ThresholdTokens:     threshold,
+		ContextWindow:       policy.ContextWindow,
+		ContextWindowRatio:  policy.ContextWindowRatio,
+		ContextWindowSource: policy.ContextWindowSource,
+		KeepWindow:          keepWindow,
+	}
+	a.emitCompactionEvent(compactionCommittedEvent(result))
+	return result, nil
 }
 
 func selectCompactionNodes(history *agentruntime.History, keepWindow int) ([]conversation.NodeID, int, error) {
@@ -156,7 +220,7 @@ func compactionSummarizeMessages(all []unified.Message, keepCount int) []unified
 	return all[:len(all)-keepCount]
 }
 
-func (a *Instance) generateCompactionSummary(ctx context.Context, messages []unified.Message) (string, error) {
+func (a *Instance) generateCompactionSummary(ctx context.Context, trigger CompactionTrigger, reason string, messages []unified.Message) (string, error) {
 	if len(messages) == 0 {
 		return "", fmt.Errorf("no messages to summarize")
 	}
@@ -193,7 +257,10 @@ func (a *Instance) generateCompactionSummary(ctx context.Context, messages []uni
 			Role:    unified.RoleUser,
 			Content: []unified.ContentPart{unified.TextPart{Text: transcript.String()}},
 		}},
-		Stream: false,
+		Stream: true,
+	}
+	if a.requestObserver != nil {
+		a.requestObserver(ctx, req)
 	}
 
 	events, err := a.client.Request(ctx, req)
@@ -211,6 +278,9 @@ func (a *Instance) generateCompactionSummary(ctx context.Context, messages []uni
 		switch ev := event.(type) {
 		case unified.TextDeltaEvent:
 			text.WriteString(ev.Text)
+			a.emitCompactionEvent(CompactionEvent{Type: CompactionEventSummaryDelta, Trigger: trigger, Reason: reason, SummaryDelta: ev.Text})
+		case unified.UsageEvent:
+			a.recordCompactionUsage(ev.Usage())
 		case unified.ErrorEvent:
 			if ev.Err != nil {
 				return "", ev.Err
@@ -222,78 +292,84 @@ func (a *Instance) generateCompactionSummary(ctx context.Context, messages []uni
 	if result == "" {
 		return "", fmt.Errorf("empty summary from model")
 	}
+	a.emitCompactionEvent(CompactionEvent{Type: CompactionEventSummaryCompleted, Trigger: trigger, Reason: reason, Summary: result})
 	return result, nil
 }
 
-func (a *Instance) autoCompactionThreshold() int {
-	if a.autoCompaction.TokenThreshold > 0 {
-		return a.autoCompaction.TokenThreshold
+func (a *Instance) CompactionPolicy() CompactionPolicy {
+	if a == nil {
+		return CompactionPolicy{Enabled: false, KeepWindow: defaultKeepWindow, ContextWindowRatio: defaultAutoCompactionContextWindowRatio, ContextWindow: defaultAutoCompactionFallbackContextWindow, ContextWindowSource: "fallback", ThresholdTokens: int(float64(defaultAutoCompactionFallbackContextWindow) * defaultAutoCompactionContextWindowRatio), Fallback: true}
 	}
-	if a.contextWindow > 0 {
-		ratio := a.autoCompaction.ContextWindowRatio
-		if ratio <= 0 {
-			ratio = defaultAutoCompactionContextWindowRatio
-		}
-		if ratio > 1 {
-			ratio = 1
-		}
-		return int(float64(a.contextWindow) * ratio)
+	keepWindow := a.autoCompaction.KeepWindow
+	if keepWindow <= 0 {
+		keepWindow = defaultKeepWindow
 	}
-	return defaultAutoCompactionThreshold
+	ratio := a.autoCompaction.ContextWindowRatio
+	if ratio <= 0 {
+		ratio = defaultAutoCompactionContextWindowRatio
+	}
+	if ratio > 1 {
+		ratio = 1
+	}
+	contextWindow := a.contextWindow
+	source := "modeldb"
+	fallback := false
+	if contextWindow <= 0 {
+		contextWindow = defaultAutoCompactionFallbackContextWindow
+		source = "fallback"
+		fallback = true
+	}
+	return CompactionPolicy{Enabled: a.autoCompaction.Enabled, KeepWindow: keepWindow, ContextWindowRatio: ratio, ContextWindow: contextWindow, ContextWindowSource: source, ThresholdTokens: int(float64(contextWindow) * ratio), Fallback: fallback}
 }
 
+func (a *Instance) autoCompactionThreshold() int { return a.CompactionPolicy().ThresholdTokens }
+
 func (a *Instance) maybeAutoCompact(ctx context.Context) {
-	if !a.autoCompaction.Enabled {
+	policy := a.CompactionPolicy()
+	if !policy.Enabled {
 		return
 	}
-	threshold := a.autoCompactionThreshold()
+	threshold := policy.ThresholdTokens
 
 	tokens, err := a.estimateProjectedTokens()
 	if err != nil {
 		return
 	}
 	if tokens < threshold {
+		a.emitCompactionEvent(CompactionEvent{Type: CompactionEventSkipped, Trigger: CompactionTriggerAuto, Reason: "below_threshold", EstimatedTokens: tokens, ThresholdTokens: threshold, ContextWindow: policy.ContextWindow, ContextWindowRatio: policy.ContextWindowRatio, ContextWindowSource: policy.ContextWindowSource, KeepWindow: policy.KeepWindow})
 		return
 	}
 
-	keepWindow := a.autoCompaction.KeepWindow
-	if keepWindow <= 0 {
-		keepWindow = defaultKeepWindow
-	}
-
-	result, err := a.CompactWithOptions(ctx, CompactOptions{KeepWindow: keepWindow})
+	result, err := a.CompactWithOptions(ctx, CompactOptions{KeepWindow: policy.KeepWindow, Trigger: CompactionTriggerAuto, Reason: "context_window_ratio", EstimatedTokens: tokens, ThresholdTokens: threshold})
 	if err != nil {
-		if a.verbose {
-			fmt.Fprintf(a.Out(), "[auto-compact failed: %v]\n", err)
+		if errors.Is(err, ErrNothingToCompact) {
+			return
 		}
 		return
 	}
-
-	saved := result.TokensBefore - result.TokensAfter
-	fmt.Fprintf(a.Out(), "[auto-compacted: replaced %d messages, ~%d tokens saved]\n",
-		result.ReplacedCount, saved)
 
 	a.emitAutoCompactionEvent(result, tokens, threshold)
 }
 
 func (a *Instance) emitAutoCompactionEvent(result CompactionResult, estimatedTokens, threshold int) {
 	payload := map[string]any{
-		"trigger":          "token_threshold",
-		"estimated_tokens": estimatedTokens,
-		"threshold":        threshold,
-		"context_window":   a.contextWindow,
-		"replaced_count":   result.ReplacedCount,
-		"tokens_before":    result.TokensBefore,
-		"tokens_after":     result.TokensAfter,
+		"trigger":               "context_window_ratio",
+		"estimated_tokens":      estimatedTokens,
+		"threshold":             threshold,
+		"threshold_ratio":       result.ContextWindowRatio,
+		"context_window":        result.ContextWindow,
+		"context_window_source": result.ContextWindowSource,
+		"replaced_count":        result.ReplacedCount,
+		"tokens_before":         result.TokensBefore,
+		"tokens_after":          result.TokensAfter,
+		"saved_tokens":          result.SavedTokens,
+		"compaction_node_id":    result.CompactionNodeID,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
-	event := thread.Event{
-		Kind:    "conversation.auto_compaction",
-		Payload: raw,
-	}
+	event := thread.Event{Kind: "conversation.auto_compaction", Payload: raw}
 	if a.threadRuntime != nil && a.threadRuntime.Live() != nil {
 		_ = a.threadRuntime.Live().Append(context.Background(), event)
 	} else if a.history != nil {
@@ -314,4 +390,18 @@ func (a *Instance) estimateProjectedTokens() (int, error) {
 		return 0, err
 	}
 	return conversation.EstimateMessagesTokens(messages, nil), nil
+}
+
+func compactionCommittedEvent(result CompactionResult) CompactionEvent {
+	return CompactionEvent{Type: CompactionEventCommitted, Trigger: result.Trigger, Reason: result.Reason, Summary: result.Summary, EstimatedTokens: result.EstimatedTokens, ThresholdTokens: result.ThresholdTokens, ContextWindow: result.ContextWindow, ContextWindowRatio: result.ContextWindowRatio, ContextWindowSource: result.ContextWindowSource, KeepWindow: result.KeepWindow, ReplacedCount: result.ReplacedCount, TokensBefore: result.TokensBefore, TokensAfter: result.TokensAfter, SavedTokens: result.SavedTokens, CompactionNodeID: string(result.CompactionNodeID)}
+}
+
+func (a *Instance) recordCompactionUsage(u unified.Usage) {
+	if a == nil || a.tracker == nil {
+		return
+	}
+	record := usage.FromUnified(u, usage.Dims{Provider: a.resolvedProvider, Model: a.resolvedModel, SessionID: a.sessionID, Labels: map[string]string{"operation": "compaction"}})
+	record.Source = "compaction"
+	a.tracker.Record(record)
+	a.persistUsageEvent(record)
 }

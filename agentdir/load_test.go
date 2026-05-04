@@ -109,7 +109,6 @@ func TestLoadFSParsesAutoCompactionConfig(t *testing.T) {
 name: coder
 auto-compaction:
   enabled: true
-  token-threshold: 50000
   context-window-ratio: 0.75
   keep-window: 6
 ---
@@ -123,7 +122,6 @@ You are a coder.`),
 	spec := bundle.AgentSpecs[0]
 	require.True(t, spec.AutoCompactionSet)
 	require.True(t, spec.AutoCompaction.Enabled)
-	require.Equal(t, 50_000, spec.AutoCompaction.TokenThreshold)
 	require.Equal(t, 0.75, spec.AutoCompaction.ContextWindowRatio)
 	require.Equal(t, 6, spec.AutoCompaction.KeepWindow)
 }
@@ -163,6 +161,23 @@ You are a coder.`),
 	_, err := LoadFS(fys, ".")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "auto-compaction.context-window-ratio")
+}
+
+func TestLoadFSRejectsDeprecatedAutoCompactionTokenThreshold(t *testing.T) {
+	fys := fstest.MapFS{
+		".agents/agents/coder.md": {
+			Data: []byte(`---
+name: coder
+auto-compaction:
+  token-threshold: 50000
+---
+You are a coder.`),
+		},
+	}
+
+	_, err := LoadFS(fys, ".")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "auto-compaction.token-threshold is deprecated")
 }
 func TestResolveDirPrefersManifest(t *testing.T) {
 	dir := t.TempDir()

@@ -219,6 +219,59 @@ func TestSessionCompactCommand(t *testing.T) {
 	require.Contains(t, renderCommandResult(t, result), "Compacted")
 }
 
+func TestSessionPublishesCompactionEvents(t *testing.T) {
+	client := runnertest.NewClient(
+		runnertest.TextStream("resp1"),
+		runnertest.TextStream("resp2"),
+		runnertest.TextStream("resp3"),
+		runnertest.TextStream("Visible summary."),
+	)
+	application, err := app.New(app.WithAgentSpec(agent.Spec{
+		Name:      "coder",
+		System:    "You code.",
+		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
+	}))
+	require.NoError(t, err)
+	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, err)
+	session, err := NewService(application).DefaultSession()
+	require.NoError(t, err)
+	events, cancel := session.Subscribe(16)
+	defer cancel()
+
+	ctx := context.Background()
+	_, err = session.Send(ctx, "old1")
+	require.NoError(t, err)
+	_, err = session.Send(ctx, "old2")
+	require.NoError(t, err)
+	_, err = session.Send(ctx, "recent")
+	require.NoError(t, err)
+	_, err = session.Send(ctx, "/compact")
+	require.NoError(t, err)
+
+	var sawDelta, sawCommitted bool
+	for i := 0; i < 16; i++ {
+		select {
+		case event := <-events:
+			if event.Type != SessionEventCompaction {
+				continue
+			}
+			if event.CompactionEvent.Type == agent.CompactionEventSummaryDelta && event.CompactionEvent.SummaryDelta != "" {
+				sawDelta = true
+			}
+			if event.CompactionEvent.Type == agent.CompactionEventCommitted && event.CompactionEvent.Summary == "Visible summary." {
+				sawCommitted = true
+			}
+		default:
+			i = 16
+		}
+	}
+	require.True(t, sawDelta)
+	require.True(t, sawCommitted)
+	policy := session.CompactionPolicy()
+	require.True(t, policy.Enabled)
+	require.Equal(t, 0.85, policy.ContextWindowRatio)
+}
 func TestSessionCompactCommandTooShort(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("resp"))
 	application, err := app.New(app.WithAgentSpec(agent.Spec{
