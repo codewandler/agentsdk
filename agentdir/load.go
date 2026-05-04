@@ -429,15 +429,16 @@ func parseAgentSpec(name string, content []byte) (agentconfig.Spec, AgentFrontma
 		inference.Effort = unified.ReasoningEffort(fm.Effort)
 	}
 	spec := agentconfig.Spec{
-		Name:         fm.Name,
-		Description:  fm.Description,
-		System:       body,
-		Inference:    inference,
-		MaxSteps:     fm.MaxSteps,
-		Tools:        append([]string(nil), []string(fm.Tools)...),
-		Skills:       append([]string(nil), []string(fm.Skills)...),
-		Commands:     append([]string(nil), []string(fm.Commands)...),
-		Capabilities: append([]capability.AttachSpec(nil), []capability.AttachSpec(fm.Capabilities)...),
+		Name:           fm.Name,
+		Description:    fm.Description,
+		System:         body,
+		Inference:      inference,
+		MaxSteps:       fm.MaxSteps,
+		Tools:          append([]string(nil), []string(fm.Tools)...),
+		Skills:         append([]string(nil), []string(fm.Skills)...),
+		Commands:       append([]string(nil), []string(fm.Commands)...),
+		Capabilities:   append([]capability.AttachSpec(nil), []capability.AttachSpec(fm.Capabilities)...),
+		HasFrontmatter: meta != nil,
 	}
 	if fm.AutoCompaction != nil {
 		spec.AutoCompaction = fm.AutoCompaction.config()

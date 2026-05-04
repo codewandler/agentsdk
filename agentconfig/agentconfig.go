@@ -38,6 +38,7 @@ type Spec struct {
 	Capabilities      []capability.AttachSpec
 	AutoCompaction    AutoCompactionConfig
 	AutoCompactionSet bool
+	HasFrontmatter    bool
 }
 
 // ThinkingMode controls extended thinking behavior.

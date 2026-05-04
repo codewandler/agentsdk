@@ -163,13 +163,7 @@ func Validate(dir string, opts ValidateOptions) (ValidationResult, error) {
 			MaxSteps:  spec.MaxSteps,
 		}
 
-		// Check frontmatter presence: if the spec has tools, skills, capabilities,
-		// or a description, it was parsed from frontmatter. A spec with only a name
-		// (derived from filename) and system prompt but nothing else likely has no
-		// frontmatter.
-		av.HasFrontmatter = spec.Description != "" || len(spec.Tools) > 0 ||
-			len(spec.Skills) > 0 || len(spec.Capabilities) > 0 ||
-			len(spec.Commands) > 0 || spec.MaxSteps > 0
+		av.HasFrontmatter = spec.HasFrontmatter
 
 		for _, cap := range spec.Capabilities {
 			av.Capabilities = append(av.Capabilities, cap.CapabilityName)
