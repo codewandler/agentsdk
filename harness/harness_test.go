@@ -26,12 +26,9 @@ import (
 )
 
 // withTestStore returns agent options that open a JSONL thread store at dir.
-// Test code uses this instead of bare WithSessionStoreDir now that the agent
-// no longer self-opens stores.
 func withTestStore(dir string) []agent.Option {
 	return []agent.Option{
 		agent.WithThreadStore(threadjsonlstore.Open(dir)),
-		agent.WithSessionStoreDir(dir),
 	}
 }
 

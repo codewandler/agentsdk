@@ -36,7 +36,6 @@ type AppLoadConfig struct {
 	DefaultAgent               string
 	Workspace                  string
 	IncludeGlobalUserResources bool
-	Verbose                    bool
 	ToolTimeout                time.Duration
 }
 
@@ -257,9 +256,6 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 			app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: appCfg.Workspace, IncludeGlobalUserResources: appCfg.IncludeGlobalUserResources}),
 			app.WithAgentOptions(agent.WithWorkspace(appCfg.Workspace)),
 		)
-	}
-	if appCfg.Verbose {
-		opts = append(opts, app.WithAgentOptions(agent.WithVerbose(true)))
 	}
 	if appCfg.ToolTimeout > 0 {
 		opts = append(opts, app.WithAgentOptions(agent.WithToolTimeout(appCfg.ToolTimeout)))

@@ -504,6 +504,12 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Remove `agent` import from `terminal/cli/run.go` — uses `runner.ErrMaxStepsReached`.
 - [x] Fix `examples/research-desk` to use `OpenSession` (was broken by `DefaultSession` removal).
 - [x] Update `ROADMAP.md`, `99_REVIEW_AND_IMPROVEMENTS.md`, and architecture docs.
+- [x] Extract baseline context provider assembly into pluggable `BaselineProviderFactory`.
+- [x] Delete `WithOutput`, `WithVerbose`, `verbose` field — no legacy shims.
+- [x] Remove `Verbose` from `AppLoadConfig` and harness load path.
+- [x] Add "no legacy fallbacks" rule to architecture docs.
+- [x] Remove `sessionStoreDir`, `sessionStorePath`, `WithSessionStoreDir`, `WithSessionStorePath`, `SessionStorePath()` from agent.
+- [x] Move `SessionStorePath()` to `harness.Session` (computes from `storeDir` + `SessionID()`).
 
 ## 31. Datasource work — deferred
 

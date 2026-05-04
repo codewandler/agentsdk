@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"io"
 	"time"
 
 	"github.com/codewandler/agentsdk/agentcontext"
@@ -84,12 +83,6 @@ func WithMaxSteps(max int) Option {
 	return func(a *Instance) { a.maxSteps = max }
 }
 
-// Deprecated: WithOutput is no longer used. Diagnostic output is routed
-// through [WithDiagnosticHandler] and compaction events through
-// [CompactionEventHandler]. This function is a no-op retained for source
-// compatibility during the migration period.
-func WithOutput(_ io.Writer) Option { return nil }
-
 // DiagnosticHandler receives structured diagnostic messages from the agent.
 // Diagnostics replace the former fmt.Fprintf(a.Out(), ...) paths for usage
 // persistence errors and similar operational notices.
@@ -121,32 +114,16 @@ func WithSystem(prompt string) Option {
 	return func(a *Instance) { a.system = prompt }
 }
 
-func WithSessionStoreDir(dir string) Option {
-	return func(a *Instance) { a.sessionStoreDir = dir }
-}
-
-func WithResumeSession(path string) Option {
-	return func(a *Instance) { a.resumeSession = path }
+func WithResumeSession(id string) Option {
+	return func(a *Instance) { a.resumeSession = id }
 }
 
 // WithThreadStore provides a pre-opened thread store so the agent does not need
 // to know about JSONL paths or store backends. When set, initSession uses this
-// store instead of opening one from sessionStoreDir. The caller (typically
-// harness) retains ownership of the store for inspection and workflow run
-// lookups.
+// store instead of creating an in-memory store. The caller (typically harness)
+// retains ownership of the store for inspection and workflow run lookups.
 func WithThreadStore(store thread.Store) Option {
 	return func(a *Instance) { a.threadStore = store }
-}
-
-// WithSessionStorePath records the filesystem path of the session store for
-// callers that need it for diagnostics or legacy compatibility. This is
-// metadata only — the agent does not open or read this path.
-func WithSessionStorePath(path string) Option {
-	return func(a *Instance) { a.sessionStorePath = path }
-}
-
-func WithVerbose(verbose bool) Option {
-	return func(a *Instance) { a.verbose = verbose }
 }
 
 func WithClient(client unified.Client) Option {
@@ -242,6 +219,13 @@ func WithContextProviderFactories(factories ...ContextProviderFactory) Option {
 	return func(a *Instance) {
 		a.contextProviderFactories = append(a.contextProviderFactories, factories...)
 	}
+}
+
+// WithBaselineProviderFactory replaces the default baseline context provider
+// builder. The factory is called each time the agent assembles its context
+// provider list (every turn). When not set, [DefaultBaselineProviders] is used.
+func WithBaselineProviderFactory(factory BaselineProviderFactory) Option {
+	return func(a *Instance) { a.baselineProviderFactory = factory }
 }
 
 // WithAutoCompaction configures automatic compaction between turns.

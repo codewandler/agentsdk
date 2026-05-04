@@ -154,9 +154,6 @@ func (s *Service) OpenSession(ctx context.Context, req SessionOpenRequest) (*Ses
 	if threadStore != nil {
 		opts = append(opts, agent.WithThreadStore(threadStore))
 	}
-	if req.StoreDir != "" {
-		opts = append(opts, agent.WithSessionStoreDir(req.StoreDir))
-	}
 	if resumeID != "" {
 		opts = append(opts, agent.WithResumeSession(resumeID))
 	}
@@ -664,6 +661,19 @@ func (s *Session) ParamsSummary() string {
 
 func (s *Session) SessionID() string {
 	return s.Info().SessionID
+}
+
+// SessionStorePath returns the filesystem path of the session's JSONL store
+// file, or empty if the session is not thread-backed.
+func (s *Session) SessionStorePath() string {
+	if s == nil || s.storeDir == "" {
+		return ""
+	}
+	id := s.SessionID()
+	if id == "" {
+		return ""
+	}
+	return filepath.Join(s.storeDir, id+".jsonl")
 }
 
 // resolveStore returns the session's thread store. It prefers the harness-owned

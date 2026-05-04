@@ -15,7 +15,6 @@ import (
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
-	"github.com/codewandler/agentsdk/agentcontext/contextproviders"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
@@ -82,10 +81,7 @@ type Instance struct {
 	systemBuilder            func(workspace, prompt string) string
 	sessionID                string
 	history                  *agentruntime.History
-	sessionStoreDir          string
 	resumeSession            string
-	sessionStorePath         string
-	verbose                  bool
 	initErrs                 []error
 	eventHandlerFactory      func(runner.EventHandlerContext) runner.EventHandler
 	requestObserver          runner.RequestObserver
@@ -107,6 +103,7 @@ type Instance struct {
 	threadRuntime            *agentruntime.ThreadRuntime
 	extraContextProviders    []agentcontext.Provider
 	contextProviderFactories []ContextProviderFactory
+	baselineProviderFactory  BaselineProviderFactory
 	threadStore              thread.Store
 	contextWindow            int
 	autoCompaction           AutoCompactionConfig
@@ -167,12 +164,7 @@ func (a *Instance) SessionID() string {
 	return a.sessionID
 }
 
-func (a *Instance) SessionStorePath() string {
-	if a == nil {
-		return ""
-	}
-	return a.sessionStorePath
-}
+
 
 func (a *Instance) CapabilityDescriptors() []capability.Descriptor {
 	if a == nil || a.runtime == nil {
@@ -490,7 +482,7 @@ func (a *Instance) Reset() {
 	if err == nil {
 		a.sessionID = sessionID
 	}
-	if a.sessionStoreDir != "" {
+	if a.threadStore != nil {
 		if err := a.startPersistentSession(time.Now()); err == nil {
 			if runtimeAgent, err := agentruntime.New(a.client, a.runtimeOptions()...); err == nil {
 				a.runtime = runtimeAgent
@@ -833,26 +825,15 @@ func (a *Instance) resolveThreadStore() thread.Store {
 
 func (a *Instance) initSession(ctx context.Context) error {
 	hasCapabilities := len(a.capabilitySpecs) > 0
-	if a.resumeSession == "" && a.threadStore == nil && a.sessionStoreDir == "" && !hasCapabilities {
+	if a.resumeSession == "" && a.threadStore == nil && !hasCapabilities {
 		return nil
 	}
 	if a.resumeSession != "" {
-		var (
-			store thread.Store
-			id    string
-		)
-		if a.threadStore != nil {
-			// Harness-owned store: the resume ref is just the session ID.
-			store = a.threadStore
-			id = a.resumeSession
-			if a.sessionStorePath == "" && a.sessionStoreDir != "" {
-				a.sessionStorePath = filepath.Join(a.sessionStoreDir, id+".jsonl")
-			}
-		} else {
-			// Legacy path: no pre-opened store. Parse the resume ref to
-			// extract directory and session ID.
+		store := a.threadStore
+		if store == nil {
 			return fmt.Errorf("resume session %s: no thread store configured (use WithThreadStore)", a.resumeSession)
 		}
+		id := a.resumeSession
 		source := thread.EventSource{Type: "session", SessionID: id}
 		if hasCapabilities {
 			registry, err := a.ensureCapabilityRegistry()
@@ -923,7 +904,6 @@ func (a *Instance) startPersistentSession(now time.Time) error {
 	store := a.resolveThreadStore()
 	if store == nil {
 		a.history = nil
-		a.sessionStorePath = ""
 		a.threadRuntime = nil
 		return nil
 	}
@@ -948,9 +928,6 @@ func (a *Instance) startPersistentSession(now time.Time) error {
 		}
 	}
 	a.history = agentruntime.NewHistory(append(a.historyOptions(true), agentruntime.WithHistoryLiveThread(live))...)
-	if a.sessionStorePath == "" && a.sessionStoreDir != "" {
-		a.sessionStorePath = filepath.Join(a.sessionStoreDir, a.sessionID+".jsonl")
-	}
 	return nil
 }
 
@@ -1073,34 +1050,32 @@ func (a *Instance) contextProviders() []agentcontext.Provider {
 		}
 	}
 
-	// addIfNotOverridden appends a provider only when no plugin already
-	// contributes the same key.
+	// Build baseline providers from the factory, skipping any whose key
+	// is already contributed by a plugin provider.
+	factory := a.baselineProviderFactory
+	if factory == nil {
+		factory = DefaultBaselineProviders
+	}
+	var activeTools func() []tool.Tool
+	if a.toolActivation != nil {
+		activeTools = a.toolActivation.ActiveTools
+	}
+	baseline := factory(BaselineProviderState{
+		Workspace:        a.workspace,
+		ResolvedModel:    a.resolvedModel,
+		ResolvedProvider: a.resolvedProvider,
+		ContextWindow:    a.contextWindow,
+		Effort:           string(a.inference.Effort),
+		ActiveTools:      activeTools,
+		SkillRepo:        a.skillRepo,
+		SkillState:       a.skillState,
+		InstructionPaths: a.specInstructionPaths,
+	})
 	var providers []agentcontext.Provider
-	addIfNotOverridden := func(p agentcontext.Provider) {
-		if !extraKeys[p.Key()] {
+	for _, p := range baseline {
+		if p != nil && !extraKeys[p.Key()] {
 			providers = append(providers, p)
 		}
-	}
-
-	addIfNotOverridden(contextproviders.Environment(contextproviders.WithWorkDir(a.workspace)))
-	addIfNotOverridden(contextproviders.Time(time.Minute))
-	addIfNotOverridden(contextproviders.Model(contextproviders.ModelInfo{
-		Name:          a.resolvedModel,
-		Provider:      a.resolvedProvider,
-		ContextWindow: a.contextWindow,
-		Effort:        string(a.inference.Effort),
-	}))
-	if a.toolActivation != nil {
-		addIfNotOverridden(contextproviders.Tools(a.toolActivation.ActiveTools()...))
-	}
-	if a.skillRepo != nil || a.skillState != nil {
-		addIfNotOverridden(contextproviders.SkillInventoryProvider(contextproviders.SkillInventory{
-			Catalog: a.skillRepo,
-			State:   a.skillState,
-		}))
-	}
-	if len(a.specInstructionPaths) > 0 {
-		addIfNotOverridden(contextproviders.AgentsMarkdown(a.specInstructionPaths, contextproviders.AgentsMarkdownOption(contextproviders.WithFileWorkDir(a.workspace))))
 	}
 
 	// Append plugin-contributed providers after the baseline set.

@@ -246,7 +246,6 @@ func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
 		agent.WithThreadStore(threadjsonlstore.Open(storeDir)),
-		agent.WithSessionStoreDir(storeDir),
 	)
 	require.NoError(t, err)
 	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
@@ -280,7 +279,6 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 		agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok"))),
 		agent.WithWorkspace(t.TempDir()),
 		agent.WithThreadStore(threadjsonlstore.Open(storeDir)),
-		agent.WithSessionStoreDir(storeDir),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, inst.LiveThread())
@@ -295,7 +293,7 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 	require.NoError(t, result.Error)
 	require.NotEmpty(t, handled)
 
-	store := threadjsonlstore.Open(filepath.Dir(inst.SessionStorePath()))
+	store := threadjsonlstore.Open(storeDir)
 	_, ok, err := (workflow.ThreadRunStore{Store: store, ThreadID: thread.ID(inst.SessionID())}).State(ctx, "run_thread")
 	require.NoError(t, err)
 	require.False(t, ok)

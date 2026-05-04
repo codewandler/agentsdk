@@ -261,13 +261,13 @@ func TestLoadSessionAppliesResumeSession(t *testing.T) {
 		AgentOptions: []agent.Option{agent.WithClient(runnertest.NewClient())},
 	})
 	require.NoError(t, err)
-	require.NotEmpty(t, first.Agent.SessionStorePath())
+	require.NotEmpty(t, first.Session.SessionStorePath())
 
 	resumed, err := LoadSession(SessionLoadConfig{
 		App: AppLoadConfig{DefaultAgent: "test"},
 		Session: SessionOpenConfig{
 			StoreDir: dir,
-			Resume:   first.Agent.SessionStorePath(),
+			Resume:   first.Session.SessionID(),
 		},
 		AppOptions: []app.Option{
 			app.WithAgentSpec(agent.Spec{Name: "test", System: "system"}),
@@ -277,7 +277,7 @@ func TestLoadSessionAppliesResumeSession(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, first.Agent.SessionID(), resumed.Agent.SessionID())
-	require.Equal(t, first.Agent.SessionStorePath(), resumed.Agent.SessionStorePath())
+	require.Equal(t, first.Session.SessionStorePath(), resumed.Session.SessionStorePath())
 }
 
 func TestLoadSessionAppliesModelPolicy(t *testing.T) {

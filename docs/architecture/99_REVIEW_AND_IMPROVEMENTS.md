@@ -7,10 +7,11 @@ This file is the single place for architecture review notes, package-boundary fi
 1. Read [`../README.md`](../README.md), [`README.md`](README.md), [`overview.md`](overview.md), and [`package-boundaries.md`](package-boundaries.md).
 2. Use this file as the backlog for review findings and cleanup candidates.
 3. Pick one small cleanup that deletes coupling or removes an obsolete path. Do not add compatibility shims or parallel runtimes.
-4. Keep production docs focused on current infrastructure and rules. If new review findings appear, update this file instead of adding another review document.
-5. Keep temporary task tracking in [`.agents/TASKLIST.md`](../../.agents/TASKLIST.md), not under `docs/`.
-6. Run focused tests for touched code and `./scripts/ci-check.sh` before reporting or committing.
-7. Leave datasource runtime expansion deferred until at least one agent/session ownership cleanup slice has been dogfooded.
+4. **No legacy fallbacks or deprecated shims.** We are the only users of this SDK. When an API is replaced, delete the old one immediately. Do not retain no-op stubs, `Deprecated:` wrappers, or backward-compatibility adapters.
+5. Keep production docs focused on current infrastructure and rules. If new review findings appear, update this file instead of adding another review document.
+6. Keep temporary task tracking in [`.agents/TASKLIST.md`](../../.agents/TASKLIST.md), not under `docs/`.
+7. Run focused tests for touched code and `./scripts/ci-check.sh` before reporting or committing.
+8. Leave datasource runtime expansion deferred until at least one agent/session ownership cleanup slice has been dogfooded.
 
 ## Current package boundary summary
 
@@ -30,7 +31,7 @@ Current high-level dependency direction:
 10. **Harness/session:** `harness`, `trigger`.
 11. **Hosts/products/channels:** `cmd/agentsdk`, `terminal/*`, `daemon`, `channel/*`, `apps/*`, `examples/*`.
 
-This is not yet a strict acyclic architecture. Some edges are accepted while the SDK is pre-1.0 and while `action`, `workflow`, command resources, capabilities, and agent/session ownership are still settling. The cleanup rule is: do not add compatibility shims or parallel runtimes; move ownership only when doing so deletes coupling.
+This is not yet a strict acyclic architecture. Some edges are accepted while the SDK is pre-1.0 and while `action`, `workflow`, command resources, capabilities, and agent/session ownership are still settling. The cleanup rule is: do not add compatibility shims or parallel runtimes; move ownership only when doing so deletes coupling. We are the only consumers — when an API is replaced, delete the old one in the same change.
 
 ## Boundary findings
 
