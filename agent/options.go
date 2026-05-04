@@ -9,6 +9,7 @@ import (
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/skill"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/toolactivation"
 	"github.com/codewandler/llmadapter/adapt"
@@ -107,6 +108,22 @@ func WithResumeSession(path string) Option {
 	return func(a *Instance) { a.resumeSession = path }
 }
 
+// WithThreadStore provides a pre-opened thread store so the agent does not need
+// to know about JSONL paths or store backends. When set, initSession uses this
+// store instead of opening one from sessionStoreDir. The caller (typically
+// harness) retains ownership of the store for inspection and workflow run
+// lookups.
+func WithThreadStore(store thread.Store) Option {
+	return func(a *Instance) { a.threadStore = store }
+}
+
+// WithSessionStorePath records the filesystem path of the session store for
+// callers that need it for diagnostics or legacy compatibility. This is
+// metadata only — the agent does not open or read this path.
+func WithSessionStorePath(path string) Option {
+	return func(a *Instance) { a.sessionStorePath = path }
+}
+
 func WithVerbose(verbose bool) Option {
 	return func(a *Instance) { a.verbose = verbose }
 }
@@ -134,7 +151,7 @@ func WithTools(tools []tool.Tool) Option {
 	return func(a *Instance) { a.toolActivation = toolactivation.New(tools...) }
 }
 
-func WithEventHandlerFactory(factory func(*Instance, int) runner.EventHandler) Option {
+func WithEventHandlerFactory(factory func(runner.EventHandlerContext) runner.EventHandler) Option {
 	return func(a *Instance) { a.eventHandlerFactory = factory }
 }
 

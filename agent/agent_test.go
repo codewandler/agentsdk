@@ -14,6 +14,7 @@ import (
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
+	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/tools/shell"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
@@ -23,6 +24,8 @@ const (
 	testProvider = "test"
 	testModel    = "model"
 )
+
+
 
 func TestAgentRunTurnUsesDefaultCachePolicy(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("response", "resp1"))
@@ -122,6 +125,7 @@ func TestAgentPersistsAndResumesSession(t *testing.T) {
 	first, err := New(
 		WithClient(firstClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
@@ -133,8 +137,9 @@ func TestAgentPersistsAndResumesSession(t *testing.T) {
 	second, err := New(
 		WithClient(secondClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
-		WithResumeSession(first.SessionStorePath()),
+		WithResumeSession(first.SessionID()),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
@@ -155,6 +160,7 @@ func TestAgentResumesSessionByIDFromStoreDir(t *testing.T) {
 	first, err := New(
 		WithClient(firstClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
@@ -165,6 +171,7 @@ func TestAgentResumesSessionByIDFromStoreDir(t *testing.T) {
 	second, err := New(
 		WithClient(secondClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithResumeSession(first.SessionID()),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
@@ -199,6 +206,7 @@ func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
 	first, err := New(
 		WithClient(firstClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
@@ -210,8 +218,9 @@ func TestAgentUsesNativeContinuationWhenAvailable(t *testing.T) {
 	second, err := New(
 		WithClient(secondClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
-		WithResumeSession(first.SessionStorePath()),
+		WithResumeSession(first.SessionID()),
 		WithInferenceOptions(InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}),
 	)
 	require.NoError(t, err)
@@ -390,6 +399,7 @@ func TestAgentResumesActivatedSkillAcrossSession(t *testing.T) {
 	first, err := New(
 		WithClient(firstClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithSpec(Spec{
 			Name:         "coder",
@@ -407,8 +417,9 @@ func TestAgentResumesActivatedSkillAcrossSession(t *testing.T) {
 	second, err := New(
 		WithClient(secondClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
-		WithResumeSession(first.SessionStorePath()),
+		WithResumeSession(first.SessionID()),
 		WithSpec(Spec{
 			Name:         "coder",
 			Skills:       []string{"base"},
@@ -431,6 +442,7 @@ func TestAgentResumesActivatedSkillReferenceAcrossSession(t *testing.T) {
 	first, err := New(
 		WithClient(firstClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithSpec(Spec{
 			Name:         "coder",
@@ -448,8 +460,9 @@ func TestAgentResumesActivatedSkillReferenceAcrossSession(t *testing.T) {
 	second, err := New(
 		WithClient(secondClient),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
-		WithResumeSession(first.SessionStorePath()),
+		WithResumeSession(first.SessionID()),
 		WithSpec(Spec{
 			Name:         "coder",
 			Skills:       []string{"base"},
@@ -813,6 +826,7 @@ func TestAgentReplaysUsageEventsAcrossSession(t *testing.T) {
 	first, err := New(
 		WithClient(client),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
 		WithSpec(Spec{Name: "coder", Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}}),
 	)
@@ -823,8 +837,9 @@ func TestAgentReplaysUsageEventsAcrossSession(t *testing.T) {
 	second, err := New(
 		WithClient(runnertest.NewClient(runnertest.TextStream("ok"))),
 		WithWorkspace(t.TempDir()),
+		WithThreadStore(threadjsonlstore.Open(dir)),
 		WithSessionStoreDir(dir),
-		WithResumeSession(first.SessionStorePath()),
+		WithResumeSession(first.SessionID()),
 		WithSpec(Spec{Name: "coder", Inference: InferenceOptions{Model: testProvider + "/" + testModel, MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)

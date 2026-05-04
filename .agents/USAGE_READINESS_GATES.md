@@ -39,7 +39,7 @@ The default internal SDK path is covered by terminal/harness end-to-end tests, e
 - `terminal/cli/e2e_test.go` `TestE2ELocalCLIPluginHarnessLoadAndSessionCommandProjection`
 - `terminal/cli/e2e_test.go` `TestE2EOneShotCommandRenderingAndNoDefaultPlugins`
 - `harness/load_test.go` `TestLoadSessionCreatesDefaultHarnessSession`
-- `harness/projection_test.go` `TestDefaultSessionAttachesAgentCommandProjection`
+- `harness/projection_test.go` `TestOpenSessionAttachesAgentCommandProjection`
 
 These verify that the terminal default local CLI plugin path opens a harness-backed session, attaches the session command projection, renders one-shot command output, and rejects the no-default-plugin path when no app agents are present.
 

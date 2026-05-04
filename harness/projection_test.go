@@ -23,7 +23,7 @@ func TestSessionAgentCommandProjectionShape(t *testing.T) {
 	require.Equal(t, AgentCommandCatalogProviderKey, projection.ContextProviders[0].Key())
 }
 
-func TestDefaultSessionAttachesAgentCommandProjection(t *testing.T) {
+func TestOpenSessionAttachesAgentCommandProjection(t *testing.T) {
 	session, client := newProjectionTestSession(t)
 
 	require.NoError(t, session.Agent.RunTurn(context.Background(), 1, "hello"))
@@ -37,7 +37,7 @@ func TestSessionAttachAgentProjectionIsIdempotent(t *testing.T) {
 	session, client := newProjectionTestSession(t)
 	projection := session.AgentCommandProjection()
 
-	// DefaultSession already attached the command projection; explicit attachment
+	// OpenSession already attached the command projection; explicit attachment
 	// remains idempotent for callers that attach projections manually.
 	require.NoError(t, session.AttachAgentProjection(projection))
 	require.NoError(t, session.AttachAgentProjection(projection))
@@ -60,10 +60,7 @@ func newProjectionTestSession(t *testing.T) (*Session, *runnertest.Client) {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(client), agent.WithWorkspace(t.TempDir()))...)
 	return session, client
 }
 

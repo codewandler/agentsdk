@@ -93,6 +93,15 @@ type ErrorEvent struct {
 
 type EventHandler func(Event)
 
+// EventHandlerContext carries per-turn metadata for event handler factories.
+// It lives in runner so that presentation layers (such as terminal/ui) can
+// accept this type without importing the agent package.
+type EventHandlerContext struct {
+	SessionID string
+	TurnID    int
+	Model     string
+}
+
 func ToolCallArgsMap(call unified.ToolCall) (map[string]any, error) {
 	if len(call.Arguments) == 0 {
 		return nil, nil

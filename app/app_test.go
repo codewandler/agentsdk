@@ -241,10 +241,12 @@ func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
+	storeDir := t.TempDir()
 	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(client),
 		agent.WithWorkspace(t.TempDir()),
-		agent.WithSessionStoreDir(t.TempDir()),
+		agent.WithThreadStore(threadjsonlstore.Open(storeDir)),
+		agent.WithSessionStoreDir(storeDir),
 	)
 	require.NoError(t, err)
 	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
@@ -273,10 +275,12 @@ func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
 		WithWorkflows(workflow.Definition{Name: "echo_flow", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
 	)
 	require.NoError(t, err)
+	storeDir := t.TempDir()
 	inst, err := app.InstantiateAgent("coder",
 		agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok"))),
 		agent.WithWorkspace(t.TempDir()),
-		agent.WithSessionStoreDir(t.TempDir()),
+		agent.WithThreadStore(threadjsonlstore.Open(storeDir)),
+		agent.WithSessionStoreDir(storeDir),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, inst.LiveThread())

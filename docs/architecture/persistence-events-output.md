@@ -378,7 +378,8 @@ legacy text to diagnostic/notice events, then eventually deprecate.
 ### Terminal event handler writer paths
 
 Current role: `terminal/ui.AgentEventHandlerFactory(out)` renders runner events
-directly to `io.Writer`.
+directly to `io.Writer`. The factory accepts `runner.EventHandlerContext` (not
+`*agent.Instance`) so `terminal/ui` does not import the `agent` package.
 
 Target: terminal should subscribe to session/agent output events and render them
 through a terminal renderer. Keep current handler until the event stream covers

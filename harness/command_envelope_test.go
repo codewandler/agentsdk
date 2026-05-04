@@ -97,9 +97,6 @@ func newCommandEnvelopeTestSession(t *testing.T) *Session {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 	return session
 }

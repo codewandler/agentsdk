@@ -19,11 +19,10 @@ import (
 	"github.com/codewandler/agentsdk/workflow"
 )
 
-// App is the user-facing composition root. It owns registries and running agent
-// instances; channel dispatch lives at harness/session boundaries.
+// App is the user-facing composition root. It owns registries and agent specs;
+// live agent instances are owned by harness sessions, not by App.
 type App struct {
 	commands              *command.Registry
-	agents                map[string]*agent.Instance
 	specs                 map[string]agent.Spec
 	specCommands          map[string][]string
 	diagnostics           []resource.Diagnostic
@@ -82,7 +81,6 @@ func New(opts ...Option) (*App, error) {
 
 	a := &App{
 		commands:     command.NewRegistry(),
-		agents:       map[string]*agent.Instance{},
 		specs:        map[string]agent.Spec{},
 		specCommands: map[string][]string{},
 		defaultAgent: cfg.defaultAgent,
@@ -313,14 +311,6 @@ func (a *App) ExecuteWorkflow(ctx action.Ctx, name string, input any, opts ...wo
 	return a.workflowExecutor(opts...).Execute(ctx, def, input)
 }
 
-func (a *App) agent(name string) (*agent.Instance, bool) {
-	if a == nil {
-		return nil, false
-	}
-	inst, ok := a.agents[name]
-	return inst, ok
-}
-
 func (a *App) registerAgentSpec(spec agent.Spec) error {
 	if spec.Name == "" {
 		return fmt.Errorf("app: agent spec name is required")
@@ -410,13 +400,6 @@ func (a *App) InstantiateAgent(name string, opts ...agent.Option) (*agent.Instan
 	if err != nil {
 		return nil, err
 	}
-	if a.agents == nil {
-		a.agents = map[string]*agent.Instance{}
-	}
-	a.agents[name] = inst
-	if a.defaultAgent == "" {
-		a.defaultAgent = name
-	}
 	return inst, nil
 }
 
@@ -465,13 +448,6 @@ func (a *App) AgentSpecs() []agent.Spec {
 		out = append(out, a.specs[name])
 	}
 	return out
-}
-
-func (a *App) DefaultAgent() (*agent.Instance, bool) {
-	if a == nil || a.defaultAgent == "" {
-		return nil, false
-	}
-	return a.agent(a.defaultAgent)
 }
 
 func (a *App) registerPlugin(plugin Plugin) error {

@@ -61,9 +61,6 @@ func newCommandActionWorkflowTestSession(t *testing.T) (*app.App, *Session) {
 		}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 	return application, session
 }

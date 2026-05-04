@@ -19,22 +19,39 @@ import (
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/thread"
+	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/workflow"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDefaultSessionSendDelegatesToAppDefaultAgent(t *testing.T) {
+// withTestStore returns agent options that open a JSONL thread store at dir.
+// Test code uses this instead of bare WithSessionStoreDir now that the agent
+// no longer self-opens stores.
+func withTestStore(dir string) []agent.Option {
+	return []agent.Option{
+		agent.WithThreadStore(threadjsonlstore.Open(dir)),
+		agent.WithSessionStoreDir(dir),
+	}
+}
+
+// openTestSession is the standard test helper for creating a harness session.
+// It replaces the old InstantiateAgent + DefaultSession pattern.
+func openTestSession(t *testing.T, application *app.App, opts ...agent.Option) (*Service, *Session) {
+	t.Helper()
+	service := NewService(application)
+	session, err := service.OpenSession(context.Background(), SessionOpenRequest{AgentOptions: opts})
+	require.NoError(t, err)
+	return service, session
+}
+
+func TestOpenSessionSendDelegatesToDefaultAgent(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	application, err := app.New(
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	result, err := session.Send(context.Background(), "hello")
 
 	require.NoError(t, err)
@@ -48,10 +65,7 @@ func TestSessionInfoCommandReportsHarnessMetadata(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	info := session.Info()
 	require.NotEmpty(t, info.SessionID)
@@ -127,11 +141,8 @@ func TestSessionCapabilitiesCommandReportsCapabilityProjections(t *testing.T) {
 		app.WithPlugin(plannerplugin.New()),
 	)
 	require.NoError(t, err)
-	inst, err := application.InstantiateAgent("planner_agent", agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok"))), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "attach planner"))
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok"))), agent.WithWorkspace(t.TempDir()))
+	require.NoError(t, session.Agent.RunTurn(context.Background(), 1, "attach planner"))
 
 	state := session.CapabilityState()
 	require.Len(t, state.Capabilities, 1)
@@ -232,10 +243,7 @@ func TestSessionPublishesCompactionEvents(t *testing.T) {
 		Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 	}))
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	events, cancel := session.Subscribe(16)
 	defer cancel()
 
@@ -297,10 +305,7 @@ func TestSessionCommandsExposeDescriptorsAndStructuredExecute(t *testing.T) {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	commands, err := session.Commands()
 	require.NoError(t, err)
@@ -338,10 +343,7 @@ func TestSessionCommandCatalogIncludesExecutableCommandsWithSchemas(t *testing.T
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Description: "Ask the agent", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	catalog := session.CommandCatalog()
 	require.Len(t, catalog, 12)
@@ -389,16 +391,17 @@ func TestSessionExecuteWorkflowRecordsThreadBackedRun(t *testing.T) {
 	)
 	require.NoError(t, err)
 	inst, err := application.InstantiateAgent("coder",
-		agent.WithClient(client),
-		agent.WithWorkspace(t.TempDir()),
-		agent.WithSessionStoreDir(t.TempDir()),
+		append(withTestStore(t.TempDir()), agent.WithClient(client), agent.WithWorkspace(t.TempDir()))...,
 	)
 	require.NoError(t, err)
 	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
 	require.NoError(t, application.RegisterActions(turnAction))
 
-	session, err := NewService(application).DefaultSession()
+	service := NewService(application)
+	session, err := service.OpenSession(context.Background(), SessionOpenRequest{AgentOptions: []agent.Option{}})
 	require.NoError(t, err)
+	// Re-attach inst from the pre-created agent for TurnAction compatibility.
+	session.Agent = inst
 	var handled []action.Event
 	result := session.ExecuteWorkflow(ctx, "ask_flow", "answer through harness",
 		workflow.WithRunID("run_harness"),
@@ -466,11 +469,7 @@ func TestSessionWorkflowRunStateMissingLiveThread(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
 	store, ok := session.WorkflowRunStore()
 	require.False(t, ok)
 	require.Nil(t, store)
@@ -525,10 +524,7 @@ func TestSessionWorkflowCommandUsageAndNotFound(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	result, err := session.Send(context.Background(), "/workflow")
 	require.NoError(t, err)
@@ -561,10 +557,7 @@ func TestSessionWorkflowListAndShowCommands(t *testing.T) {
 		),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
 
 	result, err := session.Send(context.Background(), "/workflow list")
 	require.NoError(t, err)
@@ -594,12 +587,11 @@ func TestSessionWorkflowStartCommandExecutesAndRecordsRun(t *testing.T) {
 		app.WithWorkflows(workflow.Definition{Name: "ask_flow", Steps: []workflow.Step{{ID: "ask", Action: workflow.ActionRef{Name: "ask_agent"}}}}),
 	)
 	require.NoError(t, err)
-	inst, err := application.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
+	service, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(client), agent.WithWorkspace(t.TempDir()))...)
+	inst := session.Agent
 	turnAction := agent.TurnAction(inst, action.Spec{Name: "ask_agent"})
 	require.NoError(t, application.RegisterActions(turnAction))
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_ = service
 
 	result, err := session.Send(ctx, "/workflow start ask_flow hello from start")
 	require.NoError(t, err)
@@ -642,10 +634,7 @@ func TestSessionWorkflowStartCommandUsageAndMissingWorkflow(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	result, err := session.Send(context.Background(), "/workflow start")
 	require.NoError(t, err)
@@ -669,10 +658,7 @@ func TestSessionWorkflowStartCommandFailureIncludesRunStatusAndIsQueryable(t *te
 		app.WithWorkflows(workflow.Definition{Name: "failflow", Steps: []workflow.Step{{ID: "fail", Action: workflow.ActionRef{Name: "fail"}}}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	result, err := session.Send(ctx, "/workflow start failflow")
 	require.NoError(t, err)
@@ -727,10 +713,7 @@ func TestSessionWorkflowRunsCommandFiltersByWorkflowAndStatus(t *testing.T) {
 		),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	_, err = session.Send(ctx, "/workflow start okflow")
 	require.NoError(t, err)
@@ -800,10 +783,7 @@ func TestSessionWorkflowAsyncRerunEventsCancelAndPagination(t *testing.T) {
 		),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	first, err := session.Send(ctx, "/workflow start echo_flow first")
 	require.NoError(t, err)
@@ -847,10 +827,7 @@ func TestSessionWorkflowListNoWorkflows(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
 
 	result, err := session.Send(context.Background(), "/workflow list")
 	require.NoError(t, err)
@@ -862,10 +839,7 @@ func TestSessionWorkflowRunsNoRecordedRuns(t *testing.T) {
 		app.WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 	)
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()), agent.WithSessionStoreDir(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, append(withTestStore(t.TempDir()), agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))...)
 
 	summaries, ok, err := session.WorkflowRuns(context.Background())
 	require.NoError(t, err)
@@ -877,17 +851,17 @@ func TestSessionWorkflowRunsNoRecordedRuns(t *testing.T) {
 	require.Equal(t, "No workflow runs recorded.", renderCommandResult(t, result))
 }
 
-func TestDefaultSessionReportsMissingAppAndAgent(t *testing.T) {
-	_, err := (*Service)(nil).DefaultSession()
+func TestOpenSessionReportsMissingAppAndAgent(t *testing.T) {
+	_, err := (*Service)(nil).OpenSession(context.Background(), SessionOpenRequest{})
 	require.ErrorContains(t, err, "app is required")
 
 	service := NewService(nil)
-	_, err = service.DefaultSession()
+	_, err = service.OpenSession(context.Background(), SessionOpenRequest{})
 	require.ErrorContains(t, err, "app is required")
 
 	application, err := app.New()
 	require.NoError(t, err)
-	_, err = NewService(application).DefaultSession()
+	_, err = NewService(application).OpenSession(context.Background(), SessionOpenRequest{})
 	require.ErrorContains(t, err, "no default agent")
 }
 
@@ -902,10 +876,7 @@ func TestSessionReportsMissingApp(t *testing.T) {
 func TestSessionExecuteCommandReportsInvalidPathAndUnknownRoot(t *testing.T) {
 	application, err := app.New(app.WithAgentSpec(agent.Spec{Name: "coder"}))
 	require.NoError(t, err)
-	_, err = application.InstantiateAgent("coder", agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
-	require.NoError(t, err)
-	session, err := NewService(application).DefaultSession()
-	require.NoError(t, err)
+	_, session := openTestSession(t, application, agent.WithClient(runnertest.NewClient()), agent.WithWorkspace(t.TempDir()))
 
 	_, err = session.ExecuteCommand(context.Background(), nil, nil)
 	var validation command.ValidationError

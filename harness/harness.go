@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,6 +41,8 @@ type Session struct {
 	turnID int
 
 	service         *Service
+	threadStore     thread.Store
+	storeDir        string
 	mu              sync.Mutex
 	closed          bool
 	nextSub         int
@@ -104,16 +107,6 @@ func NewService(app *app.App) *Service {
 	return &Service{App: app, sessions: map[string]*Session{}}
 }
 
-func (s *Service) DefaultSession() (*Session, error) {
-	if s == nil || s.App == nil {
-		return nil, fmt.Errorf("harness: app is required")
-	}
-	inst, ok := s.App.DefaultAgent()
-	if !ok || inst == nil {
-		return nil, fmt.Errorf("harness: no default agent configured")
-	}
-	return s.attachSession("", inst)
-}
 
 // OpenSession instantiates an agent and registers it as an active harness
 // session. It is the stable API for opening named sessions.
@@ -132,12 +125,36 @@ func (s *Service) OpenSession(ctx context.Context, req SessionOpenRequest) (*Ses
 		return nil, ctx.Err()
 	default:
 	}
+
+	// Open the thread store at the harness level so the session owns the
+	// store reference. The agent receives the pre-opened store via
+	// WithThreadStore and no longer needs to know about JSONL paths.
+	var (
+		threadStore thread.Store
+		storeDir    string
+	)
+	if req.StoreDir != "" {
+		storeDir = req.StoreDir
+		threadStore = threadjsonlstore.Open(req.StoreDir)
+	}
+
+	// When the harness owns the store, parse the resume ref to extract the
+	// session ID. The agent should receive a plain ID, not a filesystem path,
+	// because the store is already open.
+	resumeID := req.Resume
+	if threadStore != nil && resumeID != "" {
+		resumeID = parseSessionID(resumeID)
+	}
+
 	opts := append([]agent.Option(nil), req.AgentOptions...)
+	if threadStore != nil {
+		opts = append(opts, agent.WithThreadStore(threadStore))
+	}
 	if req.StoreDir != "" {
 		opts = append(opts, agent.WithSessionStoreDir(req.StoreDir))
 	}
-	if req.Resume != "" {
-		opts = append(opts, agent.WithResumeSession(req.Resume))
+	if resumeID != "" {
+		opts = append(opts, agent.WithResumeSession(resumeID))
 	}
 	var (
 		inst *agent.Instance
@@ -151,7 +168,7 @@ func (s *Service) OpenSession(ctx context.Context, req SessionOpenRequest) (*Ses
 	if err != nil {
 		return nil, err
 	}
-	return s.attachSession(req.Name, inst)
+	return s.attachSession(req.Name, inst, threadStore, storeDir)
 }
 
 // ResumeSession is the stable API for resuming an existing persisted session by
@@ -163,7 +180,7 @@ func (s *Service) ResumeSession(ctx context.Context, req SessionOpenRequest) (*S
 	return s.OpenSession(ctx, req)
 }
 
-func (s *Service) attachSession(name string, inst *agent.Instance) (*Session, error) {
+func (s *Service) attachSession(name string, inst *agent.Instance, store thread.Store, storeDir string) (*Session, error) {
 	if s == nil || s.App == nil {
 		return nil, fmt.Errorf("harness: app is required")
 	}
@@ -178,7 +195,12 @@ func (s *Service) attachSession(name string, inst *agent.Instance) (*Session, er
 	if strings.TrimSpace(name) == "" {
 		name = inst.SessionID()
 	}
-	session := &Session{App: s.App, Agent: inst, Name: name, service: s, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
+	// If the caller didn't provide a store, try to get it from the agent
+	// (backward compat for code that uses agent.WithSessionStoreDir directly).
+	if store == nil {
+		store = inst.ThreadStore()
+	}
+	session := &Session{App: s.App, Agent: inst, Name: name, service: s, threadStore: store, storeDir: storeDir, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
 	inst.AddCompactionEventHandler(func(event agent.CompactionEvent) {
 		session.publish(SessionEvent{Type: SessionEventCompaction, CompactionEvent: event})
 	})
@@ -512,11 +534,10 @@ func (s *Session) WorkflowRunStore() (*workflow.ThreadRunStore, bool) {
 	if live == nil {
 		return nil, false
 	}
-	path := s.Agent.SessionStorePath()
-	if strings.TrimSpace(path) == "" {
+	store := s.resolveStore()
+	if store == nil {
 		return nil, false
 	}
-	store := threadjsonlstore.Open(filepath.Dir(path))
 	return &workflow.ThreadRunStore{Store: store, Live: live, ThreadID: live.ID(), BranchID: live.BranchID()}, true
 }
 
@@ -533,12 +554,11 @@ func (s *Session) ThreadEvents(ctx context.Context) ([]thread.Event, bool, error
 	if s == nil || s.Agent == nil || s.Agent.LiveThread() == nil {
 		return nil, false, nil
 	}
-	path := s.Agent.SessionStorePath()
-	if strings.TrimSpace(path) == "" {
+	store := s.resolveStore()
+	if store == nil {
 		return nil, false, nil
 	}
 	live := s.Agent.LiveThread()
-	store := threadjsonlstore.Open(filepath.Dir(path))
 	stored, err := store.Read(ctx, thread.ReadParams{ID: live.ID()})
 	if err != nil {
 		return nil, false, err
@@ -634,6 +654,18 @@ func (s *Session) ParamsSummary() string {
 
 func (s *Session) SessionID() string {
 	return s.Info().SessionID
+}
+
+// resolveStore returns the session's thread store. It prefers the harness-owned
+// store, falling back to the agent's store for backward compatibility.
+func (s *Session) resolveStore() thread.Store {
+	if s.threadStore != nil {
+		return s.threadStore
+	}
+	if s.Agent != nil {
+		return s.Agent.ThreadStore()
+	}
+	return nil
 }
 
 func (s *Session) Tracker() *usage.Tracker {
@@ -766,4 +798,18 @@ func (s *Session) enrichEvent(event SessionEvent) SessionEvent {
 	event.SessionID = info.SessionID
 	event.AgentName = info.AgentName
 	return event
+}
+
+// parseSessionID extracts a plain session ID from a resume reference that may
+// be a bare ID ("b6mRRINc") or a full JSONL path ("/tmp/sessions/b6mRRINc.jsonl").
+// This mirrors the parsing previously done inside agent.splitThreadSessionRef.
+func parseSessionID(ref string) string {
+	cleaned := strings.TrimSpace(ref)
+	if cleaned == "" {
+		return ""
+	}
+	if filepath.Ext(cleaned) == ".jsonl" || strings.Contains(cleaned, string(os.PathSeparator)) {
+		return strings.TrimSuffix(filepath.Base(cleaned), filepath.Ext(cleaned))
+	}
+	return cleaned
 }

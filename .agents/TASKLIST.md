@@ -486,7 +486,19 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 - [x] Keep this batch docs/review-only with no code changes.
 - [x] Keep datasource work postponed until core ownership cleanup is clearer.
 
-## 30. Datasource work — deferred
+## 30. Agent/session ownership cleanup
+
+- [x] Move thread store opening from `agent.Instance` to `harness.Session` (first slice with backward compat).
+- [x] Route `LoadSession` through `OpenSession` so agent never self-opens stores.
+- [x] Remove agent self-open fallback and `thread/jsonlstore` import from `agent` production code.
+- [x] Update agent tests to use `WithThreadStore(threadjsonlstore.Open(dir))` instead of relying on agent self-open.
+- [x] Remove `app.App` live instance cache (`agents` map, `DefaultAgent()`, `agent()`).
+- [x] Remove `harness.DefaultSession()` — all session creation goes through `OpenSession`.
+- [x] Migrate all harness tests from `DefaultSession` to `OpenSession`.
+- [x] Decouple `terminal/ui` from `agent` — move `EventHandlerContext` to `runner` package.
+- [x] Update `ROADMAP.md`, `99_REVIEW_AND_IMPROVEMENTS.md`, and architecture docs.
+
+## 31. Datasource work — deferred
 
 - [ ] Revisit datasource work after daemon/service mode, trigger scheduling, and agent ownership cleanup are proven.
 - [ ] Pick one concrete datasource case study before expanding abstractions.
@@ -512,8 +524,11 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## Recommended next sequence
 
-- [ ] Manual dogfood pass.
-- [ ] Add one end-to-end local CLI/harness test.
-- [ ] Add/update quickstart.
-- [ ] Update examples/apps to use blessed paths.
+- [x] Manual dogfood pass.
+- [x] Add one end-to-end local CLI/harness test.
+- [x] Add/update quickstart.
+- [x] Update examples/apps to use blessed paths.
+- [ ] Move session/thread store ownership from `agent.Instance` to `harness.Session`.
+- [ ] Remove `app.App` live instance cache after harness owns session construction.
+- [ ] Reduce `terminal/ui` → `agent` dependency after harness event APIs exist.
 - [ ] Resume deeper cleanup only where dogfooding exposes friction.

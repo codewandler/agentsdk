@@ -23,7 +23,6 @@ import (
 	agentruntime "github.com/codewandler/agentsdk/runtime"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/thread"
-	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/toolactivation"
 	"github.com/codewandler/agentsdk/usage"
@@ -87,7 +86,7 @@ type Instance struct {
 	sessionStorePath         string
 	verbose                  bool
 	initErrs                 []error
-	eventHandlerFactory      func(*Instance, int) runner.EventHandler
+	eventHandlerFactory      func(runner.EventHandlerContext) runner.EventHandler
 	requestObserver          runner.RequestObserver
 	toolCtxFactory           func(context.Context) tool.Ctx
 	specName                 string
@@ -107,6 +106,7 @@ type Instance struct {
 	threadRuntime            *agentruntime.ThreadRuntime
 	extraContextProviders    []agentcontext.Provider
 	contextProviderFactories []ContextProviderFactory
+	threadStore              thread.Store
 	contextWindow            int
 	autoCompaction           AutoCompactionConfig
 	compactionEventsMu       sync.Mutex
@@ -199,6 +199,16 @@ func (a *Instance) ContextSnapshot() agentcontext.StateSnapshot {
 		return agentcontext.StateSnapshot{}
 	}
 	return a.runtime.ContextSnapshot()
+}
+
+// ThreadStore returns the thread store used by this agent session, or nil if
+// no persistent session is configured. When the store was provided by the
+// caller via WithThreadStore, that same store is returned.
+func (a *Instance) ThreadStore() thread.Store {
+	if a == nil {
+		return nil
+	}
+	return a.resolveThreadStore()
 }
 
 func (a *Instance) LiveThread() thread.Live {
@@ -805,17 +815,35 @@ func (a *Instance) resolveRouteIdentity() {
 	a.providerIdentity = identity
 }
 
+// resolveThreadStore returns the thread store to use for session persistence.
+// The store must be provided by the caller (typically harness) via
+// WithThreadStore. Returns nil when no store is configured.
+func (a *Instance) resolveThreadStore() thread.Store {
+	return a.threadStore
+}
+
 func (a *Instance) initSession(ctx context.Context) error {
 	hasCapabilities := len(a.capabilitySpecs) > 0
-	if a.resumeSession == "" && a.sessionStoreDir == "" && !hasCapabilities {
+	if a.resumeSession == "" && a.threadStore == nil && a.sessionStoreDir == "" && !hasCapabilities {
 		return nil
 	}
 	if a.resumeSession != "" {
-		dir, id := splitThreadSessionRef(a.resumeSession)
-		if dir == "." && a.sessionStoreDir != "" && filepath.Ext(strings.TrimSpace(a.resumeSession)) == "" {
-			dir = a.sessionStoreDir
+		var (
+			store thread.Store
+			id    string
+		)
+		if a.threadStore != nil {
+			// Harness-owned store: the resume ref is just the session ID.
+			store = a.threadStore
+			id = a.resumeSession
+			if a.sessionStorePath == "" && a.sessionStoreDir != "" {
+				a.sessionStorePath = filepath.Join(a.sessionStoreDir, id+".jsonl")
+			}
+		} else {
+			// Legacy path: no pre-opened store. Parse the resume ref to
+			// extract directory and session ID.
+			return fmt.Errorf("resume session %s: no thread store configured (use WithThreadStore)", a.resumeSession)
 		}
-		store := threadjsonlstore.Open(dir)
 		source := thread.EventSource{Type: "session", SessionID: id}
 		if hasCapabilities {
 			registry, err := a.ensureCapabilityRegistry()
@@ -869,11 +897,9 @@ func (a *Instance) initSession(ctx context.Context) error {
 			}
 		}
 		a.sessionID = id
-		a.sessionStoreDir = dir
-		a.sessionStorePath = filepath.Join(dir, id+".jsonl")
 		return nil
 	}
-	if a.sessionStoreDir != "" {
+	if a.threadStore != nil {
 		return a.startPersistentSession(time.Now())
 	}
 	// Capabilities without a persistent session: create an in-memory thread
@@ -885,7 +911,8 @@ func (a *Instance) initSession(ctx context.Context) error {
 }
 
 func (a *Instance) startPersistentSession(now time.Time) error {
-	if a.sessionStoreDir == "" {
+	store := a.resolveThreadStore()
+	if store == nil {
 		a.history = nil
 		a.sessionStorePath = ""
 		a.threadRuntime = nil
@@ -894,7 +921,6 @@ func (a *Instance) startPersistentSession(now time.Time) error {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	store := threadjsonlstore.Open(a.sessionStoreDir)
 	live, err := store.Create(context.Background(), thread.CreateParams{
 		ID:     thread.ID(a.sessionID),
 		Now:    now,
@@ -913,7 +939,9 @@ func (a *Instance) startPersistentSession(now time.Time) error {
 		}
 	}
 	a.history = agentruntime.NewHistory(append(a.historyOptions(true), agentruntime.WithHistoryLiveThread(live))...)
-	a.sessionStorePath = filepath.Join(a.sessionStoreDir, a.sessionID+".jsonl")
+	if a.sessionStorePath == "" && a.sessionStoreDir != "" {
+		a.sessionStorePath = filepath.Join(a.sessionStoreDir, a.sessionID+".jsonl")
+	}
 	return nil
 }
 
@@ -1107,7 +1135,11 @@ func (a *Instance) reasoningConfig() (unified.ReasoningConfig, bool) {
 func (a *Instance) newEventHandler(turnID int) runner.EventHandler {
 	extra := runner.EventHandler(nil)
 	if a.eventHandlerFactory != nil {
-		extra = a.eventHandlerFactory(a, turnID)
+		extra = a.eventHandlerFactory(runner.EventHandlerContext{
+			SessionID: a.sessionID,
+			TurnID:    turnID,
+			Model:     a.inference.Model,
+		})
 	}
 	return func(event runner.Event) {
 		a.recordEvent(turnID, event)
@@ -1199,15 +1231,4 @@ func newSessionID() (string, error) {
 	return string(out), nil
 }
 
-func splitThreadSessionRef(ref string) (dir string, id string) {
-	cleaned := strings.TrimSpace(ref)
-	if cleaned == "" {
-		return ".", ""
-	}
-	if filepath.Ext(cleaned) == ".jsonl" || strings.Contains(cleaned, string(os.PathSeparator)) {
-		dir = filepath.Dir(cleaned)
-		id = strings.TrimSuffix(filepath.Base(cleaned), filepath.Ext(cleaned))
-		return dir, id
-	}
-	return ".", cleaned
-}
+

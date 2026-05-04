@@ -54,7 +54,7 @@ Rules:
 
 Improvement backlog:
 
-- `app.App` currently caches live `*agent.Instance` values. Move live instance ownership toward harness/session when a clean replacement exists.
+- ~~`app.App` currently caches live `*agent.Instance` values.~~ Done: `agents` map, `DefaultAgent()`, and `agent()` removed. `InstantiateAgent` returns the instance without caching. All session creation goes through `harness.OpenSession`.
 - `resource` and `agentdir` currently depend on `agent` for declarative agent config. If `agent` splits spec/config from live runtime ownership, keep loaders on the spec/config side only.
 - Keep trigger execution host-owned: declarative triggers can live in resources/app metadata, but scheduler/process behavior remains daemon/harness-owned.
 - Datasource runtime expansion remains deferred until agent/session ownership is cleaner.
@@ -81,9 +81,10 @@ Rules:
 
 Improvement backlog:
 
-- Centralize session/thread store selection and open/resume behavior in harness/session instead of duplicating it through `agent.Instance` paths.
+- ~~Centralize session/thread store selection and open/resume behavior in harness/session.~~ Done: `LoadSession` routes through `OpenSession`; agent no longer self-opens stores.
 - Split `harness.LoadSession` filesystem convenience from core `harness.Service` where useful.
-- Reduce `terminal/cli -> agent` and `terminal/ui -> agent` as structured session/channel events mature.
+- ~~Reduce `terminal/ui -> agent`.~~ Done: `terminal/ui` no longer imports `agent`; event handler factory uses `runner.EventHandlerContext`.
+- Reduce `terminal/cli -> agent` as structured session/channel events mature.
 - Keep `cmd/agentsdk` orchestration-only; do not duplicate terminal or harness behavior there.
 
 ### Agent, runtime, runner
@@ -102,13 +103,13 @@ Rules:
 - `agent` may own `agent.Spec`, model/source API policy, inference defaults, and construction options.
 - Long-term live session/thread ownership should not remain concentrated in `agent.Instance`.
 
-The main architecture problem remains `agent.Instance` breadth. It currently combines spec/options normalization, model policy, runtime construction, session IDs, JSONL store selection/open/resume, skill repository/state, context providers, capability setup, usage, compaction, output hooks, and turn façade APIs.
+The main architecture problem remains `agent.Instance` breadth. It currently combines spec/options normalization, model policy, runtime construction, session IDs, skill repository/state, context providers, capability setup, usage, compaction, output hooks, and turn façade APIs. JSONL store ownership and live instance caching have been moved out.
 
 Improvement backlog:
 
 - Split spec/config from live instance behavior.
-- Move JSONL store selection and open/resume lifecycle to harness/session.
-- Move live session registry/cache ownership out of `app.App` and `agent.Instance`.
+- ~~Move JSONL store selection and open/resume lifecycle to harness/session.~~ Done.
+- ~~Move live session registry/cache ownership out of `app.App` and `agent.Instance`.~~ Done.
 - Route diagnostics, usage, compaction, and notices through structured session/channel events.
 - Make skill/capability/context activation and projection state session-aware where possible.
 
@@ -162,12 +163,12 @@ High fan-in packages are expected foundations or projections:
 
 ## Preferred cleanup sequence
 
-1. Centralize harness/session thread opening and resume behavior.
-2. Move one concrete `agent.Instance` session/thread responsibility to that harness-owned path.
-3. Remove the old path instead of keeping compatibility fallback.
-4. Reduce terminal direct `agent` dependencies only after equivalent harness/session APIs exist.
+1. ~~Centralize harness/session thread opening and resume behavior.~~ Done.
+2. ~~Move one concrete `agent.Instance` session/thread responsibility to that harness-owned path.~~ Done.
+3. ~~Remove the old path instead of keeping compatibility fallback.~~ Done: agent no longer imports `thread/jsonlstore`.
+4. ~~Reduce terminal direct `agent` dependencies.~~ Done for `terminal/ui`; `terminal/cli` still imports `agent` for options/spec types.
 5. Move output, usage, compaction, and diagnostics toward structured session/channel events.
-6. Re-check app live instance caching after harness owns enough runtime construction.
+6. ~~Re-check app live instance caching after harness owns enough runtime construction.~~ Done: cache removed.
 7. Revisit datasource runtime expansion only after at least one agent/session ownership cleanup slice has been dogfooded.
 
 ## Historical review inputs

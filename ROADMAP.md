@@ -9,20 +9,22 @@ drift.
 
 ## Near-term cleanup
 
-- **Commit or revise the current plugin/default-composition cleanup diff**
-  - Deletes `tools/standard` and `plugins/standard`.
-  - Moves local terminal composition to `plugins/localcli`.
-  - Adds context-aware `app.PluginFactory`.
-  - Keeps plugin composition as one concept; no separate profile system.
+- ~~Move session/thread store ownership from `agent.Instance` to `harness.Session`~~ ✅ Done.
+  - `agent` no longer imports `thread/jsonlstore`. Harness opens the store and
+    passes it via `agent.WithThreadStore`. `LoadSession` routes through `OpenSession`.
+  - `app.App` no longer caches live `*agent.Instance` values; `DefaultAgent()` and
+    `DefaultSession()` removed. All session creation goes through `OpenSession`.
+  - `terminal/ui` no longer imports `agent`; event handler factory uses
+    `runner.EventHandlerContext` instead of `*agent.Instance`.
 
 - **Continue shrinking `agent.Instance` only when a slice deletes code**
-  - Candidate areas: session lifecycle, context provider lifecycle, capability
-    registry/session ownership, workflow recording.
+  - Candidate areas: context provider lifecycle, capability registry/session
+    ownership, workflow recording.
   - Do not add new façade methods unless they remove older ownership paths.
 
-- **Revisit `terminal/cli.Load`**
-  - Move shared resource/app/session setup toward harness helpers only if it
-    deletes duplication and keeps terminal as a presentation/channel boundary.
+- **Route diagnostics, usage, compaction, and notices through structured session/channel events**
+  - Replace `agent.WithOutput` and terminal event handler writer paths with
+    structured event publication through harness/session subscriptions.
 
 ## Terminal rendering
 
@@ -50,6 +52,7 @@ Current first-party plugins include:
 - `plugins/toolmgmtplugin` — tool management tools + active-tools context
   provider.
 - `plugins/plannerplugin` — planner capability factory.
+- `plugins/visionplugin` — vision tool for image understanding.
 - `plugins/localcli` — local terminal plugin composition.
 
 Follow-up work:

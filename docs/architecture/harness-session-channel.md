@@ -29,8 +29,9 @@ code without adding indirection.
   - `Subscribe(buffer)`
   - `Close()`
 - `SessionOpenRequest.StoreDir` and `SessionOpenRequest.Resume` are the stable
-  harness-level inputs for persisted session creation/resume. Internally, these
-  still map to `agent.WithSessionStoreDir` and `agent.WithResumeSession`.
+  harness-level inputs for persisted session creation/resume. The harness opens
+  the thread store and passes it to the agent via `agent.WithThreadStore`;
+  the agent no longer self-opens stores.
 - `SessionSummary` is intentionally small: session name, session ID, agent name,
   thread-backed flag, and closed flag.
 - `SessionEvent` is intentionally minimal and channel-neutral. It currently

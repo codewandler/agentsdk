@@ -207,15 +207,16 @@ func LoadSession(cfg SessionLoadConfig) (*LoadedSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	inst, err := application.InstantiateDefaultAgent(sessionAgentOptions(cfg)...)
-	if err != nil {
-		return nil, err
-	}
 	service := NewService(application)
-	session, err := service.DefaultSession()
+	session, err := service.OpenSession(context.Background(), SessionOpenRequest{
+		StoreDir:     cfg.Session.StoreDir,
+		Resume:       cfg.Session.Resume,
+		AgentOptions: sessionAgentOptions(cfg),
+	})
 	if err != nil {
 		return nil, err
 	}
+	inst := session.Agent
 	if err := registerSessionActions(application, inst, session); err != nil {
 		return nil, err
 	}
@@ -265,9 +266,6 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	if appCfg.ToolTimeout > 0 {
 		opts = append(opts, app.WithAgentOptions(agent.WithToolTimeout(appCfg.ToolTimeout)))
 	}
-	if cfg.Session.StoreDir != "" {
-		opts = append(opts, app.WithAgentOptions(agent.WithSessionStoreDir(cfg.Session.StoreDir)))
-	}
 	for _, plugin := range cfg.Plugins {
 		if plugin != nil {
 			opts = append(opts, app.WithPlugin(plugin))
@@ -296,9 +294,6 @@ func sessionAgentOptions(cfg SessionLoadConfig) []agent.Option {
 	}
 	if cfg.Agent.ApplyModelPolicy {
 		opts = append(opts, agent.WithModelPolicy(cfg.Agent.ModelPolicy))
-	}
-	if cfg.Session.Resume != "" {
-		opts = append(opts, agent.WithResumeSession(cfg.Session.Resume))
 	}
 	return opts
 }
