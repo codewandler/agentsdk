@@ -352,12 +352,52 @@ func ScaffoldResourceApp(ctx context.Context, cfg Config, input ScaffoldResource
 	if description == "" {
 		description = "Generated agentsdk resource app."
 	}
+	manifest := `{
+  "default_agent": "main",
+  "discovery": {
+    "include_global_user_resources": true,
+    "include_external_ecosystems": false,
+    "allow_remote": false
+  },
+  "sources": [".agents"]
+}
+`
+	agentSpec := fmt.Sprintf(`---
+name: main
+description: %s
+tools:
+  - bash
+  - file_read
+  - file_write
+  - file_edit
+  - file_stat
+  - file_delete
+  - grep
+  - glob
+  - dir_tree
+  - dir_list
+  - git_status
+  - git_diff
+  - git_add
+  - git_commit
+  - web_fetch
+  - web_search
+  - skill
+  - tools_*
+capabilities: [planner]
+max-steps: 100
+---
+You are the main assistant for %s.
+
+%s
+`, description, name, description)
+
+	readme := fmt.Sprintf("# %s\n\n%s\n\n## Run\n\n```bash\nagentsdk validate .\nagentsdk run .\n```\n", name, description)
+
 	files := map[string]string{
-		"agentsdk.app.json":             "{\n  \"sources\": [\".agents\"]\n}\n",
-		"README.md":                     "# " + name + "\n\n" + description + "\n\n## Run\n\n```bash\nagentsdk discover --local .\nagentsdk run .\n```\n",
-		".agents/agents/main.md":        "---\nname: main\ndescription: " + description + "\n---\nYou are the main assistant for " + name + ".\n",
-		".agents/workflows/verify.yaml": "name: verify_app\ndescription: Verify the generated app.\nsteps:\n  - id: echo\n    action: echo\n",
-		".agents/actions/echo.yaml":     "name: echo\ndescription: Placeholder generated action.\nkind: placeholder\n",
+		"agentsdk.app.json":      manifest,
+		"README.md":              readme,
+		".agents/agents/main.md": agentSpec,
 	}
 	out := ScaffoldResourceAppOutput{}
 	for rel, content := range files {

@@ -135,6 +135,32 @@ func TestWriteProjectFileRejectsEscapes(t *testing.T) {
 	require.FileExists(t, filepath.Join(dir, "docs", "ok.md"))
 }
 
+func TestScaffoldProducesValidApp(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{ProjectDir: dir}
+	out, err := ScaffoldResourceApp(context.Background(), cfg, ScaffoldResourceAppInput{
+		Name:        "test-app",
+		Description: "A test application",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, out.Files)
+	require.Contains(t, out.Files, "agentsdk.app.json")
+	require.Contains(t, out.Files, ".agents/agents/main.md")
+	require.Contains(t, out.Files, "README.md")
+
+	// The scaffolded app must pass validation with zero errors.
+	// Use agentdir.Validate directly with a fake HomeDir to isolate from global resources.
+	result, valErr := agentdir.Validate(dir, agentdir.ValidateOptions{HomeDir: t.TempDir()})
+	require.NoError(t, valErr)
+	require.True(t, result.OK(), "scaffold produced validation errors: %+v", result.Checks)
+	require.Equal(t, "main", result.Manifest.DefaultAgent)
+	require.Equal(t, []string{".agents"}, result.Manifest.Sources)
+	require.Len(t, result.Agents, 1)
+	require.True(t, result.Agents[0].HasFrontmatter)
+	require.NotEmpty(t, result.Agents[0].Tools)
+	require.NotEmpty(t, result.Agents[0].Capabilities)
+}
+
 func TestBuilderCLILoadsEmbeddedResourcesWithProjectWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	opts, err := AppOptions(Config{ProjectDir: dir})

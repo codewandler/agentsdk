@@ -23,6 +23,7 @@ tools:
   - skill
   - tools_*
 skills:
+  - sdk-runtime
   - requirements
   - app-architecture
   - sdk-conventions
