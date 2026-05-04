@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/terminal/cli"
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -15,7 +15,7 @@ import (
 var resources embed.FS
 
 func main() {
-	inference := agent.DefaultInferenceOptions()
+	inference := agentconfig.DefaultInferenceOptions()
 	inference.Model = "codex/gpt-5.5"
 	inference.Effort = unified.ReasoningEffortMedium
 
@@ -38,8 +38,8 @@ func main() {
 				Model:       inference.Model,
 				MaxSteps:    20,
 				ToolTimeout: 45 * time.Second,
-				ModelPolicy: agent.ModelPolicy{
-					UseCase: agent.ModelUseCaseAgenticCoding,
+				ModelPolicy: agentconfig.ModelPolicy{
+					UseCase: agentconfig.ModelUseCaseAgenticCoding,
 				},
 			},
 		},

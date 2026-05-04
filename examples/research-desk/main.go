@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/harness"
@@ -126,8 +127,8 @@ func newResearchApp() (*app.App, error) {
 		app.WithAgentOptions(
 			agent.WithWorkspace("."),
 			agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(os.Stdout)),
-			agent.WithModelPolicy(agent.ModelPolicy{
-				UseCase: agent.ModelUseCaseAgenticCoding,
+			agent.WithModelPolicy(agentconfig.ModelPolicy{
+				UseCase: agentconfig.ModelUseCaseAgenticCoding,
 			}),
 		),
 	)

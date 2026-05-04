@@ -18,6 +18,7 @@ import (
 	"github.com/codewandler/markdown"
 
 	"github.com/codewandler/agentsdk/agent"
+	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	builderapp "github.com/codewandler/agentsdk/apps/builder"
@@ -498,18 +499,18 @@ func modelsCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sourceAPI, err := agent.ParseSourceAPI(sourceAPIFlag)
+			sourceAPI, err := agentconfig.ParseSourceAPI(sourceAPIFlag)
 			if err != nil {
 				return err
 			}
-			useCase := agent.ModelUseCaseAgenticCoding
+			useCase := agentconfig.ModelUseCaseAgenticCoding
 			if useCaseFlag != "" {
-				useCase, err = agent.ParseModelUseCase(useCaseFlag)
+				useCase, err = agentconfig.ParseModelUseCase(useCaseFlag)
 				if err != nil {
 					return err
 				}
 			}
-			policy := agent.ModelPolicy{
+			policy := agentconfig.ModelPolicy{
 				UseCase:       useCase,
 				SourceAPI:     sourceAPI,
 				ApprovedOnly:  approvedOnly,
@@ -565,7 +566,7 @@ func modelsCmd() *cobra.Command {
 	return cmd
 }
 
-func runModelsCatalog(out discoveryWriter, policy agent.ModelPolicy, thinkingOnly bool) error {
+func runModelsCatalog(out discoveryWriter, policy agentconfig.ModelPolicy, thinkingOnly bool) error {
 	evidence, evidenceSource, err := agent.LoadCompatibilityEvidence(policy)
 	if err != nil {
 		return err
@@ -933,7 +934,7 @@ func discoveryCommandPolicyLabel(policy command.Policy) string {
 	return strings.Join(parts, ",")
 }
 
-func printDiscoveryCapabilities(out discoveryWriter, specs []agent.Spec) {
+func printDiscoveryCapabilities(out discoveryWriter, specs []agentconfig.Spec) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Capabilities:")
 	hasCapabilities := false
@@ -1087,7 +1088,7 @@ func printModelEvaluations(out discoveryWriter, model string, evidenceErr error,
 		candidate := evaluation.Candidate
 		fmt.Fprintf(out, "  %s  source_api=%s  provider=%s  provider_api=%s  native_model=%s",
 			evaluation.Status,
-			agent.FormatSourceAPI(candidate.SourceAPI),
+			agentconfig.FormatSourceAPI(candidate.SourceAPI),
 			candidate.Provider,
 			candidate.ProviderAPI,
 			candidate.NativeModel,
@@ -1131,7 +1132,7 @@ func printApprovedModelSelections(out discoveryWriter, model string, evidenceSou
 		fmt.Fprintf(out, "  %s  model=%s  source_api=%s  provider=%s  provider_api=%s  native_model=%s",
 			evaluation.Status,
 			modelName,
-			agent.FormatSourceAPI(resolution.SourceAPI),
+			agentconfig.FormatSourceAPI(resolution.SourceAPI),
 			resolution.Provider,
 			resolution.ProviderAPI,
 			resolution.NativeModel,
