@@ -62,6 +62,82 @@ This is better than building new custom validation tools because:
 
 `builder_scaffold_resource_app` currently produces a minimal skeleton with a broken manifest (no `default_agent`, no `discovery`) and placeholder junk (`echo` action, `verify` workflow). The scaffold should produce a valid, functional starting point that passes `agentsdk discover` with zero diagnostics.
 
+### 5. Builder eval harness — automated output quality testing
+
+We need a repeatable way to give the builder a task, let it build, and then evaluate the output. This validates that builder improvements (skills, prompt, scaffold) actually produce better apps.
+
+#### Approach: task-driven eval with `agentsdk discover` as the judge
+
+**Eval structure:**
+
+```text
+apps/builder/eval/
+  cases/
+    babelforce-agency.yaml      # eval case definition
+    minimal-resource-app.yaml
+    cli-wrapper-agent.yaml
+  runner.go                     # or shell script
+  judge.go                      # discovery-based evaluation
+```
+
+**Eval case definition:**
+
+```yaml
+name: babelforce-agency
+description: Build a babelforce agency app with Slack awareness using global dex/babelforce skills
+task: |
+  Create a babelforce agency app. It needs two agents: a main communications
+  awareness agent and a troubleshooter for operational diagnostics. Both agents
+  should use the global skills 'babelforce' and 'dex' from ~/.claude/skills/.
+  The main agent should have commands for daily briefing, my mentions, and
+  incident radar using read-only dex slack commands.
+expect:
+  manifest:
+    has_sources: true
+    has_default_agent: true
+    global_user_resources: true
+  agents:
+    - name: main
+      has_frontmatter: true
+      has_tools: true
+      has_skills: [babelforce, dex]
+      has_capabilities: [planner]
+    - name: troubleshooter
+      has_frontmatter: true
+      has_tools: true
+  commands_min: 3
+  diagnostics_max: 0
+  no_placeholder_actions: true    # no leftover echo/scaffold junk
+  no_local_skill_copies:          # skills that must NOT exist locally
+    - babelforce
+    - dex
+```
+
+**Eval flow:**
+
+1. Create a temp directory.
+2. Run `agentsdk build` in one-shot/task mode with the eval case task text.
+3. Wait for the builder to finish (max step limit or turn limit).
+4. Run `agentsdk discover --local --json .` on the output directory.
+5. Evaluate the discovery JSON against the `expect` assertions.
+6. Optionally: parse individual agent `.md` files to check frontmatter completeness.
+7. Report pass/fail per assertion, overall score.
+
+**Key design decisions:**
+
+- **`agentsdk discover` is the primary judge.** It's the source of truth for whether the app is valid. If discover reports zero diagnostics and the expected agents/commands/skills are present, the app works.
+- **Determinism is not the goal.** The builder is an LLM — outputs will vary. The eval checks structural correctness (valid manifest, frontmatter present, skills discoverable) not exact file content.
+- **Eval cases are additive.** Start with the babelforce-agency case (we have ground truth from the real session). Add more cases as we find new failure modes.
+- **Run after every builder change.** The eval suite becomes the builder's own CI gate.
+
+**Implementation options:**
+
+- **Option A: Go test.** Each eval case is a `TestBuilderEval_*` function that runs the builder in one-shot mode via `cli.Run`, then runs discovery on the output. Fits existing test infrastructure.
+- **Option B: Shell script.** Simpler, uses `agentsdk build` and `agentsdk discover` as black boxes. Easier to run manually but harder to assert on structured JSON.
+- **Option C: Hybrid.** Shell script drives the builder, Go test evaluates the output. Separates generation from evaluation.
+
+Recommendation: **Option A (Go test)** for CI integration, with the eval case YAML files as test fixtures. The builder's `cli.Run` with `Task` field already supports one-shot mode.
+
 ## Session references
 
 - Builder sessions: `~/babelforce/agency/.agentsdk/builder/sessions/`
