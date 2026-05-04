@@ -171,6 +171,9 @@ func Actions(cfg Config) []action.Action {
 		action.NewTyped(action.Spec{Name: "builder_write_project_file", Description: "Write one file under the current project directory with path-safety checks."}, func(ctx action.Ctx, input WriteProjectFileInput) (WriteProjectFileOutput, error) {
 			return WriteProjectFile(ctx, cfg, input)
 		}),
+		action.NewTyped(action.Spec{Name: "builder_validate_target", Description: "Validate the current project for structural correctness: manifest, agents, skills, workflows, commands. Returns checks with passed/warning/error status."}, func(ctx action.Ctx, input ValidateTargetInput) (agentdir.ValidationResult, error) {
+			return ValidateTarget(ctx, cfg, input)
+		}),
 	}
 }
 
@@ -389,6 +392,21 @@ func WriteProjectFile(ctx context.Context, cfg Config, input WriteProjectFileInp
 	}
 	cfg, _ = NormalizeConfig(cfg)
 	return WriteProjectFileOutput{ProjectDir: cfg.ProjectDir, Path: rel, Bytes: len([]byte(input.Content))}, nil
+}
+
+type ValidateTargetInput struct{}
+
+func ValidateTarget(ctx context.Context, cfg Config, _ ValidateTargetInput) (agentdir.ValidationResult, error) {
+	cfg, err := NormalizeConfig(cfg)
+	if err != nil {
+		return agentdir.ValidationResult{}, err
+	}
+	select {
+	case <-ctx.Done():
+		return agentdir.ValidationResult{}, ctx.Err()
+	default:
+	}
+	return agentdir.Validate(cfg.ProjectDir, agentdir.ValidateOptions{})
 }
 
 func writeUnderProject(ctx context.Context, cfg Config, rel string, content string, overwrite bool) (string, error) {
