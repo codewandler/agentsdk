@@ -20,6 +20,10 @@ func TestRootCommandRegistersRun(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, run)
 	require.Equal(t, "run", run.Name())
+	dev, _, err := cmd.Find([]string{"dev"})
+	require.NoError(t, err)
+	require.NotNil(t, dev)
+	require.Equal(t, "dev", dev.Name())
 	serve, _, err := cmd.Find([]string{"serve"})
 	require.NoError(t, err)
 	require.NotNil(t, serve)
@@ -39,7 +43,7 @@ func TestRootCommandRegistersRun(t *testing.T) {
 }
 
 func TestRunRejectsUnknownFlag(t *testing.T) {
-	err := run([]string{"run", "./agent", "--bad"})
+	err := run([]string{"run", "--bad"})
 	require.Error(t, err)
 }
 
@@ -97,11 +101,7 @@ func TestBuildCommandStartsEmbeddedBuilderFromWorkingDirectory(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	text := out.String()
-	require.Contains(t, text, "agentsdk builder")
-	require.Contains(t, text, "project: "+dir)
-	require.Contains(t, text, filepath.Join(dir, ".agentsdk", "builder", "sessions"))
-	require.Contains(t, text, filepath.Join(dir, ".agentsdk", "builder", "target-sessions"))
-	require.Contains(t, text, "verify_app")
+	require.Contains(t, text, "builder> ")
 }
 
 func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {

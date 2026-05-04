@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,9 +26,16 @@ type CommandConfig struct {
 	Short string
 	Long  string
 
-	Resources   Resources
-	ResourceArg bool
-	AgentFlag   bool
+	Resources    Resources
+	ResourceArg  bool // Deprecated: use DiscoverFlag instead.
+	DiscoverFlag bool
+	AgentFlag    bool
+
+	// EmbeddedBase, when set alongside DiscoverFlag, uses the embedded FS as
+	// the primary resource source and merges -d paths on top. This is used by
+	// first-party app commands (dev, build) that ship their own resources.
+	EmbeddedBase     fs.FS
+	EmbeddedBaseRoot string
 
 	DefaultAgent       string
 	DefaultSessionsDir string
@@ -43,9 +51,10 @@ type CommandConfig struct {
 	ModelCompleter ModelCompleter
 	Profile        Profile
 
-	AgentOptions  []agent.Option
-	AppOptions    []app.Option
-	PluginFactory app.PluginFactory
+	NoDefaultPlugins bool
+	AgentOptions    []agent.Option
+	AppOptions      []app.Option
+	PluginFactory   app.PluginFactory
 
 	In  io.Reader
 	Out io.Writer
@@ -80,8 +89,9 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		verbose          bool
 		debugMessage     bool
 		includeGlobal    bool
+		discoverPaths    []string
 		pluginNames      []string
-		noDefaultPlugins bool
+		noDefaultPlugins = cfg.NoDefaultPlugins
 		sourceAPIFlag    = cfg.Profile.Defaults.SourceAPI
 		useCaseFlag      string
 		approvedOnly     = cfg.Profile.Defaults.ModelPolicy.ApprovedOnly
@@ -105,7 +115,19 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resources := cfg.Resources
 			taskArgs := args
-			if cfg.ResourceArg {
+			if cfg.DiscoverFlag {
+				// All positional args are the task; discovery roots come from -d flags.
+				paths := discoverPaths
+				if len(paths) == 0 {
+					paths = []string{"."}
+				}
+				if cfg.EmbeddedBase != nil {
+					resources = EmbeddedWithDirResources(cfg.EmbeddedBase, cfg.EmbeddedBaseRoot, paths)
+				} else {
+					resources = MultiDirResources(paths)
+				}
+			} else if cfg.ResourceArg {
+				// Legacy: first positional arg is the resource path.
 				resourcePath := "."
 				if len(args) > 0 {
 					resourcePath = args[0]
@@ -197,7 +219,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		},
 	}
 	addCoreFlags(cmd, cfg, &agentName, &workspace, &systemPrompt)
-	addResourceFlags(cmd, cfg, &includeGlobal, &pluginNames, &noDefaultPlugins)
+	addResourceFlags(cmd, cfg, &includeGlobal, &discoverPaths, &pluginNames, &noDefaultPlugins)
 	addInferenceFlags(cmd, cfg, &inference, &thinkingFlag, &effortFlag, &sourceAPIFlag)
 	addRuntimeFlags(cmd, cfg, &maxSteps, &totalTimeout, &toolTimeout)
 	addSessionFlags(cmd, cfg, &session, &continueLast, &sessionsDir)
@@ -253,7 +275,7 @@ func addCoreFlags(cmd *cobra.Command, cfg CommandConfig, agentName *string, work
 	}
 	f := cmd.Flags()
 	var names []string
-	if (cfg.AgentFlag || cfg.ResourceArg) && !cfg.Profile.flagDisabled("agent") {
+	if (cfg.AgentFlag || cfg.ResourceArg || cfg.DiscoverFlag) && !cfg.Profile.flagDisabled("agent") {
 		f.StringVar(agentName, "agent", *agentName, "Agent name to run")
 		names = append(names, "agent")
 	}
@@ -268,12 +290,16 @@ func addCoreFlags(cmd *cobra.Command, cfg CommandConfig, agentName *string, work
 	annotateFlags(cmd, GroupCore, names...)
 }
 
-func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool, pluginNames *[]string, noDefaultPlugins *bool) {
+func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool, discoverPaths *[]string, pluginNames *[]string, noDefaultPlugins *bool) {
 	if !cfg.Profile.groupEnabled(GroupResources) {
 		return
 	}
 	f := cmd.Flags()
 	var names []string
+	if cfg.DiscoverFlag && !cfg.Profile.flagDisabled("discover") {
+		f.StringSliceVarP(discoverPaths, "discover", "d", nil, "Discovery root directory (repeatable; default: current directory)")
+		names = append(names, "discover")
+	}
 	if !cfg.Profile.flagDisabled("include-global") {
 		f.BoolVar(includeGlobal, "include-global", false, "Load ~/.agents and ~/.claude resources")
 		names = append(names, "include-global")
@@ -283,7 +309,7 @@ func addResourceFlags(cmd *cobra.Command, cfg CommandConfig, includeGlobal *bool
 		names = append(names, "plugin")
 	}
 	if !cfg.Profile.flagDisabled("no-default-plugins") {
-		f.BoolVar(noDefaultPlugins, "no-default-plugins", false, "Disable the built-in local_cli fallback plugin")
+		f.BoolVar(noDefaultPlugins, "no-default-plugins", *noDefaultPlugins, "Disable the built-in local_cli fallback plugin")
 		names = append(names, "no-default-plugins")
 	}
 	annotateFlags(cmd, GroupResources, names...)

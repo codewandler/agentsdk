@@ -22,6 +22,7 @@ import (
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
 	builderapp "github.com/codewandler/agentsdk/apps/builder"
+	engineerapp "github.com/codewandler/agentsdk/apps/engineer"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
@@ -58,12 +59,13 @@ func rootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	cmd.AddCommand(cli.NewCommand(cli.CommandConfig{
-		Name:        "agentsdk",
-		Use:         "run [path] [task]",
-		Short:       "Run an agent resource bundle",
-		ResourceArg: true,
-		AgentFlag:   true,
+		Name:         "agentsdk",
+		Use:          "run [task]",
+		Short:        "Run an agent resource bundle",
+		DiscoverFlag: true,
+		AgentFlag:    true,
 	}))
+	cmd.AddCommand(devCmd())
 	cmd.AddCommand(serveCmd())
 	cmd.AddCommand(buildCmd())
 	cmd.AddCommand(discoverCmd())
@@ -72,53 +74,52 @@ func rootCmd() *cobra.Command {
 	return cmd
 }
 
+func devCmd() *cobra.Command {
+	return cli.NewCommand(cli.CommandConfig{
+		Name:             "agentsdk",
+		Use:              "dev [task]",
+		Short:            "Run the first-party engineer agent with project discovery",
+		Long:             "Run the embedded engineer agent (apps/engineer) with the current working directory as a discovery root. Additional roots can be added with -d/--discover.",
+		DiscoverFlag:     true,
+		AgentFlag:        true,
+		EmbeddedBase:     engineerapp.Resources(),
+		EmbeddedBaseRoot: engineerapp.ResourcesRoot,
+		DefaultAgent:     "main",
+	})
+}
+
 func buildCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "build",
-		Short:         "Start the first-party agentsdk builder app",
-		Args:          cobra.NoArgs,
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			workspace, err := os.Getwd()
-			if err != nil {
-				return err
-			}
-			workspace, err = filepath.Abs(workspace)
-			if err != nil {
-				return err
-			}
-			builderCfg, err := builderapp.NormalizeConfig(builderapp.Config{ProjectDir: workspace})
-			if err != nil {
-				return err
-			}
-			appOpts, err := builderapp.AppOptions(builderCfg)
-			if err != nil {
-				return err
-			}
-			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "agentsdk builder")
-			fmt.Fprintf(out, "project: %s\n", builderCfg.ProjectDir)
-			fmt.Fprintf(out, "builder_sessions: %s\n", builderCfg.SessionsDir)
-			fmt.Fprintf(out, "target_test_sessions: %s\n", builderCfg.TargetSessionsDir)
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "Try /workflow list, /workflow start verify_app, or /workflow start test_target_agent.")
-			fmt.Fprintln(out)
-			return cli.Run(cmd.Context(), cli.Config{
-				Resources:        cli.EmbeddedResources(builderapp.Resources(), builderapp.ResourcesRoot),
-				AgentName:        "builder",
-				Workspace:        builderCfg.ProjectDir,
-				SessionsDir:      builderCfg.SessionsDir,
-				NoDefaultPlugins: true,
-				AppOptions:       appOpts,
-				Prompt:           "builder> ",
-				In:               cmd.InOrStdin(),
-				Out:              out,
-				Err:              cmd.ErrOrStderr(),
-			})
-		},
+	return cli.NewCommand(cli.CommandConfig{
+		Name:             "agentsdk",
+		Use:              "build [task]",
+		Short:            "Start the first-party agentsdk builder app",
+		Long:             "Run the embedded builder agent with the current working directory as the project under construction. Additional discovery roots can be added with -d/--discover.",
+		DiscoverFlag:     true,
+		AgentFlag:        true,
+		EmbeddedBase:     builderapp.Resources(),
+		EmbeddedBaseRoot: builderapp.ResourcesRoot,
+		DefaultAgent:     "builder",
+		NoDefaultPlugins: true,
+		Prompt:           "builder> ",
+		AppOptions:       builderAppOptions(),
+	})
+}
+
+func builderAppOptions() []app.Option {
+	workspace, err := os.Getwd()
+	if err != nil {
+		return nil
 	}
-	return cmd
+	workspace, _ = filepath.Abs(workspace)
+	builderCfg, err := builderapp.NormalizeConfig(builderapp.Config{ProjectDir: workspace})
+	if err != nil {
+		return nil
+	}
+	appOpts, err := builderapp.AppOptions(builderCfg)
+	if err != nil {
+		return nil
+	}
+	return appOpts
 }
 
 func serveCmd() *cobra.Command {
