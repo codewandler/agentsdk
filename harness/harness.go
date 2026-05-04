@@ -559,6 +559,18 @@ func (s *Session) Info() SessionInfo {
 	return info
 }
 
+func (s *Session) ContextState() ContextState {
+	state := ContextState{Text: "context: unavailable"}
+	if s == nil || s.Agent == nil {
+		return state
+	}
+	state.Agent = s.Agent.Spec().Name
+	state.Text = s.Agent.ContextState()
+	state.Descriptors = s.Agent.ContextDescriptors()
+	state.Snapshot = s.Agent.ContextSnapshot()
+	return state
+}
+
 func (s *Session) ParamsSummary() string {
 	if s == nil || s.Agent == nil {
 		return ""

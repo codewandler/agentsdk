@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/thread"
 )
@@ -17,6 +18,16 @@ type SessionInfo struct {
 	ParamsSummary string
 }
 
+// ContextState exposes context provider descriptors plus the last committed
+// render snapshot for harness/channel inspection. Snapshot content is included
+// because it is already model-visible context; channel owners may redact before
+// exposing it to untrusted clients.
+type ContextState struct {
+	Agent       string                            `json:"agent,omitempty"`
+	Text        string                            `json:"text"`
+	Descriptors []agentcontext.ProviderDescriptor `json:"descriptors,omitempty"`
+	Snapshot    agentcontext.StateSnapshot        `json:"snapshot"`
+}
 type SessionInfoPayload struct {
 	Info SessionInfo
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/harness"
+	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -42,6 +43,29 @@ func TestNativeHealthOpenListAndCommand(t *testing.T) {
 	require.Contains(t, resp.Body.String(), `"kind":"display"`)
 	require.Contains(t, resp.Body.String(), `"display"`)
 	require.Contains(t, resp.Body.String(), `session:`)
+}
+
+func TestNativeContextEndpointExposesDescriptorsAndSnapshot(t *testing.T) {
+	service := testService(t)
+	server := httptest.NewServer(New(service).Handler())
+	defer server.Close()
+
+	resp := requestJSON(t, http.MethodPost, server.URL+nativePrefix+"/sessions", map[string]any{"name": "web", "agent_name": "coder"})
+	require.Equal(t, http.StatusCreated, resp.Code)
+
+	resp = requestJSON(t, http.MethodGet, server.URL+nativePrefix+"/sessions/web/context", nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+	require.Contains(t, resp.Body.String(), `"agent":"coder"`)
+	require.Contains(t, resp.Body.String(), `"key":"environment"`)
+	require.Contains(t, resp.Body.String(), `"descriptors"`)
+
+	resp = requestJSON(t, http.MethodPost, server.URL+nativePrefix+"/sessions/web/commands", map[string]any{"path": []string{"turn"}, "input": map[string]any{"text": "hello"}})
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	resp = requestJSON(t, http.MethodGet, server.URL+nativePrefix+"/sessions/web/context", nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+	require.Contains(t, resp.Body.String(), `"providers"`)
+	require.Contains(t, resp.Body.String(), `"fragments"`)
 }
 
 func TestNativeWorkflowStartAndRunsRequireThreadBackedSession(t *testing.T) {
@@ -113,7 +137,6 @@ func TestAGUICompatibilityNamespaceAdvertisesBoundary(t *testing.T) {
 	require.Contains(t, resp.Body.String(), "protocol-neutral")
 	require.Contains(t, resp.Body.String(), "A2UI")
 }
-
 func TestSlashStringsAreNotNativeCommandAPI(t *testing.T) {
 	service := testService(t)
 	server := httptest.NewServer(New(service).Handler())
@@ -136,6 +159,7 @@ func testService(t *testing.T) *harness.Service {
 			return action.OK(input)
 		})),
 		app.WithWorkflows(workflow.Definition{Name: "echo", Steps: []workflow.Step{{ID: "echo", Action: workflow.ActionRef{Name: "echo"}}}}),
+		app.WithAgentOptions(agent.WithClient(runnertest.NewClient(runnertest.TextStream("ok")))),
 	)
 	require.NoError(t, err)
 	return harness.NewService(a)

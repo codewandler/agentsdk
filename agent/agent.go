@@ -169,6 +169,20 @@ func (a *Instance) SessionStorePath() string {
 	return a.sessionStorePath
 }
 
+func (a *Instance) ContextDescriptors() []agentcontext.ProviderDescriptor {
+	if a == nil || a.runtime == nil {
+		return nil
+	}
+	return a.runtime.ContextDescriptors()
+}
+
+func (a *Instance) ContextSnapshot() agentcontext.StateSnapshot {
+	if a == nil || a.runtime == nil {
+		return agentcontext.StateSnapshot{}
+	}
+	return a.runtime.ContextSnapshot()
+}
+
 func (a *Instance) LiveThread() thread.Live {
 	if a == nil {
 		return nil

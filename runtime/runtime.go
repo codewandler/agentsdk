@@ -115,6 +115,36 @@ func (e *Engine) RegisterContextProviders(providers ...agentcontext.Provider) er
 	return e.threadContexts.Register(providers...)
 }
 
+// ContextDescriptors returns metadata for registered context providers without
+// rendering them.
+func (e *Engine) ContextDescriptors() []agentcontext.ProviderDescriptor {
+	if e == nil {
+		return nil
+	}
+	if e.threadRuntime != nil {
+		return e.threadRuntime.ContextDescriptors()
+	}
+	if e.threadContexts != nil {
+		return e.threadContexts.Descriptors()
+	}
+	return nil
+}
+
+// ContextSnapshot returns a machine-readable snapshot of the last committed
+// context render state.
+func (e *Engine) ContextSnapshot() agentcontext.StateSnapshot {
+	if e == nil {
+		return agentcontext.StateSnapshot{}
+	}
+	if e.threadRuntime != nil {
+		return e.threadRuntime.ContextSnapshot()
+	}
+	if e.threadContexts != nil {
+		return e.threadContexts.StateSnapshot()
+	}
+	return agentcontext.StateSnapshot{}
+}
+
 // ContextState returns a human-readable summary of the last committed context
 // manager render state.
 func (e *Engine) ContextState() string {

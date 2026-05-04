@@ -85,6 +85,36 @@ func (m *Manager) SetRecords(records map[ProviderKey]ProviderRenderRecord) {
 	m.version++
 }
 
+// Descriptors returns side-effect-free metadata for all registered providers.
+func (m *Manager) Descriptors() []ProviderDescriptor {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]ProviderDescriptor, 0, len(m.providers))
+	for _, provider := range m.providers {
+		out = append(out, descriptorForProvider(provider))
+	}
+	return out
+}
+
+// StateSnapshot returns a machine-readable copy of the last committed provider
+// render state, enriched with provider descriptors when available.
+func (m *Manager) StateSnapshot() StateSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	records := make(map[ProviderKey]ProviderRenderRecord, len(m.records))
+	for key, record := range m.records {
+		records[key] = cloneRecord(record)
+	}
+	descriptors := make(map[ProviderKey]ProviderDescriptor, len(m.providers))
+	for _, provider := range m.providers {
+		desc := descriptorForProvider(provider)
+		if desc.Key != "" {
+			descriptors[desc.Key] = desc
+		}
+	}
+	return snapshotFromRecords(records, descriptors)
+}
+
 type BuildRequest struct {
 	ThreadID     string
 	BranchID     string

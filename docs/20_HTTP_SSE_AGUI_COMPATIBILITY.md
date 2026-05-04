@@ -26,6 +26,7 @@ GET  /api/agentsdk/v1/health
 GET  /api/agentsdk/v1/sessions
 POST /api/agentsdk/v1/sessions
 POST /api/agentsdk/v1/sessions/{session}/commands
+GET  /api/agentsdk/v1/sessions/{session}/context
 GET  /api/agentsdk/v1/sessions/{session}/events
 POST /api/agentsdk/v1/sessions/{session}/workflows/{workflow}/start
 GET  /api/agentsdk/v1/sessions/{session}/workflows/runs
@@ -97,6 +98,13 @@ Workflow endpoints are convenience wrappers around session APIs:
 The command endpoint can also drive workflow commands through structured command
 paths, so workflow-specific endpoints are additive convenience, not a separate
 canonical workflow runtime.
+
+### Context inspection
+
+`GET /api/agentsdk/v1/sessions/{session}/context` returns provider descriptors
+and the last committed context render snapshot. The endpoint is a channel
+inspection surface over `agentcontext.Manager`; it does not render providers or
+mutate context state.
 
 ### SSE events
 

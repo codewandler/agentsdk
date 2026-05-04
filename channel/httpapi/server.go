@@ -115,6 +115,8 @@ func (s *Server) handleSessionRoute(w http.ResponseWriter, r *http.Request, rel 
 	switch {
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "commands":
 		s.handleExecuteCommand(w, r, session)
+	case r.Method == http.MethodGet && len(parts) == 2 && parts[1] == "context":
+		s.handleContext(w, r, session)
 	case r.Method == http.MethodGet && len(parts) == 2 && parts[1] == "events":
 		s.handleEvents(w, r, session)
 	case r.Method == http.MethodPost && len(parts) == 4 && parts[1] == "workflows" && parts[3] == "start":
@@ -192,6 +194,10 @@ func (s *Server) handleWorkflowRuns(w http.ResponseWriter, r *http.Request, sess
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+func (s *Server) handleContext(w http.ResponseWriter, r *http.Request, session *harness.Session) {
+	writeJSON(w, http.StatusOK, session.ContextState())
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request, session *harness.Session) {

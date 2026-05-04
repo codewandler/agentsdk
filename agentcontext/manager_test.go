@@ -163,6 +163,42 @@ func TestManagerPrepareCommitAndRollback(t *testing.T) {
 	}
 }
 
+func TestManagerDescriptorsAndStateSnapshot(t *testing.T) {
+	provider := &describedStaticProvider{
+		staticProvider: staticProvider{
+			key: "policy",
+			fragments: []ContextFragment{{
+				Key:         "policy/rule",
+				Content:     "Use safe defaults",
+				Authority:   AuthorityDeveloper,
+				CachePolicy: CachePolicy{Stable: true, Scope: CacheThread},
+			}},
+		},
+		desc: ProviderDescriptor{Key: "policy", Description: "policy context", Lifecycle: "test", Scope: CacheThread},
+	}
+	manager, err := NewManager(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if descriptors := manager.Descriptors(); len(descriptors) != 1 || descriptors[0].Description != "policy context" {
+		t.Fatalf("descriptors = %#v", descriptors)
+	}
+	if _, err := manager.Build(context.Background(), BuildRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := manager.StateSnapshot()
+	if len(snapshot.Providers) != 1 {
+		t.Fatalf("providers = %#v", snapshot.Providers)
+	}
+	state := snapshot.Providers[0]
+	if state.Descriptor.Description != "policy context" || state.Descriptor.Lifecycle != "test" {
+		t.Fatalf("descriptor = %#v", state.Descriptor)
+	}
+	if len(state.Fragments) != 1 || state.Fragments[0].Content != "Use safe defaults" || state.Fragments[0].CachePolicy.Scope != CacheThread {
+		t.Fatalf("fragments = %#v", state.Fragments)
+	}
+}
+
 type staticProvider struct {
 	key         ProviderKey
 	fragments   []ContextFragment
@@ -203,3 +239,10 @@ func sameKeys(a, b []FragmentKey) bool {
 	}
 	return true
 }
+
+type describedStaticProvider struct {
+	staticProvider
+	desc ProviderDescriptor
+}
+
+func (p *describedStaticProvider) Descriptor() ProviderDescriptor { return p.desc }

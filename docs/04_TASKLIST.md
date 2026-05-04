@@ -304,16 +304,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 17. Context system follow-ups
 
-- [ ] Keep `agentcontext.Manager` as context render/replay model.
-- [ ] Clarify app-level context provider lifecycle.
-- [ ] Clarify plugin context provider lifecycle.
-- [ ] Clarify session projection context provider lifecycle.
-- [ ] Clarify agent-local context provider lifecycle.
-- [ ] Reduce `agent.Instance` context setup responsibility if a clear seam emerges.
-- [ ] Add better context state inspection.
-- [ ] Add context diff/debug output for non-terminal channels.
-- [ ] Add context provider descriptors if needed.
-- [ ] Ensure cache policies are explicit and tested.
+- [x] Keep `agentcontext.Manager` as context render/replay model.
+- [x] Clarify app-level context provider lifecycle.
+- [x] Clarify plugin context provider lifecycle.
+- [x] Clarify session projection context provider lifecycle.
+- [x] Clarify agent-local context provider lifecycle.
+- [x] Reduce `agent.Instance` context setup responsibility if a clear seam emerges.
+- [x] Add better context state inspection.
+- [x] Add context diff/debug output for non-terminal channels.
+- [x] Add context provider descriptors if needed.
+- [x] Ensure cache policies are explicit and tested.
 
 ## 18. Capability system follow-ups
 

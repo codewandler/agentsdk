@@ -174,11 +174,12 @@ func (h controlCommandHandler) contextCommand(context.Context, command.Invocatio
 	if !ok {
 		return command.Notice("context: no current agent"), nil
 	}
-	state := inst.ContextState()
-	if state == "context: no render state" {
-		state = fmt.Sprintf("context: no render state yet for agent %q\nrun a turn first to capture provider context", inst.Spec().Name)
+	state := h.Session.ContextState()
+	text := state.Text
+	if text == "context: no render state" {
+		text = fmt.Sprintf("context: no render state yet for agent %q\nrun a turn first to capture provider context", inst.Spec().Name)
 	}
-	return command.Notice(state), nil
+	return command.Display(ContextStatePayload{State: state, Text: text}), nil
 }
 
 func (h controlCommandHandler) skillsCommand(context.Context, command.Invocation) (command.Result, error) {

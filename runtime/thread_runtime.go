@@ -155,6 +155,24 @@ func (r *ThreadRuntime) ContextState() string {
 	return r.contexts.LastRenderState()
 }
 
+// ContextDescriptors returns metadata for registered context providers without
+// rendering them.
+func (r *ThreadRuntime) ContextDescriptors() []agentcontext.ProviderDescriptor {
+	if r == nil || r.contexts == nil {
+		return nil
+	}
+	return r.contexts.Descriptors()
+}
+
+// ContextSnapshot returns a machine-readable snapshot of the last committed
+// context render records.
+func (r *ThreadRuntime) ContextSnapshot() agentcontext.StateSnapshot {
+	if r == nil || r.contexts == nil {
+		return agentcontext.StateSnapshot{}
+	}
+	return r.contexts.StateSnapshot()
+}
+
 func (r *ThreadRuntime) AttachCapability(ctx context.Context, spec capability.AttachSpec) (capability.Capability, error) {
 	if r == nil || r.capabilities == nil {
 		return nil, fmt.Errorf("runtime: thread runtime is nil")
