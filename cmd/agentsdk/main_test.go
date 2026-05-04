@@ -296,6 +296,60 @@ func TestDiscoverTruncatesLongDescriptions(t *testing.T) {
 	require.NotContains(t, out.String(), long)
 }
 
+func TestDiscoverBundledExamplesAndDogfoodApps(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	cases := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{
+			name: "local quickstart",
+			path: filepath.Join(repoRoot, "examples", "local-quickstart"),
+			want: []string{"Agents:", "quickstart", "Commands:", "/hello"},
+		},
+		{
+			name: "workflow app",
+			path: filepath.Join(repoRoot, "examples", "workflow-app"),
+			want: []string{"Workflows:", "summarize_topic", "Structured commands:", "/summarize"},
+		},
+		{
+			name: "command tree",
+			path: filepath.Join(repoRoot, "examples", "command-tree"),
+			want: []string{"Commands:", "/explain", "Structured commands:", "/project plan"},
+		},
+		{
+			name: "resource only",
+			path: filepath.Join(repoRoot, "examples", "resource-only-app"),
+			want: []string{"Workflows:", "session_summary", "Triggers:", "hourly-summary"},
+		},
+		{
+			name: "hybrid app",
+			path: filepath.Join(repoRoot, "examples", "hybrid-app"),
+			want: []string{"Plugins:", "local_cli", "Workflows:", "operator_check"},
+		},
+		{
+			name: "engineer app",
+			path: filepath.Join(repoRoot, "apps", "engineer"),
+			want: []string{"Agents:", "main", "Commands:", "/review"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := rootCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"discover", "--local", tc.path})
+			require.NoError(t, cmd.Execute())
+			for _, want := range tc.want {
+				require.Contains(t, out.String(), want)
+			}
+		})
+	}
+}
+
 func TestModelsPrintIncludesModelForCatalogRows(t *testing.T) {
 	var out bytes.Buffer
 	err := printApprovedModelSelections(&out, "", "test-evidence", []adapterconfig.UseCaseModelSelection{{

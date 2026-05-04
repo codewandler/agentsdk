@@ -1,0 +1,16 @@
+name: plan-change
+path: [project, plan]
+description: Build a short implementation plan for a project change.
+input_schema:
+  type: object
+  properties:
+    change:
+      type: string
+      description: Change to plan.
+  required: [change]
+target:
+  workflow: plan_change
+  input: "Create a concise implementation plan for: {{ .change }}"
+policy:
+  user_callable: true
+  agent_callable: true

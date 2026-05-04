@@ -1,0 +1,9 @@
+{
+  "default_agent": "quickstart",
+  "sources": [".agents"],
+  "discovery": {
+    "include_global_user_resources": false,
+    "include_external_ecosystems": false,
+    "allow_remote": false
+  }
+}

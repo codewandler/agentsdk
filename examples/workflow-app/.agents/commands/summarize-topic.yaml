@@ -1,0 +1,16 @@
+name: summarize-topic
+path: [summarize]
+description: Run the summarize_topic workflow.
+input_schema:
+  type: object
+  properties:
+    topic:
+      type: string
+      description: Topic to summarize.
+  required: [topic]
+target:
+  workflow: summarize_topic
+  input: "Summarize this topic in three bullets: {{ .topic }}"
+policy:
+  user_callable: true
+  agent_callable: true

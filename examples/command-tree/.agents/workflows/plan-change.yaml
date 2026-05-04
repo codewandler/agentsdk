@@ -1,0 +1,6 @@
+name: plan_change
+description: Plan a small project change through the active agent
+version: v1
+steps:
+  - id: plan
+    action: agent.turn

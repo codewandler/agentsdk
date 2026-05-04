@@ -431,16 +431,16 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 25. Examples / dogfood apps
 
-- [ ] Update local quickstart example.
-- [ ] Add workflow example.
-- [ ] Add command tree example.
-- [ ] Add plugin composition example.
-- [ ] Add datasource example.
-- [ ] Add action/tool adapter example.
-- [ ] Update `apps/engineer` to use blessed paths.
-- [ ] Decide what remains in `examples/*` vs `apps/*`.
-- [ ] Remove stale examples referencing old APIs.
-- [ ] Ensure every example passes `go test ./...`.
+- [x] Update local quickstart example.
+- [x] Add workflow example.
+- [x] Add command tree example.
+- [x] Add plugin composition example.
+- [x] Add datasource example.
+- [x] Add action/tool adapter example.
+- [x] Update `apps/engineer` to use blessed paths.
+- [x] Decide what remains in `examples/*` vs `apps/*`.
+- [x] Remove stale examples referencing old APIs.
+- [x] Ensure every example passes `go test ./...`.
 
 ## 26. Release readiness
 

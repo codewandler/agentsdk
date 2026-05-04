@@ -1,0 +1,23 @@
+name: summarize_topic
+description: Summarize a topic through the active session agent
+version: v1
+labels: [example, workflow]
+steps:
+  - id: summarize
+    action: agent.turn
+expose:
+  commands:
+    - name: summarize-topic
+      path: [workflow, summarize]
+      description: Summarize a topic with the workflow example.
+      input: "Summarize this topic in three bullets: {{ .topic }}"
+      input_schema:
+        type: object
+        properties:
+          topic:
+            type: string
+            description: Topic to summarize.
+        required: [topic]
+      policy:
+        user_callable: true
+        agent_callable: true

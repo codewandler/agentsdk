@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/codewandler/agentsdk v0.0.0
-	github.com/codewandler/llmadapter v1.0.0-rc.14
+	github.com/codewandler/llmadapter v1.0.0-rc.32
 )
 
 require (
@@ -18,12 +18,29 @@ require (
 	github.com/amitybell/piper-bin-windows v0.0.0-20231118093113-cc2cef2f6b74 // indirect
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7 // indirect
 	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.32.17 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.16 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
+	github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
+	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000 // indirect
 	github.com/codewandler/markdown v0.46.2 // indirect
-	github.com/codewandler/modeldb v0.13.2 // indirect
+	github.com/codewandler/modeldb v0.15.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/emiago/diago v0.28.0 // indirect
 	github.com/emiago/dtls/v3 v3.0.0-20260122183559-8b8d23e359c0 // indirect

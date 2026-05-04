@@ -52,7 +52,7 @@ The agent has access to filesystem, shell, git, and web tools:
 
 ## Bundled skills
 
-These skills are bundled with the app and discoverable through `/skills`, but they are not activated automatically. Activate them during a session with `/skill <name>` or the model-side `skill` tool.
+These skills are bundled with the app and discoverable through `/skills`, but they are not activated automatically. Activate them during a session with `/skill activate <name>` or the model-side `skill` tool.
 
 | Skill          | Description                                              |
 | -------------- | -------------------------------------------------------- |
@@ -101,7 +101,7 @@ List discovered skills and their current state:
 Activate a discovered skill on the current agent session:
 
 ```text
-/skill architecture
+/skill activate architecture
 ```
 
 If the `skill` tool is available to the model, it can also activate skills and exact references under `references/` with batched actions.

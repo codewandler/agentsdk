@@ -53,9 +53,7 @@ For new applications, prefer the refactored app/harness path:
 5. Keep command results structured and render them at terminal, API, TUI, or
    model-facing presentation boundaries.
 
-See [docs/05_QUICKSTART.md](docs/05_QUICKSTART.md) for runnable examples,
-including `/session info`, `/workflow list`, `/workflow start`, `/workflow runs`,
-and `/workflow run <id>`.
+See [docs/05_QUICKSTART.md](docs/05_QUICKSTART.md) and [examples/README.md](examples/README.md) for runnable examples, including `/session info`, `/workflow list`, `/workflow start`, `/workflow runs`, and `/workflow run <id>`.
 
 ## Recommended Runtime Stack
 
