@@ -483,6 +483,7 @@ Use these directly when `runtime.Agent` is too high level:
 - [`docs/24_SAFETY_RISK_POLICY.md`](docs/24_SAFETY_RISK_POLICY.md) — surface-neutral safety decisions, approval boundary, risk events, audit trail, and tool compatibility bridge.
 - [`docs/25_PERSISTENCE_THREAD_MODEL.md`](docs/25_PERSISTENCE_THREAD_MODEL.md) — durable thread event foundation, event schema versions, harness event inspection, and replay coverage.
 - [`docs/26_COMPACTION_MEMORY.md`](docs/26_COMPACTION_MEMORY.md) — default-on percentage-based compaction policy, opt-out, lifecycle visibility, summary streaming, and persistence conventions.
+- [`docs/27_DISCOVER_INTROSPECTION.md`](docs/27_DISCOVER_INTROSPECTION.md) — human and machine-readable discovery output for resources, descriptors, plugins, capabilities, and diagnostics.
 - [`docs/RESOURCES.md`](docs/RESOURCES.md) — external format references and compatibility layouts.
 - [`.agents/reviews`](.agents/reviews/) — detailed architecture and implementation review notes.
 

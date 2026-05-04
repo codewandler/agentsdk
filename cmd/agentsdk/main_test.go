@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,10 +128,76 @@ func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {
 	require.Contains(t, text, "Structured commands:")
 	require.Contains(t, text, "/deploy")
 	require.Contains(t, text, "target=workflow:sync_docs")
+	require.Contains(t, text, "Capabilities:")
+	require.Contains(t, text, "none")
 	require.Contains(t, text, "Disabled suggestions:")
 	require.Contains(t, text, "Makefile")
 }
 
+func TestDiscoverJSONPrintsMachineReadableDescriptors(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "main.md"), "---\nname: main\ndescription: Main agent\ncapabilities:\n  - name: planner\n    instance-id: plans\n---\nmain")
+	writeTestFile(t, filepath.Join(dir, ".agents", "commands", "review.md"), "---\ndescription: Review command\n---\nreview")
+	writeTestFile(t, filepath.Join(dir, ".agents", "skills", "go", "SKILL.md"), "---\nname: go\ndescription: Go skill\n---\n# Go")
+	writeTestFile(t, filepath.Join(dir, ".agents", "skills", "go", "references", "testing.md"), "---\ntrigger: tests\n---\nTesting reference")
+	writeTestFile(t, filepath.Join(dir, ".agents", "datasources", "docs.yaml"), "name: docs\ndescription: Documentation corpus\nkind: corpus\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "workflows", "sync-docs.yaml"), "name: sync_docs\ndescription: Sync documentation\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "actions", "echo.yaml"), "name: echo\ndescription: Echo action\nkind: builtin\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "triggers", "hourly.yaml"), "id: hourly\ndescription: Hourly trigger\nsource:\n  interval: 1h\ntarget:\n  workflow: sync_docs\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "commands", "deploy.yaml"), "name: deploy\ndescription: Deploy command\npath: [deploy]\ntarget:\n  workflow: sync_docs\n")
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.json"), `{"sources":[".agents"],"plugins":[{"name":"local_cli","config":{"mode":"safe"}}]}`)
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"discover", "--local", "--json", dir})
+	require.NoError(t, cmd.Execute())
+
+	var payload struct {
+		Sources []string `json:"sources"`
+		Agents  []struct {
+			Name         string `json:"name"`
+			Capabilities []struct {
+				Name       string `json:"name"`
+				InstanceID string `json:"instanceId"`
+			} `json:"capabilities"`
+		} `json:"agents"`
+		Commands []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"commands"`
+		SkillReferences    []struct{ Skill, Path string } `json:"skillReferences"`
+		DataSources        []struct{ Name, Kind string }  `json:"datasources"`
+		Workflows          []struct{ Name string }        `json:"workflows"`
+		Actions            []struct{ Name string }        `json:"actions"`
+		Triggers           []struct{ Name string }        `json:"triggers"`
+		StructuredCommands []struct{ Name string }        `json:"structuredCommands"`
+		Plugins            []struct {
+			Name   string         `json:"name"`
+			Config map[string]any `json:"config"`
+		} `json:"plugins"`
+		Capabilities []struct {
+			Name       string `json:"name"`
+			InstanceID string `json:"instanceId"`
+			Agent      string `json:"agent"`
+		} `json:"capabilities"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &payload))
+	require.NotEmpty(t, payload.Sources)
+	require.Equal(t, "main", payload.Agents[0].Name)
+	require.Equal(t, "planner", payload.Agents[0].Capabilities[0].Name)
+	require.Equal(t, "plans", payload.Capabilities[0].InstanceID)
+	require.Equal(t, "review", payload.Commands[0].Name)
+	require.Equal(t, "go", payload.SkillReferences[0].Skill)
+	require.Equal(t, "docs", payload.DataSources[0].Name)
+	require.Equal(t, "sync_docs", payload.Workflows[0].Name)
+	require.Equal(t, "echo", payload.Actions[0].Name)
+	require.Equal(t, "hourly", payload.Triggers[0].Name)
+	require.Equal(t, "deploy", payload.StructuredCommands[0].Name)
+	require.Equal(t, "local_cli", payload.Plugins[0].Name)
+	require.Equal(t, "safe", payload.Plugins[0].Config["mode"])
+}
 func TestDiscoverPrintsFirstWinsDiagnostics(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "reviewer.md"), "---\nname: reviewer\n---\nfirst")

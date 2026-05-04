@@ -398,14 +398,14 @@ Use this as the living checklist for the post-refactor path. Keep items checked 
 
 ## 23. Discover / introspection
 
-- [ ] Keep `agentsdk discover` as debugging surface.
-- [ ] Add command descriptors to discover output.
-- [ ] Add workflow descriptors to discover output.
-- [ ] Add datasource descriptors to discover output.
-- [ ] Add action descriptors to discover output.
-- [ ] Add plugin refs/config to discover output.
-- [ ] Add capability info if needed.
-- [ ] Add machine-readable discover output.
+- [x] Keep `agentsdk discover` as debugging surface.
+- [x] Add command descriptors to discover output.
+- [x] Add workflow descriptors to discover output.
+- [x] Add datasource descriptors to discover output.
+- [x] Add action descriptors to discover output.
+- [x] Add plugin refs/config to discover output.
+- [x] Add capability info if needed.
+- [x] Add machine-readable discover output.
 
 ## 24. Builder product
 

@@ -20,6 +20,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
 	agentruntime "github.com/codewandler/agentsdk/runtime"
@@ -640,6 +641,7 @@ func uniqueModelSelections(selections []adapterconfig.UseCaseModelSelection) []a
 
 func discoverCmd() *cobra.Command {
 	var localOnly bool
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:           "discover [path]",
 		Short:         "Discover agent resources without running them",
@@ -664,10 +666,14 @@ func discoverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if jsonOutput {
+				return printDiscoveryJSON(cmd.OutOrStdout(), resolved)
+			}
 			return printDiscovery(cmd.OutOrStdout(), resolved)
 		},
 	}
 	cmd.Flags().BoolVar(&localOnly, "local", false, "Only inspect the specified workspace/path")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print machine-readable discovery output")
 	return cmd
 }
 
@@ -701,6 +707,7 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 		}
 		fmt.Fprintf(out, "  %s  %s  %s\n", spec.Name, displayDescription(spec.Description), id)
 	}
+	printDiscoveryCapabilities(out, agentSpecs)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Commands:")
 	commands := imported.Commands().All()
@@ -709,7 +716,11 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 	}
 	for _, cmd := range commands {
 		desc := cmd.Descriptor()
-		fmt.Fprintf(out, "  /%s  %s\n", desc.Name, displayDescription(desc.Description))
+		policy := discoveryCommandPolicyLabel(desc.Policy)
+		if policy != "" {
+			policy = "  policy=" + policy
+		}
+		fmt.Fprintf(out, "  /%s  %s%s\n", desc.Name, displayDescription(desc.Description), policy)
 	}
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Skills:")
@@ -759,6 +770,135 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 		fmt.Fprintf(out, "  %s  %s  %s\n", diag.Severity, diag.Source.Label(), diag.Message)
 	}
 	return nil
+}
+
+type discoveryOutput struct {
+	Sources             []string                          `json:"sources"`
+	Agents              []discoveryAgent                  `json:"agents"`
+	Commands            []command.Descriptor              `json:"commands"`
+	Skills              []resource.SkillContribution      `json:"skills"`
+	SkillReferences     []discoverySkillReference         `json:"skillReferences"`
+	DataSources         []resource.DataSourceContribution `json:"datasources"`
+	WorkflowDescriptors []resource.WorkflowContribution   `json:"workflows"`
+	ActionDescriptors   []resource.ActionContribution     `json:"actions"`
+	Triggers            []resource.TriggerContribution    `json:"triggers"`
+	StructuredCommands  []resource.CommandContribution    `json:"structuredCommands"`
+	Plugins             []agentdir.PluginRef              `json:"plugins"`
+	Capabilities        []discoveryCapability             `json:"capabilities"`
+	Diagnostics         []resource.Diagnostic             `json:"diagnostics"`
+}
+
+type discoveryAgent struct {
+	Name         string                `json:"name"`
+	Description  string                `json:"description,omitempty"`
+	ResourceID   string                `json:"resourceId,omitempty"`
+	ResourceFrom string                `json:"resourceFrom,omitempty"`
+	Capabilities []discoveryCapability `json:"capabilities,omitempty"`
+}
+
+type discoveryCapability struct {
+	Name       string          `json:"name"`
+	InstanceID string          `json:"instanceId,omitempty"`
+	Config     json.RawMessage `json:"config,omitempty"`
+	Agent      string          `json:"agent,omitempty"`
+}
+
+type discoverySkillReference struct {
+	Skill    string   `json:"skill"`
+	Path     string   `json:"path"`
+	Triggers []string `json:"triggers,omitempty"`
+}
+
+func printDiscoveryJSON(out discoveryWriter, resolved agentdir.Resolution) error {
+	imported, err := app.New(app.WithResourceBundle(resolved.Bundle))
+	if err != nil {
+		return err
+	}
+	payload := buildDiscoveryOutput(resolved, imported)
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(payload)
+}
+
+func buildDiscoveryOutput(resolved agentdir.Resolution, imported *app.App) discoveryOutput {
+	out := discoveryOutput{
+		Sources:             append([]string(nil), resolved.Sources...),
+		Skills:              firstSkillContributions(resolved.Bundle.Skills),
+		DataSources:         append([]resource.DataSourceContribution(nil), resolved.Bundle.DataSources...),
+		WorkflowDescriptors: append([]resource.WorkflowContribution(nil), resolved.Bundle.Workflows...),
+		ActionDescriptors:   append([]resource.ActionContribution(nil), resolved.Bundle.Actions...),
+		Triggers:            append([]resource.TriggerContribution(nil), resolved.Bundle.Triggers...),
+		StructuredCommands:  append([]resource.CommandContribution(nil), resolved.Bundle.CommandResources...),
+		Plugins:             append([]agentdir.PluginRef(nil), resolved.ManifestPluginRefs()...),
+	}
+	if imported != nil {
+		for _, spec := range imported.AgentSpecs() {
+			agentOut := discoveryAgent{Name: spec.Name, Description: spec.Description, ResourceID: spec.ResourceID, ResourceFrom: spec.ResourceFrom}
+			for _, capSpec := range spec.Capabilities {
+				capOut := discoveryCapability{Name: capSpec.CapabilityName, InstanceID: capSpec.InstanceID, Config: capSpec.Config, Agent: spec.Name}
+				agentOut.Capabilities = append(agentOut.Capabilities, capOut)
+				out.Capabilities = append(out.Capabilities, capOut)
+			}
+			out.Agents = append(out.Agents, agentOut)
+		}
+		out.Commands = imported.Commands().Descriptors()
+		out.Diagnostics = append([]resource.Diagnostic(nil), imported.Diagnostics()...)
+		out.SkillReferences = discoverySkillReferences(imported.SkillSources())
+	}
+	return out
+}
+
+func discoverySkillReferences(sources []skill.Source) []discoverySkillReference {
+	repo, err := skill.NewRepository(sources, nil)
+	if err != nil {
+		return nil
+	}
+	var out []discoverySkillReference
+	for _, item := range repo.List() {
+		for _, ref := range repo.ListReferences(item.Name) {
+			out = append(out, discoverySkillReference{Skill: item.Name, Path: ref.Path, Triggers: ref.Metadata.AllTriggers()})
+		}
+	}
+	return out
+}
+
+func discoveryCommandPolicyLabel(policy command.Policy) string {
+	parts := []string{}
+	if policy.UserCallable {
+		parts = append(parts, "user")
+	}
+	if policy.AgentCallable {
+		parts = append(parts, "agent")
+	}
+	if policy.Internal {
+		parts = append(parts, "internal")
+	}
+	if policy.SafetyClass != "" {
+		parts = append(parts, "safety:"+policy.SafetyClass)
+	}
+	if policy.RequiresApproval {
+		parts = append(parts, "approval")
+	}
+	return strings.Join(parts, ",")
+}
+
+func printDiscoveryCapabilities(out discoveryWriter, specs []agent.Spec) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Capabilities:")
+	hasCapabilities := false
+	for _, spec := range specs {
+		for _, capSpec := range spec.Capabilities {
+			hasCapabilities = true
+			instanceID := capSpec.InstanceID
+			if instanceID == "" {
+				instanceID = capSpec.CapabilityName
+			}
+			fmt.Fprintf(out, "  %s  agent=%s  instance=%s\n", capSpec.CapabilityName, spec.Name, instanceID)
+		}
+	}
+	if !hasCapabilities {
+		fmt.Fprintln(out, "  none")
+	}
 }
 
 func printDiscoverySkillReferences(out discoveryWriter, sources []skill.Source) {

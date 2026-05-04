@@ -268,6 +268,20 @@ func (a *App) Workflows() []workflow.Definition {
 	return out
 }
 
+func (a *App) Actions() []action.Action {
+	if a == nil || a.actions == nil {
+		return nil
+	}
+	return a.actions.All()
+}
+
+func (a *App) DataSources() []datasource.Definition {
+	if a == nil || a.datasources == nil {
+		return nil
+	}
+	return a.datasources.All()
+}
+
 // ResourceCommands returns declarative structured command resources contributed
 // by resource bundles. These are load-time contribution metadata retained for
 // harness/session/channel consumers, not executable app commands; session/channel
