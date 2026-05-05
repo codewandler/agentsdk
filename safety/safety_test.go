@@ -42,7 +42,7 @@ func TestGateAllowsAndPublishesAuditEvent(t *testing.T) {
 		Now:      fixedNow,
 	}))
 
-	result := gate.Execute(context.Background(), map[string]any{"path": "README.md"})
+	result := gate.Execute(action.NewCtx(context.Background()), map[string]any{"path": "README.md"})
 
 	require.False(t, result.IsError())
 	require.True(t, base.executed)
@@ -51,7 +51,7 @@ func TestGateAllowsAndPublishesAuditEvent(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, EventAllowed, event.Type)
 	require.Equal(t, "write_config", event.Intent.Action)
-	events, err := store.ListSafetyEvents(context.Background())
+	events, err := store.ListSafetyEvents(action.NewCtx(context.Background()))
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.Equal(t, EventAssessed, events[0].Type)
@@ -70,7 +70,7 @@ func TestGateRequiresApprovalAtBoundary(t *testing.T) {
 		Now: fixedNow,
 	}))
 
-	result := gate.Execute(context.Background(), nil)
+	result := gate.Execute(action.NewCtx(context.Background()), nil)
 
 	require.False(t, result.IsError())
 	require.True(t, base.executed)
@@ -87,7 +87,7 @@ func TestGateDeniesApprovalWhenNoApprover(t *testing.T) {
 		Now:      fixedNow,
 	}))
 
-	result := gate.Execute(context.Background(), nil)
+	result := gate.Execute(action.NewCtx(context.Background()), nil)
 
 	require.True(t, result.IsError())
 	require.False(t, base.executed)
@@ -103,7 +103,7 @@ func TestGateRejectsBeforeExecution(t *testing.T) {
 		Now:      fixedNow,
 	}))
 
-	result := gate.Execute(context.Background(), nil)
+	result := gate.Execute(action.NewCtx(context.Background()), nil)
 
 	require.True(t, result.IsError())
 	require.False(t, base.executed)
@@ -118,7 +118,7 @@ func TestGateFailsClosedOnAssessmentError(t *testing.T) {
 		Now:      fixedNow,
 	}))
 
-	result := gate.Execute(context.Background(), nil)
+	result := gate.Execute(action.NewCtx(context.Background()), nil)
 
 	require.True(t, result.IsError())
 	require.False(t, base.executed)
@@ -136,17 +136,17 @@ func TestInMemoryAuditStoreClonesEvents(t *testing.T) {
 			Dimensions: []Dimension{{Name: "scope", Severity: 7}},
 		},
 	}
-	require.NoError(t, store.AppendSafetyEvent(context.Background(), event))
+	require.NoError(t, store.AppendSafetyEvent(action.NewCtx(context.Background()), event))
 	event.Intent.Operations[0].Operation = "mutated"
 	event.Assessment.Dimensions[0].Name = "mutated"
 
-	events, err := store.ListSafetyEvents(context.Background())
+	events, err := store.ListSafetyEvents(action.NewCtx(context.Background()))
 	require.NoError(t, err)
 	require.Equal(t, "write", events[0].Intent.Operations[0].Operation)
 	require.Equal(t, "scope", events[0].Assessment.Dimensions[0].Name)
 	events[0].Assessment.Dimensions[0].Name = "changed"
 
-	events, err = store.ListSafetyEvents(context.Background())
+	events, err = store.ListSafetyEvents(action.NewCtx(context.Background()))
 	require.NoError(t, err)
 	require.Equal(t, "scope", events[0].Assessment.Dimensions[0].Name)
 }

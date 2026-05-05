@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,14 +19,14 @@ import (
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-type testCtx struct{ context.Context }
+type testCtx struct{ action.BaseCtx }
 
 func (c *testCtx) WorkDir() string       { return "." }
 func (c *testCtx) AgentID() string       { return "test" }
 func (c *testCtx) SessionID() string     { return "test" }
 func (c *testCtx) Extra() map[string]any { return nil }
 
-func tctx() tool.Ctx { return &testCtx{Context: context.Background()} }
+func tctx() tool.Ctx { return &testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}} }
 
 func toJSON(t *testing.T, v any) []byte {
 	t.Helper()

@@ -2,6 +2,8 @@ package toolmw
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"testing"
 
 	"github.com/codewandler/agentsdk/tool"
@@ -307,7 +309,7 @@ func TestCmdRiskAssessor_StructuredIntent_NoAnalyzer_FallsBack(t *testing.T) {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func riskCtxWithExtras(extras map[string]any) tool.Ctx {
-	return riskTestCtxWithExtras{riskTestCtx{Context: context.Background()}, extras}
+	return riskTestCtxWithExtras{riskTestCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, extras}
 }
 
 type riskTestCtxWithExtras struct {

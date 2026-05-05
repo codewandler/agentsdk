@@ -2,6 +2,8 @@ package git
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -17,7 +19,7 @@ import (
 // ── test helpers ─────────────────────────────────────────────────────────────
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir string
 }
 
@@ -27,7 +29,7 @@ func (c *testCtx) SessionID() string     { return "test-session" }
 func (c *testCtx) Extra() map[string]any { return nil }
 
 func ctx(dir string) tool.Ctx {
-	return &testCtx{Context: context.Background(), workDir: dir}
+	return &testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: dir}
 }
 
 // callTool marshals params, executes the tool, and returns the result.

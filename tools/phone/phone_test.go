@@ -2,6 +2,8 @@ package phone
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -66,7 +68,7 @@ func (fakeAudioDevice) Connect(context.Context, *diago.DialogClientSession) erro
 // ── test context ──────────────────────────────────────────────────────────────
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c testCtx) WorkDir() string       { return "/tmp" }
@@ -75,7 +77,7 @@ func (c testCtx) SessionID() string     { return "sess" }
 func (c testCtx) Extra() map[string]any { return nil }
 
 func ctx() tool.Ctx {
-	return testCtx{Context: context.Background()}
+	return testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

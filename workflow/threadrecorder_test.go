@@ -46,7 +46,7 @@ func TestThreadEventForWorkflowEventIgnoresNonWorkflowEvents(t *testing.T) {
 }
 
 func TestThreadRecorderRecordsWorkflowEvents(t *testing.T) {
-	ctx := context.Background()
+	ctx := action.NewCtx(context.Background())
 	registry, err := thread.NewEventRegistry(append(thread.CoreEventDefinitions(), EventDefinitions()...)...)
 	require.NoError(t, err)
 	store := thread.NewMemoryStore(thread.WithEventRegistry(registry))
@@ -74,13 +74,13 @@ func TestThreadRecorderRecordsWorkflowEvents(t *testing.T) {
 
 func TestThreadRecorderOnEventCollectsErrors(t *testing.T) {
 	recorder := &ThreadRecorder{}
-	recorder.OnEvent(context.Background(), Started{RunID: "run_1", WorkflowName: "echo"})
+	recorder.OnEvent(action.NewCtx(context.Background()), Started{RunID: "run_1", WorkflowName: "echo"})
 
 	require.Error(t, recorder.Err())
 }
 
 func TestThreadRecorderRecordsExecutorEvents(t *testing.T) {
-	ctx := context.Background()
+	ctx := action.NewCtx(context.Background())
 	registry, err := thread.NewEventRegistry(append(thread.CoreEventDefinitions(), EventDefinitions()...)...)
 	require.NoError(t, err)
 	store := thread.NewMemoryStore(thread.WithEventRegistry(registry))

@@ -2,6 +2,8 @@ package toolmw
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -27,20 +29,20 @@ func (t *riskTestTool) DeclareIntent(_ tool.Ctx, _ json.RawMessage) (tool.Intent
 	return t.intent, nil
 }
 
-type riskTestCtx struct{ context.Context }
+type riskTestCtx struct{ action.BaseCtx }
 
 func (c riskTestCtx) WorkDir() string       { return "/tmp/project" }
 func (c riskTestCtx) AgentID() string       { return "test" }
 func (c riskTestCtx) SessionID() string     { return "sess" }
 func (c riskTestCtx) Extra() map[string]any { return nil }
 
-func riskCtx() tool.Ctx { return riskTestCtx{Context: context.Background()} }
+func riskCtx() tool.Ctx { return riskTestCtx{BaseCtx: action.BaseCtx{Context: context.Background()}} }
 
 func riskCtxWithApprover(approve bool) tool.Ctx {
 	ctx := tool.CtxWithApprover(context.Background(), func(_ tool.Ctx, _ tool.Intent, _ any) (bool, error) {
 		return approve, nil
 	})
-	return riskTestCtx{Context: ctx}
+	return riskTestCtx{BaseCtx: action.BaseCtx{Context: ctx}}
 }
 
 // staticAssessor always returns the same assessment.

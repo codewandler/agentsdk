@@ -2,6 +2,8 @@ package shell
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 
@@ -13,7 +15,7 @@ import (
 // ── test helpers ──────────────────────────────────────────────────────────────
 
 type shellTestCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir string
 	extras  map[string]any
 }
@@ -24,11 +26,11 @@ func (c shellTestCtx) SessionID() string     { return "sess" }
 func (c shellTestCtx) Extra() map[string]any { return c.extras }
 
 func shellCtx() tool.Ctx {
-	return shellTestCtx{Context: context.Background(), workDir: "/tmp/project", extras: map[string]any{}}
+	return shellTestCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: "/tmp/project", extras: map[string]any{}}
 }
 
 func shellCtxWithExtras(extras map[string]any) tool.Ctx {
-	return shellTestCtx{Context: context.Background(), workDir: "/tmp/project", extras: extras}
+	return shellTestCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: "/tmp/project", extras: extras}
 }
 
 // declareIntent extracts the intent from a tool built with the given options.

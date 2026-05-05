@@ -2,6 +2,8 @@ package vision
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,7 +20,7 @@ import (
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir string
 }
 
@@ -28,7 +30,7 @@ func (c *testCtx) SessionID() string     { return "test" }
 func (c *testCtx) Extra() map[string]any { return nil }
 
 func tctx(workDir string) tool.Ctx {
-	return &testCtx{Context: context.Background(), workDir: workDir}
+	return &testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: workDir}
 }
 
 func toJSON(t *testing.T, v any) []byte {

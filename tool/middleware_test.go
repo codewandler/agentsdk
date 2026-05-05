@@ -2,6 +2,8 @@ package tool
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -33,7 +35,7 @@ func (t *fakeTool) Execute(ctx Ctx, input json.RawMessage) (Result, error) {
 }
 
 type fakeCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c fakeCtx) WorkDir() string       { return "/tmp" }
@@ -42,7 +44,7 @@ func (c fakeCtx) SessionID() string     { return "test-session" }
 func (c fakeCtx) Extra() map[string]any { return nil }
 
 func testCtx() Ctx {
-	return fakeCtx{Context: context.Background()}
+	return fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 }
 
 // ── Apply / Unwrap / Innermost ────────────────────────────────────────────────

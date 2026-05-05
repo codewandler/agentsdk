@@ -2,6 +2,8 @@ package harness
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 
@@ -76,12 +78,12 @@ func TestLoadSessionAttachesAgentCommandProjection(t *testing.T) {
 	require.Contains(t, loaded.Agent.ContextState(), string(AgentCommandCatalogProviderKey))
 
 	sessionTool := loaded.Session.AgentCommandProjection().Tools[0]
-	res, err := sessionTool.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","show"],"input":{"name":"ask_flow"}}`))
+	res, err := sessionTool.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","show"],"input":{"name":"ask_flow"}}`))
 	require.NoError(t, err)
 	require.False(t, res.IsError())
 	require.Contains(t, res.String(), "ask_flow")
 
-	res, err = sessionTool.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
+	res, err = sessionTool.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
 	require.NoError(t, err)
 	require.True(t, res.IsError())
 	require.Contains(t, res.String(), "not callable")

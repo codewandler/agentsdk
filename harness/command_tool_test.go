@@ -2,6 +2,8 @@ package harness
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 
@@ -19,7 +21,7 @@ func TestSessionAgentCommandToolExecutesAgentCallableCommand(t *testing.T) {
 	require.NotEmpty(t, tk.Guidance())
 	require.NotNil(t, tk.Schema())
 
-	res, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","show"],"input":{"name":"ask_flow"}}`))
+	res, err := tk.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","show"],"input":{"name":"ask_flow"}}`))
 
 	require.NoError(t, err)
 	require.False(t, res.IsError())
@@ -30,7 +32,7 @@ func TestSessionAgentCommandToolRejectsNonAgentCallableCommand(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 	tk := session.AgentCommandProjection().Tools[0]
 
-	res, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
+	res, err := tk.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"ask_flow"}}`))
 
 	require.NoError(t, err)
 	require.True(t, res.IsError())
@@ -41,7 +43,7 @@ func TestSessionAgentCommandToolReportsMissingPathAsToolError(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 	tk := session.AgentCommandProjection().Tools[0]
 
-	res, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`{}`))
+	res, err := tk.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{}`))
 
 	require.NoError(t, err)
 	require.True(t, res.IsError())
@@ -70,7 +72,7 @@ func TestSessionAgentCommandToolParseErrorIsInfrastructureError(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 	tk := session.AgentCommandProjection().Tools[0]
 
-	_, err := tk.Execute(minimalToolCtx{Context: context.Background()}, json.RawMessage(`not-json`))
+	_, err := tk.Execute(minimalToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`not-json`))
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "parse "+AgentCommandToolName+" input")
@@ -79,7 +81,7 @@ func TestSessionAgentCommandToolParseErrorIsInfrastructureError(t *testing.T) {
 var _ tool.Ctx = minimalToolCtx{}
 
 type minimalToolCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c minimalToolCtx) WorkDir() string       { return "" }

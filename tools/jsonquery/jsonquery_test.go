@@ -14,7 +14,7 @@ import (
 )
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir string
 }
 
@@ -23,7 +23,7 @@ func (c testCtx) AgentID() string       { return "test-agent" }
 func (c testCtx) SessionID() string     { return "test-session" }
 func (c testCtx) Extra() map[string]any { return nil }
 
-func ctx(dir string) tool.Ctx { return testCtx{Context: context.Background(), workDir: dir} }
+func ctx(dir string) tool.Ctx { return testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: dir} }
 
 func TestJSONQuery_FieldWildcard(t *testing.T) {
 	dir := t.TempDir()

@@ -2,6 +2,8 @@ package tool
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -12,7 +14,7 @@ import (
 
 // minimalCtx is a test implementation of tool.Ctx (embeds context.Context + adds agentsdk-specific methods).
 type minimalCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c minimalCtx) WorkDir() string       { return "/tmp" }
@@ -34,7 +36,7 @@ func TestTypedTool_Execute_InvalidJSON_ReturnsHelpfulError(t *testing.T) {
 	// Validation catches this with a clear error message.
 	raw := json.RawMessage(`{"path": "f.txt", "edits": "not an array"}`)
 
-	_, err := tl.Execute(minimalCtx{Context: context.Background()}, raw)
+	_, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, raw)
 	// The error should be returned as a Go error (infrastructure-level),
 	// wrapping the validation failure with field context.
 	require.Error(t, err)
@@ -56,7 +58,7 @@ func TestTypedTool_Execute_InvalidJSON_WrongTypeNested(t *testing.T) {
 	// Pass a number where a string is expected.
 	raw := json.RawMessage(`{"patch": 123}`)
 
-	_, err := tl.Execute(minimalCtx{Context: context.Background()}, raw)
+	_, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, raw)
 	require.Error(t, err)
 	errMsg := err.Error()
 	require.Contains(t, errMsg, "patch_tool")
@@ -73,7 +75,7 @@ func TestTypedTool_Execute_EmptyInput_Succeeds(t *testing.T) {
 		return Text("ok"), nil
 	})
 
-	_, err := tl.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{}`))
+	_, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{}`))
 	require.NoError(t, err)
 }
 
@@ -85,7 +87,7 @@ func TestTypedTool_Execute_NullInput_Succeeds(t *testing.T) {
 		return Text("ok"), nil
 	})
 
-	_, err := tl.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`null`))
+	_, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`null`))
 	require.NoError(t, err)
 }
 
@@ -128,7 +130,7 @@ func TestTypedTool_JSONSchemaValidation_MissingRequired(t *testing.T) {
 		})
 
 		// Missing required field - should return Go error
-		_, err := tk.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"age": 30}`))
+		_, err := tk.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"age": 30}`))
 
 		require.Error(t, err, "Should return error for missing required field")
 		require.Contains(t, err.Error(), "validate")
@@ -148,7 +150,7 @@ func TestTypedTool_JSONSchemaValidation_WrongType(t *testing.T) {
 		})
 
 		// Wrong type for name (should be string, not number)
-		_, err := tk.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"name": 123}`))
+		_, err := tk.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"name": 123}`))
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "validate")
@@ -167,7 +169,7 @@ func TestTypedTool_JSONSchemaValidation_ValidInput(t *testing.T) {
 		})
 
 		// Valid input
-		res, err := tk.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"name": "Alice", "age": 30}`))
+		res, err := tk.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"name": "Alice", "age": 30}`))
 
 		require.NoError(t, err)
 		require.False(t, res.IsError(), "Valid input should not return error")

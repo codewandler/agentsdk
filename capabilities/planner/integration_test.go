@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/thread"
@@ -31,7 +32,7 @@ func TestPlannerCapabilityPersistsResumesAndReplaysThroughThreadStore(t *testing
 		t.Fatal(err)
 	}
 	planTool := requirePlanTool(t, manager)
-	result, err := planTool.Execute(fakeToolCtx{Context: ctx}, json.RawMessage(`{"actions":[
+	result, err := planTool.Execute(fakeToolCtx{BaseCtx: action.BaseCtx{Context: ctx}}, json.RawMessage(`{"actions":[
 		{"action":"create_plan","plan":{"id":"plan_1","title":"Thread replay"}},
 		{"action":"add_step","step":{"id":"step_1","title":"Attach planner","status":"completed"}},
 		{"action":"add_step","step":{"id":"step_2","title":"Replay planner","status":"in_progress"}},
@@ -84,7 +85,7 @@ func TestPlannerCapabilityPersistsResumesAndReplaysThroughThreadStore(t *testing
 	requireFragment(t, providerContext, "planner_1/planner/step/step_2")
 
 	planTool = requirePlanTool(t, resumed)
-	if _, err := planTool.Execute(fakeToolCtx{Context: ctx}, json.RawMessage(`{"actions":[{"action":"remove_step","step_id":"step_2"}]}`)); err != nil {
+	if _, err := planTool.Execute(fakeToolCtx{BaseCtx: action.BaseCtx{Context: ctx}}, json.RawMessage(`{"actions":[{"action":"remove_step","step_id":"step_2"}]}`)); err != nil {
 		t.Fatal(err)
 	}
 	stored, err = store.Read(ctx, thread.ReadParams{ID: live.ID()})

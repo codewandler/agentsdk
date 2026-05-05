@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type testToolCtx struct{ context.Context }
+type testToolCtx struct{ action.BaseCtx }
 
 func (c testToolCtx) WorkDir() string       { return "." }
 func (c testToolCtx) AgentID() string       { return "example" }
@@ -22,7 +22,7 @@ func TestActionBackedTool(t *testing.T) {
 	require.Equal(t, "normalize_text", tl.Name())
 	require.NotNil(t, tl.Schema())
 
-	out, err := ExecuteNormalize(tl, testToolCtx{Context: context.Background()}, "  Hello SDK  ")
+	out, err := ExecuteNormalize(tl, testToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, "  Hello SDK  ")
 	require.NoError(t, err)
 	require.Equal(t, "hello sdk", out.Normalized)
 }
@@ -32,7 +32,7 @@ func TestToolToActionAdapter(t *testing.T) {
 		return tool.Text(input.Text), nil
 	})
 
-	res := tool.ToAction(tl).Execute(testToolCtx{Context: context.Background()}, json.RawMessage(`{"text":"ok"}`))
+	res := tool.ToAction(tl).Execute(testToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"text":"ok"}`))
 	require.NoError(t, res.Err())
 	require.False(t, res.IsError())
 

@@ -2,6 +2,8 @@ package skills
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 	"testing/fstest"
@@ -12,7 +14,7 @@ import (
 )
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	extra map[string]any
 }
 
@@ -22,7 +24,7 @@ func (c testCtx) SessionID() string     { return "session" }
 func (c testCtx) Extra() map[string]any { return c.extra }
 
 func TestSkillToolRequiresActions(t *testing.T) {
-	ctx := testCtx{Context: context.Background(), extra: map[string]any{skill.ContextKey: &skill.ActivationState{}}}
+	ctx := testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, extra: map[string]any{skill.ContextKey: &skill.ActivationState{}}}
 	result, err := Tools()[0].Execute(ctx, json.RawMessage(`{"actions":[]}`))
 	require.NoError(t, err)
 	require.True(t, result.IsError())
@@ -33,7 +35,7 @@ func TestSkillToolActivatesSkillAndReferences(t *testing.T) {
 	_, err := state.ActivateSkill("architecture")
 	require.NoError(t, err)
 
-	ctx := testCtx{Context: context.Background(), extra: map[string]any{skill.ContextKey: state}}
+	ctx := testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, extra: map[string]any{skill.ContextKey: state}}
 	result, err := Tools()[0].Execute(ctx, json.RawMessage(`{"actions":[{"action":"activate","skill":"architecture","references":["references/tradeoffs.md"]}]}`))
 	require.NoError(t, err)
 	require.False(t, result.IsError())
@@ -41,14 +43,14 @@ func TestSkillToolActivatesSkillAndReferences(t *testing.T) {
 }
 
 func TestSkillToolRejectsUnknownAction(t *testing.T) {
-	ctx := testCtx{Context: context.Background(), extra: map[string]any{skill.ContextKey: testState(t)}}
+	ctx := testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, extra: map[string]any{skill.ContextKey: testState(t)}}
 	result, err := Tools()[0].Execute(ctx, json.RawMessage(`{"actions":[{"action":"noop","skill":"architecture"}]}`))
 	require.NoError(t, err)
 	require.Contains(t, result.String(), `unsupported action "noop"`)
 }
 
 func TestSkillToolRejectsInactiveSkillReferences(t *testing.T) {
-	ctx := testCtx{Context: context.Background(), extra: map[string]any{skill.ContextKey: testState(t)}}
+	ctx := testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, extra: map[string]any{skill.ContextKey: testState(t)}}
 	result, err := Tools()[0].Execute(ctx, json.RawMessage(`{"actions":[{"action":"activate","skill":"architecture","references":["references/tradeoffs.md"]}]}`))
 	require.NoError(t, err)
 	require.Contains(t, result.String(), `references for "architecture" require the skill to be active first`)
@@ -57,7 +59,7 @@ func TestSkillToolRejectsInactiveSkillReferences(t *testing.T) {
 func TestSkillToolUsesSessionAwareActivator(t *testing.T) {
 	state := testState(t)
 	activator := &recordingActivator{state: state}
-	ctx := testCtx{Context: context.Background(), extra: map[string]any{
+	ctx := testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, extra: map[string]any{
 		skill.ContextKey:          state,
 		skill.ActivatorContextKey: activator,
 	}}

@@ -19,7 +19,7 @@ func TestTurnActionRunsAgentTurnAndReturnsAssistantText(t *testing.T) {
 	require.NoError(t, err)
 
 	act := TurnAction(inst, action.Spec{Name: "ask_agent", Description: "Ask agent"})
-	result := act.Execute(context.Background(), "say hello")
+	result := act.Execute(action.NewCtx(context.Background()), "say hello")
 
 	require.NoError(t, result.Error)
 	require.Equal(t, "hello from model", result.Data)
@@ -43,7 +43,7 @@ func TestTurnActionUsesDefaultsAndReportsInvalidInput(t *testing.T) {
 	require.Equal(t, DefaultTurnActionName, act.Spec().Name)
 
 	var invalid action.ErrInvalidInput
-	result := act.Execute(context.Background(), []string{"not", "a", "prompt"})
+	result := act.Execute(action.NewCtx(context.Background()), []string{"not", "a", "prompt"})
 	require.ErrorAs(t, result.Error, &invalid)
 	require.Empty(t, client.Requests())
 }
@@ -51,7 +51,7 @@ func TestTurnActionUsesDefaultsAndReportsInvalidInput(t *testing.T) {
 func TestTurnActionNilInstanceReturnsError(t *testing.T) {
 	act := TurnAction(nil, action.Spec{Name: "missing_agent"})
 
-	result := act.Execute(context.Background(), "hello")
+	result := act.Execute(action.NewCtx(context.Background()), "hello")
 
 	require.ErrorContains(t, result.Error, "instance is nil")
 }

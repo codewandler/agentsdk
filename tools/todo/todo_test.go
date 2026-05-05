@@ -2,6 +2,8 @@ package todo
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 
@@ -10,7 +12,7 @@ import (
 )
 
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	sessionID string
 }
 
@@ -21,7 +23,7 @@ func (c testCtx) Extra() map[string]any { return nil }
 
 func execTodo(t *testing.T, sessionID, raw string) (tool.Result, error) {
 	t.Helper()
-	return Tools()[0].Execute(testCtx{Context: context.Background(), sessionID: sessionID}, json.RawMessage(raw))
+	return Tools()[0].Execute(testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, sessionID: sessionID}, json.RawMessage(raw))
 }
 
 func boolPtr(v bool) *bool { return &v }

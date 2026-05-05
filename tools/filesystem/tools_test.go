@@ -2,6 +2,8 @@ package filesystem
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,7 +20,7 @@ import (
 
 // testCtx is a minimal tool.Ctx for filesystem tests.
 type testCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir string
 }
 
@@ -29,7 +31,7 @@ func (c *testCtx) Extra() map[string]any { return nil }
 
 // ctx returns a testCtx rooted at dir.
 func ctx(dir string) tool.Ctx {
-	return &testCtx{Context: context.Background(), workDir: dir}
+	return &testCtx{BaseCtx: action.BaseCtx{Context: context.Background()}, workDir: dir}
 }
 
 // ── file_write ────────────────────────────────────────────────────────────────

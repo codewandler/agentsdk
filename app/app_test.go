@@ -166,7 +166,7 @@ func TestAppExecutesRegisteredWorkflow(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result := app.ExecuteWorkflow(context.Background(), "shout", "hello")
+	result := app.ExecuteWorkflow(action.NewCtx(context.Background()), "shout", "hello")
 	require.NoError(t, result.Error)
 	require.Equal(t, "HELLO!", result.Data.(workflow.Result).Data)
 }
@@ -181,7 +181,7 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	var events []action.Event
-	result := app.ExecuteWorkflow(context.Background(), "echo_flow", "hi",
+	result := app.ExecuteWorkflow(action.NewCtx(context.Background()), "echo_flow", "hi",
 		workflow.WithRunID("run_fixed"),
 		workflow.WithEventHandler(func(_ action.Ctx, event action.Event) {
 			events = append(events, event)
@@ -209,7 +209,7 @@ func TestAppExecuteWorkflowAcceptsExecutionOptions(t *testing.T) {
 }
 
 func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := action.NewCtx(context.Background())
 	client := runnertest.NewClient(runnertest.TextStream("model says hi"))
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
@@ -232,7 +232,7 @@ func TestAppAgentTurnActionCanBackWorkflow(t *testing.T) {
 	requireAppRequestContainsText(t, client.RequestAt(0), "say hi")
 }
 func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
-	ctx := context.Background()
+	ctx := action.NewCtx(context.Background())
 	bundle, err := agentdir.LoadDir("../testdata/workflow-app")
 	require.NoError(t, err)
 	client := runnertest.NewClient(runnertest.TextStream("resource workflow response"))
@@ -265,7 +265,7 @@ func TestWorkflowResourceCanUseExplicitAgentTurnAction(t *testing.T) {
 }
 
 func TestAppExecuteWorkflowDoesNotRecordToDefaultAgentLiveThread(t *testing.T) {
-	ctx := context.Background()
+	ctx := action.NewCtx(context.Background())
 	app, err := New(
 		WithAgentSpec(agent.Spec{Name: "coder", Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000}}),
 		WithActions(action.New(action.Spec{Name: "echo"}, func(_ action.Ctx, input any) action.Result {
@@ -305,8 +305,8 @@ func TestAppWorkflowExecutionReportsMissingWorkflowAndAction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.ErrorContains(t, app.ExecuteWorkflow(context.Background(), "nope", nil).Error, "workflow \"nope\" not found")
-	require.ErrorContains(t, app.ExecuteWorkflow(context.Background(), "missing_action", nil).Error, "action \"missing\" not found")
+	require.ErrorContains(t, app.ExecuteWorkflow(action.NewCtx(context.Background()), "nope", nil).Error, "workflow \"nope\" not found")
+	require.ErrorContains(t, app.ExecuteWorkflow(action.NewCtx(context.Background()), "missing_action", nil).Error, "action \"missing\" not found")
 }
 
 func TestAppResourceBundleDuplicateAgentFirstWinsWithDiagnostic(t *testing.T) {
@@ -333,7 +333,7 @@ func TestPluginDuplicateCommandFirstWinsWithDiagnostic(t *testing.T) {
 		}}),
 	)
 	require.NoError(t, err)
-	result, err := app.Commands().Execute(context.Background(), "/review")
+	result, err := app.Commands().Execute(action.NewCtx(context.Background()), "/review")
 	require.NoError(t, err)
 	require.Equal(t, "first", renderCommandResult(t, result))
 	require.Len(t, app.Diagnostics(), 1)
@@ -348,7 +348,7 @@ func TestAppOwnsMarkdownCommandDispatch(t *testing.T) {
 	app, err := New(WithResourceBundle(bundle))
 	require.NoError(t, err)
 
-	result, err := app.Commands().Execute(context.Background(), "/review security")
+	result, err := app.Commands().Execute(action.NewCtx(context.Background()), "/review security")
 	require.NoError(t, err)
 	require.Equal(t, command.ResultAgentTurn, result.Kind)
 	require.Equal(t, "Review security", agentTurnInput(t, result))
@@ -368,7 +368,7 @@ func TestAppInstantiateAndSendRoutesToDefaultAgent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 	require.Len(t, client.Requests(), 1)
 	require.Contains(t, inst.ContextState(), "provider: environment")
 	require.Contains(t, inst.ContextState(), "provider: time")
@@ -411,7 +411,7 @@ func TestAppDefaultSpecUsesConfiguredLocalCLIPluginTools(t *testing.T) {
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 
 	var names []string
 	for _, tool := range client.RequestAt(0).Tools {
@@ -445,7 +445,7 @@ func TestAppPluginCapabilityFactoriesConfigureAgentCapabilities(t *testing.T) {
 		agent.WithWorkspace(t.TempDir()),
 	)
 	require.NoError(t, err)
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 
 	var names []string
 	for _, tool := range client.RequestAt(0).Tools {
@@ -472,8 +472,8 @@ func TestAppSendAdvancesTurnUsageIDs(t *testing.T) {
 	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(t.TempDir()))
 	require.NoError(t, err)
 
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "first"))
-	require.NoError(t, inst.RunTurn(context.Background(), 2, "second"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "first"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 2, "second"))
 	require.Equal(t, 1, inst.Tracker().AggregateTurn("1").Usage.Tokens.Count(unified.TokenKindInputNew))
 	require.Equal(t, 2, inst.Tracker().AggregateTurn("2").Usage.Tokens.Count(unified.TokenKindInputNew))
 }
@@ -646,7 +646,7 @@ func TestPluginContextProvidersForwardedToAgent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run a turn and verify the plugin provider's context is included.
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 
 	// The context state should mention the plugin provider key.
 	require.Contains(t, inst.ContextState(), "plugin_git")
@@ -771,7 +771,7 @@ func TestAgentContextPluginForwardedToAgent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run a turn and verify the agent-scoped provider is present.
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 	require.Contains(t, inst.ContextState(), "test_skills")
 }
 
@@ -797,7 +797,7 @@ func TestAgentContextPluginSkillRepoAlwaysAvailable(t *testing.T) {
 
 	// Run a turn — the plugin should contribute a provider because the
 	// agent always creates a skill repo (even if empty).
-	require.NoError(t, inst.RunTurn(context.Background(), 1, "hello"))
+	require.NoError(t, inst.RunTurn(action.NewCtx(context.Background()), 1, "hello"))
 	require.Contains(t, inst.ContextState(), "test_skills")
 }
 

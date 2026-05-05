@@ -34,7 +34,7 @@ func TestFromActionExposesActionAsTool(t *testing.T) {
 	require.Equal(t, "say hello", tl.Guidance())
 	require.NotNil(t, tl.Schema())
 
-	res, err := tl.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"name":"Ada"}`))
+	res, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"name":"Ada"}`))
 	require.NoError(t, err)
 	require.False(t, res.IsError())
 	require.JSONEq(t, `{"greeting":"hello Ada"}`, res.String())
@@ -46,7 +46,7 @@ func TestFromActionMapsActionErrorToToolErrorResult(t *testing.T) {
 		return actionToolOutput{}, want
 	})
 
-	res, err := FromAction(a).Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"name":"Ada"}`))
+	res, err := FromAction(a).Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"name":"Ada"}`))
 	require.NoError(t, err)
 	require.True(t, res.IsError())
 	require.Equal(t, "boom", res.String())
@@ -57,7 +57,7 @@ func TestFromActionReturnsParseErrorForInvalidInput(t *testing.T) {
 		return actionToolOutput{}, nil
 	})
 
-	_, err := FromAction(a).Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`{"name":123}`))
+	_, err := FromAction(a).Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"name":123}`))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "parse greet input")
 }
@@ -67,7 +67,7 @@ func TestFromActionPreservesToolResultData(t *testing.T) {
 		return action.Result{Data: Error("denied")}
 	})
 
-	res, err := FromAction(a).Execute(minimalCtx{Context: context.Background()}, nil)
+	res, err := FromAction(a).Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, nil)
 	require.NoError(t, err)
 	require.True(t, res.IsError())
 	require.Equal(t, "denied", res.String())
@@ -78,7 +78,7 @@ func TestFromActionMapsExplicitFailedStatusToToolErrorResult(t *testing.T) {
 		return action.Failed(nil)
 	})
 
-	res, err := FromAction(a).Execute(minimalCtx{Context: context.Background()}, nil)
+	res, err := FromAction(a).Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, nil)
 	require.NoError(t, err)
 	require.True(t, res.IsError())
 	require.Equal(t, "action failed", res.String())
@@ -98,7 +98,7 @@ func TestToActionAdaptsLegacyTool(t *testing.T) {
 	require.Equal(t, reflect.TypeOf(json.RawMessage{}), spec.Input.GoType)
 	require.NotNil(t, spec.Input.Schema)
 
-	res := a.Execute(minimalCtx{Context: context.Background()}, map[string]any{"text": "hi"})
+	res := a.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, map[string]any{"text": "hi"})
 	require.NoError(t, res.Error)
 	toolRes, ok := res.Data.(Result)
 	require.True(t, ok)
@@ -110,7 +110,7 @@ func TestToActionRequiresToolCtx(t *testing.T) {
 		return Text("ok"), nil
 	})
 
-	res := ToAction(tl).Execute(context.Background(), json.RawMessage(`{}`))
+	res := ToAction(tl).Execute(action.NewCtx(context.Background()), json.RawMessage(`{}`))
 	require.Error(t, res.Error)
 	require.Contains(t, res.Error.Error(), "requires tool.Ctx")
 }
@@ -121,7 +121,7 @@ func TestFromActionAppliesActionMiddlewareOption(t *testing.T) {
 	})
 
 	tl := FromAction(a, WithActionMiddleware(action.HooksMiddleware(prefixHook{prefix: "option:"})))
-	res, err := tl.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`"value"`))
+	res, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`"value"`))
 	require.NoError(t, err)
 	require.JSONEq(t, `"option:value"`, res.String())
 }
@@ -133,7 +133,7 @@ func TestApplyActionAppliesMiddlewareToActionBackedTool(t *testing.T) {
 
 	tl := ApplyAction(FromAction(a), action.HooksMiddleware(prefixHook{prefix: "apply:"}))
 	require.Implements(t, (*ActionBacked)(nil), tl)
-	res, err := tl.Execute(minimalCtx{Context: context.Background()}, json.RawMessage(`"value"`))
+	res, err := tl.Execute(minimalCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`"value"`))
 	require.NoError(t, err)
 	require.JSONEq(t, `"apply:value"`, res.String())
 }

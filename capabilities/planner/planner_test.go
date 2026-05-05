@@ -2,6 +2,8 @@ package planner
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -156,7 +158,7 @@ func TestPlannerContextOmitsDeletedStep(t *testing.T) {
 func TestPlannerToolReturnsModelFacingResultOnly(t *testing.T) {
 	p := New(capability.AttachSpec{CapabilityName: CapabilityName, InstanceID: "planner_1"}, &recordingRuntime{})
 	tool := p.Tools()[0]
-	result, err := tool.Execute(fakeToolCtx{Context: context.Background()}, json.RawMessage(`{"actions":[{"action":"create_plan","plan":{"id":"plan_1","title":"Tool"}}]}`))
+	result, err := tool.Execute(fakeToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"actions":[{"action":"create_plan","plan":{"id":"plan_1","title":"Tool"}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +381,7 @@ func (r *recordingRuntime) AppendEvents(_ context.Context, events ...thread.Even
 }
 
 type fakeToolCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c fakeToolCtx) WorkDir() string       { return "" }

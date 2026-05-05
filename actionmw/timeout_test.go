@@ -22,7 +22,7 @@ func TestTimeoutMiddlewareStripsJSONTimeoutAndSetsDeadline(t *testing.T) {
 	})
 
 	wrapped := action.Apply(a, NewTimeoutMiddleware(30*time.Second, 5*time.Minute))
-	result := wrapped.Execute(context.Background(), json.RawMessage(`{"query":"x","timeout":"2m"}`))
+	result := wrapped.Execute(action.NewCtx(context.Background()), json.RawMessage(`{"query":"x","timeout":"2m"}`))
 	require.NoError(t, result.Error)
 
 	var parsed map[string]any
@@ -40,7 +40,7 @@ func TestTimeoutMiddlewareClampsToMax(t *testing.T) {
 	})
 
 	wrapped := action.Apply(a, NewTimeoutMiddleware(30*time.Second, time.Second))
-	result := wrapped.Execute(context.Background(), json.RawMessage(`{"timeout":"10m"}`))
+	result := wrapped.Execute(action.NewCtx(context.Background()), json.RawMessage(`{"timeout":"10m"}`))
 	require.NoError(t, result.Error)
 }
 
@@ -54,7 +54,7 @@ func TestTimeoutMiddlewareLeavesGoNativeInputUntouched(t *testing.T) {
 	})
 
 	wrapped := action.Apply(a, NewTimeoutMiddleware(30*time.Second, 0))
-	result := wrapped.Execute(context.Background(), input{Name: "Ada"})
+	result := wrapped.Execute(action.NewCtx(context.Background()), input{Name: "Ada"})
 	require.NoError(t, result.Error)
 }
 
@@ -65,7 +65,7 @@ func TestTimeoutMiddlewareAnnotatesDeadlineError(t *testing.T) {
 	})
 
 	wrapped := action.Apply(a, NewTimeoutMiddleware(time.Millisecond, 0))
-	result := wrapped.Execute(context.Background(), nil)
+	result := wrapped.Execute(action.NewCtx(context.Background()), nil)
 	require.Error(t, result.Error)
 	require.True(t, errors.Is(result.Error, context.DeadlineExceeded))
 	require.Contains(t, result.Error.Error(), "timed out after")

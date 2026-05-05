@@ -2,6 +2,8 @@ package toolmw
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"encoding/json"
 	"testing"
 	"time"
@@ -32,7 +34,7 @@ func (t *stubTool) Execute(ctx tool.Ctx, input json.RawMessage) (tool.Result, er
 }
 
 type stubCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c stubCtx) WorkDir() string       { return "/tmp" }
@@ -41,7 +43,7 @@ func (c stubCtx) SessionID() string     { return "sess" }
 func (c stubCtx) Extra() map[string]any { return nil }
 
 func testCtx() tool.Ctx {
-	return stubCtx{Context: context.Background()}
+	return stubCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 }
 
 // ── Schema extension ──────────────────────────────────────────────────────────

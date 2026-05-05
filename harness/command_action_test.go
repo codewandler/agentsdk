@@ -2,6 +2,8 @@ package harness
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"testing"
 
 	"github.com/codewandler/agentsdk/agent"
@@ -18,7 +20,7 @@ func TestSessionCommandActionExecutesCommandEnvelope(t *testing.T) {
 	require.Equal(t, CommandActionName, a.Spec().Name)
 	require.False(t, a.Spec().Input.IsZero())
 
-	result := a.Execute(context.Background(), map[string]any{"path": []any{"session", "info"}})
+	result := a.Execute(action.NewCtx(context.Background()), map[string]any{"path": []any{"session", "info"}})
 
 	require.NoError(t, result.Error)
 	cmdResult, ok := result.Data.(command.Result)
@@ -30,7 +32,7 @@ func TestSessionCommandActionReportsInvalidEnvelope(t *testing.T) {
 	session := newCommandEnvelopeTestSession(t)
 	a := session.CommandAction()
 
-	result := a.Execute(context.Background(), map[string]any{})
+	result := a.Execute(action.NewCtx(context.Background()), map[string]any{})
 
 	var validation command.ValidationError
 	require.ErrorAs(t, result.Error, &validation)
@@ -41,7 +43,7 @@ func TestWorkflowCanExecuteCommandAction(t *testing.T) {
 	application, session := newCommandActionWorkflowTestSession(t)
 	require.NoError(t, application.RegisterActions(session.CommandAction()))
 
-	result := session.ExecuteWorkflow(context.Background(), "session_info_flow", nil)
+	result := session.ExecuteWorkflow(action.NewCtx(context.Background()), "session_info_flow", nil)
 
 	require.NoError(t, result.Error)
 	wfResult := result.Data.(workflow.Result)

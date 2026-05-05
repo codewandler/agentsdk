@@ -2,6 +2,8 @@ package tool
 
 import (
 	"context"
+
+	"github.com/codewandler/agentsdk/action"
 	"testing"
 	"time"
 
@@ -9,7 +11,7 @@ import (
 )
 
 func TestWrapCtx_PreservesMetadata(t *testing.T) {
-	base := fakeCtx{Context: context.Background()}
+	base := fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 	newCtx := context.WithValue(context.Background(), testKey{}, "injected")
 
 	wrapped := WrapCtx(base, newCtx)
@@ -20,7 +22,7 @@ func TestWrapCtx_PreservesMetadata(t *testing.T) {
 }
 
 func TestWrapCtx_UsesNewContextDeadline(t *testing.T) {
-	base := fakeCtx{Context: context.Background()}
+	base := fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 	deadline := time.Now().Add(5 * time.Second)
 	newCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
@@ -37,7 +39,7 @@ func TestWrapCtx_UsesNewContextDeadline(t *testing.T) {
 }
 
 func TestWrapCtx_UsesNewContextDone(t *testing.T) {
-	base := fakeCtx{Context: context.Background()}
+	base := fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 	newCtx, cancel := context.WithCancel(context.Background())
 
 	wrapped := WrapCtx(base, newCtx)
@@ -61,7 +63,7 @@ func TestWrapCtx_UsesNewContextDone(t *testing.T) {
 }
 
 func TestWrapCtx_UsesNewContextValues(t *testing.T) {
-	base := fakeCtx{Context: context.Background()}
+	base := fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 	newCtx := context.WithValue(context.Background(), testKey{}, "from-new-ctx")
 
 	wrapped := WrapCtx(base, newCtx)
@@ -74,7 +76,7 @@ func TestWrapCtx_UsesNewContextValues(t *testing.T) {
 }
 
 func TestWrapCtx_ApproverViaContext(t *testing.T) {
-	base := fakeCtx{Context: context.Background()}
+	base := fakeCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}
 	called := false
 	approver := Approver(func(_ Ctx, _ Intent, _ any) (bool, error) {
 		called = true

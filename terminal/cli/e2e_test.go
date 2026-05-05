@@ -40,12 +40,12 @@ func TestE2ELocalCLIPluginHarnessLoadAndSessionCommandProjection(t *testing.T) {
 	require.Contains(t, loaded.Agent.ContextState(), string(harness.AgentCommandCatalogProviderKey))
 
 	sessionTool := loaded.Session.AgentCommandProjection().Tools[0]
-	res, err := sessionTool.Execute(e2eToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","list"]}`))
+	res, err := sessionTool.Execute(e2eToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","list"]}`))
 	require.NoError(t, err)
 	require.False(t, res.IsError())
 	require.Contains(t, res.String(), "No workflows registered")
 
-	res, err = sessionTool.Execute(e2eToolCtx{Context: context.Background()}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"missing"}}`))
+	res, err = sessionTool.Execute(e2eToolCtx{BaseCtx: action.BaseCtx{Context: context.Background()}}, json.RawMessage(`{"path":["workflow","start"],"input":{"name":"missing"}}`))
 	require.NoError(t, err)
 	require.True(t, res.IsError())
 	require.Contains(t, res.String(), "not callable")
@@ -248,7 +248,7 @@ func e2eRequestToolNames(tools []unified.Tool) []string {
 }
 
 type e2eToolCtx struct {
-	context.Context
+	action.BaseCtx
 }
 
 func (c e2eToolCtx) WorkDir() string       { return "" }

@@ -31,7 +31,7 @@ func TestExecutorRunsWorkflowOverActionRefs(t *testing.T) {
 		{ID: "suffix", Action: ActionRef{Name: "suffix"}, DependsOn: []string{"upper"}},
 	}}
 
-	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, "hello")
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), def, "hello")
 	require.NoError(t, result.Error)
 	wfResult := result.Data.(Result)
 	require.Equal(t, "HELLO!", wfResult.Data)
@@ -54,7 +54,7 @@ func TestExecutorPassesMultipleDependencyOutputs(t *testing.T) {
 		{ID: "join", Action: ActionRef{Name: "join"}, DependsOn: []string{"a", "b"}},
 	}}
 
-	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, nil)
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), def, nil)
 	require.NoError(t, result.Error)
 	require.Equal(t, "AB", result.Data.(Result).Data)
 }
@@ -67,7 +67,7 @@ func TestExecutorStopsOnStepError(t *testing.T) {
 	})))
 
 	def := Definition{Name: "failflow", Steps: []Step{{ID: "fail", Action: ActionRef{Name: "fail"}}}}
-	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, nil)
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), def, nil)
 	require.ErrorIs(t, result.Error, boom)
 	wfResult := result.Data.(Result)
 	require.Contains(t, wfResult.StepResults, "fail")
@@ -80,10 +80,10 @@ func TestExecutorRejectsCyclesAndUnknownDeps(t *testing.T) {
 		{ID: "a", Action: ActionRef{Name: "a"}, DependsOn: []string{"b"}},
 		{ID: "b", Action: ActionRef{Name: "b"}, DependsOn: []string{"a"}},
 	}}
-	require.ErrorContains(t, exec.Execute(context.Background(), cycle, nil).Error, "cycle")
+	require.ErrorContains(t, exec.Execute(action.NewCtx(context.Background()), cycle, nil).Error, "cycle")
 
 	unknown := Definition{Name: "unknown", Steps: []Step{{ID: "a", Action: ActionRef{Name: "a"}, DependsOn: []string{"missing"}}}}
-	require.ErrorContains(t, exec.Execute(context.Background(), unknown, nil).Error, "unknown step")
+	require.ErrorContains(t, exec.Execute(action.NewCtx(context.Background()), unknown, nil).Error, "unknown step")
 }
 
 func TestWorkflowActionExposesDefinition(t *testing.T) {
@@ -97,7 +97,7 @@ func TestWorkflowActionExposesDefinition(t *testing.T) {
 	}
 
 	require.Equal(t, "echo_flow", wa.Spec().Name)
-	result := wa.Execute(context.Background(), "hi")
+	result := wa.Execute(action.NewCtx(context.Background()), "hi")
 	require.NoError(t, result.Error)
 	require.Equal(t, "hi", result.Data.(Result).Data)
 }
@@ -121,7 +121,7 @@ func TestExecutorEmitsWorkflowEvents(t *testing.T) {
 		live = append(live, event)
 	}}
 
-	result := exec.Execute(context.Background(), def, "hello")
+	result := exec.Execute(action.NewCtx(context.Background()), def, "hello")
 	require.NoError(t, result.Error)
 	require.Equal(t, "HELLO!", result.Data.(Result).Data)
 	require.Len(t, live, 6)
@@ -146,7 +146,7 @@ func TestExecutorEmitsFailureEvents(t *testing.T) {
 		live = append(live, event)
 	}}
 
-	result := exec.Execute(context.Background(), def, nil)
+	result := exec.Execute(action.NewCtx(context.Background()), def, nil)
 	require.ErrorIs(t, result.Error, boom)
 	require.Equal(t, []thread.EventKind{EventStarted, EventStepStarted, EventStepFailed, EventFailed}, eventKinds(live))
 	require.Equal(t, boom.Error(), live[2].(StepFailed).Error)
@@ -166,10 +166,10 @@ func TestExecutorValidatesActionInputAndOutput(t *testing.T) {
 		}),
 	))
 
-	inputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), Definition{Name: "input", Steps: []Step{{ID: "needs_string", Action: ActionRef{Name: "needs_string"}}}}, 123)
+	inputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), Definition{Name: "input", Steps: []Step{{ID: "needs_string", Action: ActionRef{Name: "needs_string"}}}}, 123)
 	require.ErrorContains(t, inputResult.Error, "invalid input")
 
-	outputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), Definition{Name: "output", Steps: []Step{{ID: "returns_wrong", Action: ActionRef{Name: "returns_wrong"}}}}, nil)
+	outputResult := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), Definition{Name: "output", Steps: []Step{{ID: "returns_wrong", Action: ActionRef{Name: "returns_wrong"}}}}, nil)
 	require.ErrorContains(t, outputResult.Error, "invalid output")
 }
 
@@ -200,7 +200,7 @@ func TestExecutorRunsIndependentStepsInParallelWithFanIn(t *testing.T) {
 	}}
 	done := make(chan action.Result, 1)
 	go func() {
-		done <- Executor{Resolver: RegistryResolver{Registry: reg}, MaxConcurrency: 2}.Execute(context.Background(), def, nil)
+		done <- Executor{Resolver: RegistryResolver{Registry: reg}, MaxConcurrency: 2}.Execute(action.NewCtx(context.Background()), def, nil)
 	}()
 
 	require.ElementsMatch(t, []string{"a", "b"}, []string{<-started, <-started})
@@ -244,7 +244,7 @@ func TestExecutorHonorsRetryTimeoutContinueConditionAndInputMapping(t *testing.T
 		{ID: "mapped", Action: ActionRef{Name: "mapped"}, DependsOn: []string{"seed", "flaky", "slow"}, InputMap: map[string]string{"seed": "steps.seed.output.value", "flaky": "steps.flaky.output", "initial": "input"}},
 	}}
 
-	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, "hello")
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), def, "hello")
 	require.NoError(t, result.Error)
 	wfResult := result.Data.(Result)
 	require.Equal(t, int32(2), atomic.LoadInt32(&flakyAttempts))
@@ -266,7 +266,7 @@ func TestExecutorPreservesExternalAndRedactedValueRefs(t *testing.T) {
 	})))
 	def := Definition{Name: "refs", Steps: []Step{{ID: "external", Action: ActionRef{Name: "external"}}}}
 
-	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(context.Background(), def, nil)
+	result := Executor{Resolver: RegistryResolver{Registry: reg}}.Execute(action.NewCtx(context.Background()), def, nil)
 	require.NoError(t, result.Error)
 	state, ok, err := Projector{}.ProjectRun(result.Events, result.Data.(Result).RunID)
 	require.NoError(t, err)

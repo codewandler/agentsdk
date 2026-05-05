@@ -137,7 +137,7 @@ func TestExecutorResultCarriesRunIDForProjection(t *testing.T) {
 	require.NoError(t, reg.Register(action.New(action.Spec{Name: "echo"}, func(action.Ctx, any) action.Result {
 		return action.Result{Data: "ok"}
 	})))
-	result := Executor{Resolver: RegistryResolver{Registry: reg}, RunID: "run_1"}.Execute(context.Background(), Definition{Name: "echo", Steps: []Step{{ID: "echo", Action: ActionRef{Name: "echo"}}}}, nil)
+	result := Executor{Resolver: RegistryResolver{Registry: reg}, RunID: "run_1"}.Execute(action.NewCtx(context.Background()), Definition{Name: "echo", Steps: []Step{{ID: "echo", Action: ActionRef{Name: "echo"}}}}, nil)
 	require.NoError(t, result.Error)
 	wfResult := result.Data.(Result)
 	require.Equal(t, RunID("run_1"), wfResult.RunID)
