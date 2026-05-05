@@ -43,6 +43,9 @@ func (p *Plugin) executeNavigate(_ action.Ctx, input NavigateInput) (NavigateOut
 		return NavigateOutput{}, fmt.Errorf("navigation failed: %w", err)
 	}
 
+	// Auto-dismiss common cookie consent banners.
+	dismissCookieConsent(ctx)
+
 	return NavigateOutput{
 		SessionID: sess.ID,
 		Title:     title,
@@ -107,4 +110,36 @@ func (p *Plugin) executeClose(_ action.Ctx, input CloseInput) (CloseOutput, erro
 // browser connection.
 func (p *Plugin) opContext(sess *Session) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(sess.browserCtx, p.sessions.config.OpTimeout)
+}
+
+// dismissCookieConsent attempts to click common cookie consent "accept" buttons.
+// It's best-effort — failures are silently ignored.
+func dismissCookieConsent(ctx context.Context) {
+	// Common selectors for cookie consent accept buttons across popular
+	// consent frameworks (Google, OneTrust, CookieBot, etc.).
+	const js = `(function() {
+		const selectors = [
+			'button#L2AGLb',                          // Google
+			'button#W0wltc',                          // Google (reject-ish but dismisses)
+			'[aria-label="Accept all"]',
+			'[aria-label="Alle akzeptieren"]',
+			'button.accept-all',
+			'#onetrust-accept-btn-handler',           // OneTrust
+			'#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll', // CookieBot
+			'.cc-accept',                             // Cookie Consent (Osano)
+			'[data-testid="cookie-policy-manage-dialog-btn-accept-all"]',
+			'button[data-cookiefirst-action="accept"]',
+		];
+		for (const sel of selectors) {
+			const btn = document.querySelector(sel);
+			if (btn && btn.offsetParent !== null) {
+				btn.click();
+				return sel;
+			}
+		}
+		return null;
+	})()`
+	var result any
+	// Ignore errors — this is best-effort.
+	_ = chromedp.Run(ctx, chromedp.Evaluate(js, &result))
 }
