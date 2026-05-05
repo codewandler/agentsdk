@@ -54,6 +54,11 @@ match these entries as the project starts publishing releases.
 - **`agentsdk discover --tree`** — new flag renders discovered resources
   grouped by origin and namespace with shadow/conflict annotations and a
   resolution summary.
+- **`appconfig`** — new package providing declarative YAML-based application
+  configuration as an alternative to the agentdir directory convention.
+  Supports inline agents, commands, workflows, actions, datasources,
+  triggers, resolution settings, and plugin references. Produces
+  `[]app.Option` via `Config.ToAppOptions()`.
 
 ### Changed
 
