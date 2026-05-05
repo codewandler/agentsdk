@@ -98,6 +98,7 @@ type ToolContribution struct {
 	Source      SourceRef
 	Enabled     bool
 	Metadata    map[string]any
+	RID         ResourceID
 }
 
 type SkillContribution struct {
@@ -107,6 +108,7 @@ type SkillContribution struct {
 	Source      SourceRef
 	Path        string
 	Metadata    skill.SkillMetadata
+	RID         ResourceID
 }
 
 type DataSourceContribution struct {
@@ -118,6 +120,7 @@ type DataSourceContribution struct {
 	Path        string
 	Config      map[string]any
 	Metadata    map[string]any
+	RID         ResourceID
 }
 
 type WorkflowContribution struct {
@@ -128,6 +131,7 @@ type WorkflowContribution struct {
 	Path        string
 	Metadata    map[string]any
 	Definition  map[string]any
+	RID         ResourceID
 }
 
 type ActionContribution struct {
@@ -139,6 +143,7 @@ type ActionContribution struct {
 	Path        string
 	Config      map[string]any
 	Metadata    map[string]any
+	RID         ResourceID
 }
 
 type TriggerContribution struct {
@@ -149,6 +154,7 @@ type TriggerContribution struct {
 	Path        string
 	Definition  map[string]any
 	Metadata    map[string]any
+	RID         ResourceID
 }
 
 type CommandTargetKind string
@@ -181,6 +187,7 @@ type CommandContribution struct {
 	Policy      command.Policy
 	Target      CommandTarget
 	Metadata    map[string]any
+	RID         ResourceID
 }
 
 type HookContribution struct {
@@ -189,6 +196,7 @@ type HookContribution struct {
 	Source   SourceRef
 	Enabled  bool
 	Metadata map[string]any
+	RID      ResourceID
 }
 
 type Permission struct {
