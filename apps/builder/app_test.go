@@ -178,6 +178,59 @@ func TestBuilderCLILoadsEmbeddedResourcesWithProjectWorkspace(t *testing.T) {
 	require.Equal(t, dir, loaded.Workspace)
 }
 
+func TestBuilderDoesNotLoadTargetAgentsDir(t *testing.T) {
+	// The builder operates ON a target project. When the target has its own
+	// .agents directory, the builder must NOT load those resources as its own.
+	// This is the critical isolation invariant for the builder app.
+	targetDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, ".agents", "agents", "target_main.md"),
+		[]byte("---\nname: target_main\ndescription: Target app agent\ntools: [bash]\n---\nI am the target."),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, "agentsdk.app.json"),
+		[]byte(`{"default_agent":"target_main","sources":[".agents"]}`),
+		0o644,
+	))
+
+	// Load the builder using EmbeddedResources (as the build command does).
+	loaded, err := cli.Load(context.Background(), cli.Config{
+		Resources:        cli.EmbeddedResources(Resources(), ResourcesRoot),
+		AgentName:        "builder",
+		Workspace:        targetDir,
+		SessionsDir:      DefaultSessionsDir(targetDir),
+		NoDefaultPlugins: true,
+		AppOptions:       mustAppOptions(t, Config{ProjectDir: targetDir}),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "builder", loaded.AgentName)
+
+	// The target's agent must NOT appear in the builder's resolved resources.
+	for _, spec := range loaded.Resources.Bundle.AgentSpecs {
+		require.NotEqual(t, "target_main", spec.Name,
+			"builder must not load target project's .agents directory as its own resources")
+	}
+
+	// The builder's own agent must be present.
+	var hasBuilder bool
+	for _, spec := range loaded.Resources.Bundle.AgentSpecs {
+		if spec.Name == "builder" {
+			hasBuilder = true
+			break
+		}
+	}
+	require.True(t, hasBuilder, "builder's own agent spec must be present")
+}
+
+func mustAppOptions(t *testing.T, cfg Config) []app.Option {
+	t.Helper()
+	opts, err := AppOptions(cfg)
+	require.NoError(t, err)
+	return opts
+}
+
 func TestBuilderManifestHasDefaultAgent(t *testing.T) {
 	// ResolveFS loads the resource bundle but not the manifest.
 	// Parse the embedded manifest directly to verify its content.

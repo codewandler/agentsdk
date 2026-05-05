@@ -430,6 +430,124 @@ func TestResourceArgCommandDefaultsToCurrentDirectory(t *testing.T) {
 	require.Contains(t, out.String(), "agent(default)> ")
 }
 
+func TestEmbeddedOnlyDoesNotMergeTargetDirResources(t *testing.T) {
+	// Create a target directory with its own .agents/agents that defines a
+	// "target_agent". When EmbeddedOnly is true, the CLI must NOT load this
+	// agent into the app's resource set.
+	targetDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, ".agents", "agents", "target_agent.md"),
+		[]byte("---\nname: target_agent\n---\nI am the target."),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, "agentsdk.app.json"),
+		[]byte(`{"sources":[".agents"]}`),
+		0o644,
+	))
+
+	// Use EmbeddedOnly with our test embedded bundle (has "coder" agent).
+	embedded := testBundle()
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	var out bytes.Buffer
+
+	// Load with EmbeddedOnly=true, workspace pointing at the target dir.
+	loaded, err := Load(t.Context(), Config{
+		Resources:        EmbeddedResources(embedded, ".agents"),
+		AgentName:        "coder",
+		Workspace:        targetDir,
+		NoDefaultPlugins: true,
+		AgentOptions:     []agent.Option{agent.WithClient(client)},
+		Out:              &out,
+		Err:              &bytes.Buffer{},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "coder", loaded.AgentName)
+
+	// The target_agent must NOT appear in the resolved resources.
+	for _, spec := range loaded.Resources.Bundle.AgentSpecs {
+		require.NotEqual(t, "target_agent", spec.Name,
+			"target directory's agent must not be loaded when using EmbeddedOnly/EmbeddedResources")
+	}
+}
+
+func TestEmbeddedOnlyCommandDoesNotMergeTargetDirResources(t *testing.T) {
+	// Simulate the build command scenario: EmbeddedBase + EmbeddedOnly + DiscoverFlag.
+	// The target directory has its own agent spec that must NOT be merged.
+	targetDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, ".agents", "agents", "target_agent.md"),
+		[]byte("---\nname: target_agent\n---\nI am the target."),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, "agentsdk.app.json"),
+		[]byte(`{"sources":[".agents"]}`),
+		0o644,
+	))
+
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	var out bytes.Buffer
+	cmd := NewCommand(CommandConfig{
+		Name:             "testbuilder",
+		Use:              "testbuilder [task]",
+		DiscoverFlag:     true,
+		AgentFlag:        true,
+		EmbeddedBase:     testBundle(),
+		EmbeddedBaseRoot: ".agents",
+		EmbeddedOnly:     true,
+		DefaultAgent:     "coder",
+		NoDefaultPlugins: true,
+		AgentOptions:     []agent.Option{agent.WithClient(client)},
+		Out:              &out,
+		Err:              &bytes.Buffer{},
+	})
+	// Pass -d pointing to the target directory and a task.
+	cmd.SetArgs([]string{"-d", targetDir, "hello"})
+
+	err := cmd.Execute()
+
+	require.NoError(t, err)
+	// The command ran successfully with the embedded "coder" agent.
+	require.Len(t, client.Requests(), 1)
+}
+
+func TestEmbeddedWithDirResourcesDoesMerge(t *testing.T) {
+	// Contrast test: without EmbeddedOnly, directory resources ARE merged.
+	targetDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, ".agents", "agents", "extra_agent.md"),
+		[]byte("---\nname: extra_agent\n---\nI am extra."),
+		0o644,
+	))
+
+	client := runnertest.NewClient(runnertest.TextStream("ok"))
+	var out bytes.Buffer
+	cmd := NewCommand(CommandConfig{
+		Name:             "testdev",
+		Use:              "testdev [task]",
+		DiscoverFlag:     true,
+		AgentFlag:        true,
+		EmbeddedBase:     testBundle(),
+		EmbeddedBaseRoot: ".agents",
+		EmbeddedOnly:     false, // explicitly NOT embedded-only
+		DefaultAgent:     "coder",
+		NoDefaultPlugins: true,
+		AgentOptions:     []agent.Option{agent.WithClient(client)},
+		Out:              &out,
+		Err:              &bytes.Buffer{},
+	})
+	cmd.SetArgs([]string{"-d", targetDir, "hello"})
+
+	err := cmd.Execute()
+
+	require.NoError(t, err)
+	require.Len(t, client.Requests(), 1)
+}
+
 func testBundle() fstest.MapFS {
 	return fstest.MapFS{
 		".agents/agents/coder.md": {Data: []byte(`---

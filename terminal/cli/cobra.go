@@ -37,6 +37,13 @@ type CommandConfig struct {
 	EmbeddedBase     fs.FS
 	EmbeddedBaseRoot string
 
+	// EmbeddedOnly, when true alongside EmbeddedBase, prevents merging
+	// directory resources from -d paths into the app's resource set. The
+	// embedded FS is used as the sole resource source. This is critical for
+	// apps like the builder that operate ON a target project and must not
+	// load the target's .agents directory as their own resources.
+	EmbeddedOnly bool
+
 	DefaultAgent       string
 	DefaultSessionsDir string
 	Prompt             string
@@ -121,7 +128,11 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				if len(paths) == 0 {
 					paths = []string{"."}
 				}
-				if cfg.EmbeddedBase != nil {
+				if cfg.EmbeddedBase != nil && cfg.EmbeddedOnly {
+					// Use only the embedded resources; do not merge from -d paths.
+					// The app operates ON the target directory, not WITH its resources.
+					resources = EmbeddedResources(cfg.EmbeddedBase, cfg.EmbeddedBaseRoot)
+				} else if cfg.EmbeddedBase != nil {
 					resources = EmbeddedWithDirResources(cfg.EmbeddedBase, cfg.EmbeddedBaseRoot, paths)
 				} else {
 					resources = MultiDirResources(paths)

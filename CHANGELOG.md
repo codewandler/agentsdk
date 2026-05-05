@@ -27,6 +27,14 @@ match these entries as the project starts publishing releases.
   dogfood boundary, intentional breakage notes, CI guards, and deferred external
   release cadence.
 
+### Fixed
+
+- **`agentsdk build` no longer loads the target project's `.agents` directory**
+  as its own resources. The builder now uses only its embedded resources,
+  preventing the target's agents/skills/workflows from polluting the builder's
+  runtime. Added `EmbeddedOnly` option to `cli.CommandConfig` to support this
+  isolation.
+
 ### Changed
 
 - **Breaking:** `agentsdk run` no longer takes a positional directory argument.
