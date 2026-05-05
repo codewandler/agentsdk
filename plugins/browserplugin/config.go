@@ -40,6 +40,11 @@ type Config struct {
 
 	// MaxSessions caps concurrent browser sessions. Default: 3.
 	MaxSessions int
+
+	// OpTimeout is the maximum time any single operation may take.
+	// Default: 30 seconds. The wait operation uses its own timeout_ms
+	// parameter but is still capped by this value.
+	OpTimeout time.Duration
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -49,6 +54,7 @@ func DefaultConfig() Config {
 		Headless:    true,
 		IdleTimeout: 10 * time.Minute,
 		MaxSessions: 3,
+		OpTimeout:   30 * time.Second,
 	}
 }
 
@@ -83,4 +89,9 @@ func WithIdleTimeout(d time.Duration) Option {
 // WithMaxSessions sets the maximum concurrent sessions.
 func WithMaxSessions(n int) Option {
 	return func(c *Config) { c.MaxSessions = n }
+}
+
+// WithOpTimeout sets the per-operation timeout.
+func WithOpTimeout(d time.Duration) Option {
+	return func(c *Config) { c.OpTimeout = d }
 }

@@ -1,6 +1,7 @@
 package browserplugin
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/chromedp/chromedp"
@@ -9,10 +10,7 @@ import (
 )
 
 func (p *Plugin) executeOpen(_ action.Ctx, input OpenInput) (OpenOutput, error) {
-	headless := input.Headless
-	// Default to config headless if not explicitly set (struct zero = false,
-	// but OpenOp.Headless defaults to true via tool layer).
-	sess, err := p.sessions.Create(headless)
+	sess, err := p.sessions.Create(input.Headless)
 	if err != nil {
 		return OpenOutput{}, err
 	}
@@ -29,8 +27,11 @@ func (p *Plugin) executeNavigate(_ action.Ctx, input NavigateInput) (NavigateOut
 		return NavigateOutput{}, fmt.Errorf("url is required")
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var title, location string
-	err = chromedp.Run(sess.browserCtx,
+	err = chromedp.Run(ctx,
 		chromedp.Navigate(input.URL),
 		chromedp.Location(&location),
 		chromedp.Title(&title),
@@ -52,8 +53,11 @@ func (p *Plugin) executeBack(_ action.Ctx, input HistoryInput) (HistoryOutput, e
 		return HistoryOutput{}, err
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var title, location string
-	err = chromedp.Run(sess.browserCtx,
+	err = chromedp.Run(ctx,
 		chromedp.NavigateBack(),
 		chromedp.Location(&location),
 		chromedp.Title(&title),
@@ -71,8 +75,11 @@ func (p *Plugin) executeForward(_ action.Ctx, input HistoryInput) (HistoryOutput
 		return HistoryOutput{}, err
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var title, location string
-	err = chromedp.Run(sess.browserCtx,
+	err = chromedp.Run(ctx,
 		chromedp.NavigateForward(),
 		chromedp.Location(&location),
 		chromedp.Title(&title),
@@ -89,4 +96,12 @@ func (p *Plugin) executeClose(_ action.Ctx, input CloseInput) (CloseOutput, erro
 		return CloseOutput{}, err
 	}
 	return CloseOutput{Closed: true}, nil
+}
+
+// opContext returns a child of the session's browser context with the
+// configured operation timeout. chromedp finds its internal state via context
+// value chain, so this correctly scopes the deadline without losing the
+// browser connection.
+func (p *Plugin) opContext(sess *Session) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(sess.browserCtx, p.sessions.config.OpTimeout)
 }

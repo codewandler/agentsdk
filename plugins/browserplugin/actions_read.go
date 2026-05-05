@@ -17,13 +17,16 @@ func (p *Plugin) executeRead(_ action.Ctx, input ReadInput) (ReadOutput, error) 
 		return ReadOutput{}, err
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var text string
 	if input.Selector != "" {
-		err = chromedp.Run(sess.browserCtx,
+		err = chromedp.Run(ctx,
 			chromedp.Text(input.Selector, &text, chromedp.NodeVisible),
 		)
 	} else {
-		err = chromedp.Run(sess.browserCtx,
+		err = chromedp.Run(ctx,
 			chromedp.Text("body", &text, chromedp.NodeVisible),
 		)
 	}
@@ -39,19 +42,22 @@ func (p *Plugin) executeScreenshot(_ action.Ctx, input ScreenshotInput) (Screens
 		return ScreenshotOutput{}, err
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var buf []byte
 	switch {
 	case input.Selector != "":
-		err = chromedp.Run(sess.browserCtx,
+		err = chromedp.Run(ctx,
 			chromedp.WaitVisible(input.Selector),
 			chromedp.Screenshot(input.Selector, &buf),
 		)
 	case input.FullPage:
-		err = chromedp.Run(sess.browserCtx,
+		err = chromedp.Run(ctx,
 			chromedp.FullScreenshot(&buf, 90),
 		)
 	default:
-		err = chromedp.Run(sess.browserCtx,
+		err = chromedp.Run(ctx,
 			chromedp.CaptureScreenshot(&buf),
 		)
 	}
@@ -59,7 +65,6 @@ func (p *Plugin) executeScreenshot(_ action.Ctx, input ScreenshotInput) (Screens
 		return ScreenshotOutput{}, fmt.Errorf("screenshot failed: %w", err)
 	}
 
-	// Write to temp file.
 	f, err := os.CreateTemp("", "browser-screenshot-*.png")
 	if err != nil {
 		return ScreenshotOutput{}, fmt.Errorf("create temp file: %w", err)
@@ -83,16 +88,17 @@ func (p *Plugin) executeEvaluate(_ action.Ctx, input EvaluateInput) (EvaluateOut
 		return EvaluateOutput{}, fmt.Errorf("expression is required")
 	}
 
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
 	var result any
-	err = chromedp.Run(sess.browserCtx,
+	err = chromedp.Run(ctx,
 		chromedp.Evaluate(input.Expression, &result),
 	)
 	if err != nil {
 		return EvaluateOutput{}, fmt.Errorf("evaluate failed: %w", err)
 	}
 
-	// Ensure result is JSON-serializable; if it's already a primitive or map
-	// from chromedp, it should be fine. Marshal+unmarshal to normalize.
 	raw, _ := json.Marshal(result)
 	var normalized any
 	_ = json.Unmarshal(raw, &normalized)

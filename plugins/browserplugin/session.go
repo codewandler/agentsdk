@@ -24,6 +24,12 @@ type Session struct {
 	mu          sync.Mutex
 }
 
+// withTimeout returns a child context of the browser context with the given
+// deadline. The caller must call the returned cancel function.
+func (s *Session) withTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(s.browserCtx, timeout)
+}
+
 // touch updates the last-used timestamp.
 func (s *Session) touch() {
 	s.mu.Lock()

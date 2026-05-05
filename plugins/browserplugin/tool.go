@@ -1,7 +1,6 @@
 package browserplugin
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/codewandler/agentsdk/action"
@@ -194,8 +193,6 @@ func (p *Plugin) executeBrowser(_ tool.Ctx, params BrowserParams) (tool.Result, 
 
 // dispatchToAction maps a BrowserOperation to the corresponding action call.
 func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.Result {
-	ctx := context.Background()
-
 	sid := ""
 	if session != nil {
 		sid = session.ID
@@ -207,28 +204,28 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		if op.Open.Headless != nil {
 			headless = *op.Open.Headless
 		}
-		out, err := p.executeOpen(ctx, OpenInput{Headless: headless})
+		out, err := p.executeOpen(nil, OpenInput{Headless: headless})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Navigate != nil:
-		out, err := p.executeNavigate(ctx, NavigateInput{SessionID: sid, URL: op.Navigate.URL})
+		out, err := p.executeNavigate(nil, NavigateInput{SessionID: sid, URL: op.Navigate.URL})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Click != nil:
-		out, err := p.executeClick(ctx, ClickInput{SessionID: sid, Selector: op.Click.Selector})
+		out, err := p.executeClick(nil, ClickInput{SessionID: sid, Selector: op.Click.Selector})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Type != nil:
-		out, err := p.executeType(ctx, TypeInput{
+		out, err := p.executeType(nil, TypeInput{
 			SessionID: sid,
 			Selector:  op.Type.Selector,
 			Text:      op.Type.Text,
@@ -241,7 +238,7 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		return action.OK(out)
 
 	case op.Select != nil:
-		out, err := p.executeSelect(ctx, SelectInput{
+		out, err := p.executeSelect(nil, SelectInput{
 			SessionID: sid,
 			Selector:  op.Select.Selector,
 			Values:    op.Select.Values,
@@ -252,14 +249,14 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		return action.OK(out)
 
 	case op.Read != nil:
-		out, err := p.executeRead(ctx, ReadInput{SessionID: sid, Selector: op.Read.Selector})
+		out, err := p.executeRead(nil, ReadInput{SessionID: sid, Selector: op.Read.Selector})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Screenshot != nil:
-		out, err := p.executeScreenshot(ctx, ScreenshotInput{
+		out, err := p.executeScreenshot(nil, ScreenshotInput{
 			SessionID: sid,
 			Selector:  op.Screenshot.Selector,
 			FullPage:  op.Screenshot.FullPage,
@@ -270,14 +267,14 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		return action.OK(out)
 
 	case op.Evaluate != nil:
-		out, err := p.executeEvaluate(ctx, EvaluateInput{SessionID: sid, Expression: op.Evaluate.Expression})
+		out, err := p.executeEvaluate(nil, EvaluateInput{SessionID: sid, Expression: op.Evaluate.Expression})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Wait != nil:
-		out, err := p.executeWait(ctx, WaitInput{
+		out, err := p.executeWait(nil, WaitInput{
 			SessionID: sid,
 			Selector:  op.Wait.Selector,
 			TimeoutMs: op.Wait.TimeoutMs,
@@ -288,21 +285,21 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		return action.OK(out)
 
 	case op.Back != nil:
-		out, err := p.executeBack(ctx, HistoryInput{SessionID: sid})
+		out, err := p.executeBack(nil, HistoryInput{SessionID: sid})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Forward != nil:
-		out, err := p.executeForward(ctx, HistoryInput{SessionID: sid})
+		out, err := p.executeForward(nil, HistoryInput{SessionID: sid})
 		if err != nil {
 			return action.Failed(err)
 		}
 		return action.OK(out)
 
 	case op.Close != nil:
-		out, err := p.executeClose(ctx, CloseInput{SessionID: sid})
+		out, err := p.executeClose(nil, CloseInput{SessionID: sid})
 		if err != nil {
 			return action.Failed(err)
 		}
