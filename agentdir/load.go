@@ -313,7 +313,61 @@ func LoadFSWithSource(fsys fs.FS, root string, source resource.SourceRef) (resou
 			out.Skills = append(out.Skills, skills...)
 		}
 	}
+	stampResourceIDs(&out, source)
 	return out, nil
+}
+
+// stampResourceIDs populates the RID field on all contributions in the bundle
+// by deriving a ResourceID from the bundle's SourceRef and each resource's name/kind.
+func stampResourceIDs(bundle *resource.ContributionBundle, source resource.SourceRef) {
+	for i := range bundle.CommandResources {
+		c := &bundle.CommandResources[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "command", c.Name)
+		}
+	}
+	for i := range bundle.Skills {
+		c := &bundle.Skills[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "skill", c.Name)
+		}
+	}
+	for i := range bundle.DataSources {
+		c := &bundle.DataSources[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "datasource", c.Name)
+		}
+	}
+	for i := range bundle.Workflows {
+		c := &bundle.Workflows[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "workflow", c.Name)
+		}
+	}
+	for i := range bundle.Actions {
+		c := &bundle.Actions[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "action", c.Name)
+		}
+	}
+	for i := range bundle.Triggers {
+		c := &bundle.Triggers[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "trigger", c.Name)
+		}
+	}
+	for i := range bundle.Tools {
+		c := &bundle.Tools[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "tool", c.Name)
+		}
+	}
+	for i := range bundle.Hooks {
+		c := &bundle.Hooks[i]
+		if c.RID.IsZero() {
+			c.RID = resource.DeriveResourceID(source, "hook", c.Name)
+		}
+	}
 }
 
 func instructionPathsForAgentFile(file string) []string {

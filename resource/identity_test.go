@@ -149,3 +149,47 @@ func TestResourceIDMatchesRefDeepNamespace(t *testing.T) {
 	require.False(t, id.MatchesRef("bar:fruit"))
 	require.False(t, id.MatchesRef("local:foo:fruit"))
 }
+
+func TestDeriveOrigin(t *testing.T) {
+	tests := []struct {
+		scope Scope
+		want  string
+	}{
+		{ScopeEmbedded, "embedded"},
+		{ScopeProject, "local"},
+		{ScopeUser, "user"},
+		{ScopeRemote, "remote"},
+		{ScopeGit, "git"},
+	}
+	for _, tt := range tests {
+		got := DeriveOrigin(SourceRef{Scope: tt.scope})
+		require.Equal(t, tt.want, got, "scope=%s", tt.scope)
+	}
+}
+
+func TestDeriveNamespace(t *testing.T) {
+	tests := []struct {
+		name   string
+		source SourceRef
+		want   string
+	}{
+		{"user scope", SourceRef{Scope: ScopeUser, Root: "/home/user/.agents"}, "global"},
+		{"project scope", SourceRef{Scope: ScopeProject, Root: "/home/user/projects/my-app/.agents"}, ".agents"},
+		{"embedded scope", SourceRef{Scope: ScopeEmbedded, Root: "resources"}, "resources"},
+		{"embedded dot-agents", SourceRef{Scope: ScopeEmbedded, Root: ".agents"}, "agents"},
+		{"remote scope", SourceRef{Scope: ScopeRemote, Root: "github.com/acme/tools"}, "github.com/acme/tools"},
+	}
+	for _, tt := range tests {
+		got := DeriveNamespace(tt.source)
+		require.Equal(t, tt.want, got.String(), tt.name)
+	}
+}
+
+func TestDeriveResourceID(t *testing.T) {
+	source := SourceRef{Scope: ScopeProject, Root: "/home/user/my-app/.agents", Ecosystem: "agents"}
+	id := DeriveResourceID(source, "command", "commit")
+	require.Equal(t, "command", id.Kind)
+	require.Equal(t, "local", id.Origin)
+	require.Equal(t, "commit", id.Name)
+	require.Equal(t, "local:.agents:commit", id.Address())
+}

@@ -1,6 +1,9 @@
 package resource
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // Namespace is an origin-local path that scopes a resource. Internally stored
 // as string segments, rendered as "/"-joined for display. The agentdir loader
@@ -183,4 +186,64 @@ func suffixSliceMatch(full, suffix []string) bool {
 		}
 	}
 	return true
+}
+
+// DeriveOrigin returns the origin token for a SourceRef based on its Scope.
+func DeriveOrigin(source SourceRef) string {
+	switch source.Scope {
+	case ScopeEmbedded:
+		return "embedded"
+	case ScopeProject:
+		return "local"
+	case ScopeUser:
+		return "user"
+	case ScopeRemote:
+		return "remote"
+	case ScopeGit:
+		return "git"
+	default:
+		if source.Ecosystem != "" {
+			return source.Ecosystem
+		}
+		return "unknown"
+	}
+}
+
+// DeriveNamespace returns the namespace for a SourceRef. For project scope,
+// it uses the basename of the root directory. For user scope, it returns
+// "global". For embedded scope, it uses the root path. For other scopes,
+// it uses the root path cleaned of leading dots and separators.
+func DeriveNamespace(source SourceRef) Namespace {
+	switch source.Scope {
+	case ScopeUser:
+		return NewNamespace("global")
+	case ScopeProject:
+		base := filepath.Base(source.Root)
+		if base == "." || base == "/" || base == "" {
+			return NewNamespace()
+		}
+		return NewNamespace(base)
+	case ScopeEmbedded:
+		root := strings.TrimPrefix(source.Root, ".")
+		root = strings.TrimPrefix(root, "/")
+		if root == "" {
+			return NewNamespace()
+		}
+		return NewNamespace(root)
+	default:
+		if source.Root != "" {
+			return NewNamespace(source.Root)
+		}
+		return NewNamespace()
+	}
+}
+
+// DeriveResourceID builds a ResourceID from a SourceRef, kind, and name.
+func DeriveResourceID(source SourceRef, kind, name string) ResourceID {
+	return ResourceID{
+		Kind:      kind,
+		Origin:    DeriveOrigin(source),
+		Namespace: DeriveNamespace(source),
+		Name:      name,
+	}
 }
