@@ -46,6 +46,14 @@ match these entries as the project starts publishing releases.
   contributions automatically.
 - **`app.App.ResourceIndex()`** — exposes the index of all registered
   resources for use by resolvers and discovery commands.
+- **`harness.Session.Resolver`** — each session holds a `*resource.Resolver`
+  initialized from the app's `ResourceIndex`.
+- **Qualified command dispatch** — `ExecuteCommand` resolves qualified
+  references (e.g. `/engineer:commit`, `/agentsdk:commit`) via the session
+  resolver before dispatching to the command registry.
+- **`agentsdk discover --tree`** — new flag renders discovered resources
+  grouped by origin and namespace with shadow/conflict annotations and a
+  resolution summary.
 
 ### Changed
 
