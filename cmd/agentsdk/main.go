@@ -23,6 +23,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	builderapp "github.com/codewandler/agentsdk/apps/builder"
 	engineerapp "github.com/codewandler/agentsdk/apps/engineer"
+	"github.com/codewandler/agentsdk/plugins/browserplugin"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
@@ -86,7 +87,14 @@ func devCmd() *cobra.Command {
 		EmbeddedBase:     engineerapp.Resources(),
 		EmbeddedBaseRoot: engineerapp.ResourcesRoot,
 		DefaultAgent:     "main",
+		AppOptions:       devAppOptions(),
 	})
+}
+
+func devAppOptions() []app.Option {
+	return []app.Option{
+		app.WithPlugin(browserplugin.New()),
+	}
 }
 
 func buildCmd() *cobra.Command {

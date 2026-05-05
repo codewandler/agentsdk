@@ -27,6 +27,9 @@ type BrowserOperation struct {
 	Screenshot *ScreenshotOp `json:"screenshot,omitempty"`
 	Evaluate   *EvaluateOp   `json:"evaluate,omitempty"`
 	Wait       *WaitOp       `json:"wait,omitempty"`
+	Scroll     *ScrollOp     `json:"scroll,omitempty"`
+	Hover      *HoverOp      `json:"hover,omitempty"`
+	PDF        *PDFOp        `json:"pdf,omitempty"`
 	Back       *BackOp       `json:"back,omitempty"`
 	Forward    *ForwardOp    `json:"forward,omitempty"`
 	Close      *CloseOp      `json:"close,omitempty"`
@@ -55,6 +58,9 @@ func (BrowserOperation) JSONSchema() *jsonschema.Schema {
 			makeVariant("screenshot", tool.SchemaFor[ScreenshotOp]()),
 			makeVariant("evaluate", tool.SchemaFor[EvaluateOp]()),
 			makeVariant("wait", tool.SchemaFor[WaitOp]()),
+			makeVariant("scroll", tool.SchemaFor[ScrollOp]()),
+			makeVariant("hover", tool.SchemaFor[HoverOp]()),
+			makeVariant("pdf", tool.SchemaFor[PDFOp]()),
 			makeVariant("back", tool.SchemaFor[BackOp]()),
 			makeVariant("forward", tool.SchemaFor[ForwardOp]()),
 			makeVariant("close", tool.SchemaFor[CloseOp]()),
@@ -115,6 +121,21 @@ type WaitOp struct {
 	Selector  string `json:"selector,omitempty"   jsonschema:"description=CSS selector to wait for."`
 	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"description=Max wait time in milliseconds (default 5000)."`
 }
+
+// ScrollOp scrolls the page or an element into view.
+type ScrollOp struct {
+	Selector  string `json:"selector,omitempty"  jsonschema:"description=CSS selector to scroll into view. If omitted scrolls the page."`
+	Direction string `json:"direction,omitempty" jsonschema:"description=Scroll direction: up or down (default down). Ignored when selector is set."`
+	Pixels    int    `json:"pixels,omitempty"    jsonschema:"description=Pixels to scroll (default 600). Ignored when selector is set."`
+}
+
+// HoverOp hovers over an element.
+type HoverOp struct {
+	Selector string `json:"selector" jsonschema:"description=CSS selector of the element to hover over.,required"`
+}
+
+// PDFOp generates a PDF of the current page.
+type PDFOp struct{}
 
 // BackOp navigates back.
 type BackOp struct{}
@@ -288,6 +309,32 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		}
 		return action.OK(out)
 
+	case op.Scroll != nil:
+		out, err := p.executeScroll(nil, ScrollInput{
+			SessionID: sid,
+			Selector:  op.Scroll.Selector,
+			Direction: op.Scroll.Direction,
+			Pixels:    op.Scroll.Pixels,
+		})
+		if err != nil {
+			return action.Failed(err)
+		}
+		return action.OK(out)
+
+	case op.Hover != nil:
+		out, err := p.executeHover(nil, HoverInput{SessionID: sid, Selector: op.Hover.Selector})
+		if err != nil {
+			return action.Failed(err)
+		}
+		return action.OK(out)
+
+	case op.PDF != nil:
+		out, err := p.executePDF(nil, PDFInput{SessionID: sid})
+		if err != nil {
+			return action.Failed(err)
+		}
+		return action.OK(out)
+
 	case op.Back != nil:
 		out, err := p.executeBack(nil, HistoryInput{SessionID: sid})
 		if err != nil {
@@ -346,6 +393,15 @@ func opFieldCount(op BrowserOperation) int {
 	if op.Wait != nil {
 		n++
 	}
+	if op.Scroll != nil {
+		n++
+	}
+	if op.Hover != nil {
+		n++
+	}
+	if op.PDF != nil {
+		n++
+	}
 	if op.Back != nil {
 		n++
 	}
@@ -379,6 +435,12 @@ func opName(op BrowserOperation) string {
 		return "evaluate"
 	case op.Wait != nil:
 		return "wait"
+	case op.Scroll != nil:
+		return "scroll"
+	case op.Hover != nil:
+		return "hover"
+	case op.PDF != nil:
+		return "pdf"
 	case op.Back != nil:
 		return "back"
 	case op.Forward != nil:
@@ -426,6 +488,14 @@ func formatActionResult(op BrowserOperation, r action.Result) string {
 		}
 	case op.Wait != nil:
 		return "Element visible."
+	case op.Scroll != nil:
+		return "Scrolled."
+	case op.Hover != nil:
+		return "Hovered."
+	case op.PDF != nil:
+		if out, ok := r.Data.(PDFOutput); ok {
+			return fmt.Sprintf("PDF saved: %s", out.Path)
+		}
 	case op.Back != nil:
 		if out, ok := r.Data.(HistoryOutput); ok {
 			return fmt.Sprintf("Back to %q (%s)", out.Title, out.URL)

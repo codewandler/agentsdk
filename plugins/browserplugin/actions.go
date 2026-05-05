@@ -117,6 +117,36 @@ type HistoryOutput struct {
 	Title string `json:"title"`
 }
 
+// ScrollInput is the input for browser.scroll.
+type ScrollInput struct {
+	SessionID string `json:"session_id"`
+	Selector  string `json:"selector,omitempty"` // scroll element into view
+	Direction string `json:"direction,omitempty"` // "up" or "down" (default "down")
+	Pixels    int    `json:"pixels,omitempty"` // pixels to scroll (default 600)
+}
+
+// ScrollOutput is the output for browser.scroll.
+type ScrollOutput struct{}
+
+// HoverInput is the input for browser.hover.
+type HoverInput struct {
+	SessionID string `json:"session_id"`
+	Selector  string `json:"selector"`
+}
+
+// HoverOutput is the output for browser.hover.
+type HoverOutput struct{}
+
+// PDFInput is the input for browser.pdf.
+type PDFInput struct {
+	SessionID string `json:"session_id"`
+}
+
+// PDFOutput is the output for browser.pdf.
+type PDFOutput struct {
+	Path string `json:"path"`
+}
+
 // CloseInput is the input for browser.close.
 type CloseInput struct {
 	SessionID string `json:"session_id"`
@@ -176,6 +206,21 @@ func (p *Plugin) actions() []action.Action {
 			Name:        "browser.wait",
 			Description: "Wait for an element to become visible.",
 		}, p.executeWait),
+
+		action.NewTyped(action.Spec{
+			Name:        "browser.scroll",
+			Description: "Scroll the page or scroll an element into view.",
+		}, p.executeScroll),
+
+		action.NewTyped(action.Spec{
+			Name:        "browser.hover",
+			Description: "Hover over an element to trigger menus or tooltips.",
+		}, p.executeHover),
+
+		action.NewTyped(action.Spec{
+			Name:        "browser.pdf",
+			Description: "Generate a PDF of the current page.",
+		}, p.executePDF),
 
 		action.NewTyped(action.Spec{
 			Name:        "browser.back",

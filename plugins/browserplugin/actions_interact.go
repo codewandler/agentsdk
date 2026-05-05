@@ -130,3 +130,54 @@ func (p *Plugin) executeWait(_ action.Ctx, input WaitInput) (WaitOutput, error) 
 	}
 	return WaitOutput{}, nil
 }
+
+func (p *Plugin) executeScroll(_ action.Ctx, input ScrollInput) (ScrollOutput, error) {
+	sess, err := p.sessions.Get(input.SessionID)
+	if err != nil {
+		return ScrollOutput{}, err
+	}
+
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
+	if input.Selector != "" {
+		// Scroll element into view.
+		err = chromedp.Run(ctx, chromedp.ScrollIntoView(input.Selector))
+	} else {
+		// Scroll page by pixels.
+		pixels := input.Pixels
+		if pixels == 0 {
+			pixels = 600
+		}
+		if input.Direction == "up" {
+			pixels = -pixels
+		}
+		err = chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf("window.scrollBy(0, %d)", pixels), nil))
+	}
+	if err != nil {
+		return ScrollOutput{}, fmt.Errorf("scroll failed: %w", err)
+	}
+	return ScrollOutput{}, nil
+}
+
+func (p *Plugin) executeHover(_ action.Ctx, input HoverInput) (HoverOutput, error) {
+	sess, err := p.sessions.Get(input.SessionID)
+	if err != nil {
+		return HoverOutput{}, err
+	}
+	if input.Selector == "" {
+		return HoverOutput{}, fmt.Errorf("selector is required")
+	}
+
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
+	err = chromedp.Run(ctx,
+		chromedp.WaitReady(input.Selector),
+		chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).dispatchEvent(new MouseEvent('mouseover', {bubbles: true}))`, input.Selector), nil),
+	)
+	if err != nil {
+		return HoverOutput{}, fmt.Errorf("hover failed: %w", err)
+	}
+	return HoverOutput{}, nil
+}

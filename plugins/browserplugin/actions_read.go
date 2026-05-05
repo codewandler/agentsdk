@@ -1,11 +1,13 @@
 package browserplugin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
 	"github.com/codewandler/agentsdk/action"
@@ -110,4 +112,37 @@ func (p *Plugin) executeEvaluate(_ action.Ctx, input EvaluateInput) (EvaluateOut
 	_ = json.Unmarshal(raw, &normalized)
 
 	return EvaluateOutput{Result: normalized}, nil
+}
+
+func (p *Plugin) executePDF(_ action.Ctx, input PDFInput) (PDFOutput, error) {
+	sess, err := p.sessions.Get(input.SessionID)
+	if err != nil {
+		return PDFOutput{}, err
+	}
+
+	ctx, cancel := p.opContext(sess)
+	defer cancel()
+
+	var buf []byte
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var err error
+		buf, _, err = page.PrintToPDF().WithPrintBackground(true).Do(ctx)
+		return err
+	}))
+	if err != nil {
+		return PDFOutput{}, fmt.Errorf("pdf generation failed: %w", err)
+	}
+
+	f, err := os.CreateTemp("", "browser-page-*.pdf")
+	if err != nil {
+		return PDFOutput{}, fmt.Errorf("create temp file: %w", err)
+	}
+	if _, err := f.Write(buf); err != nil {
+		f.Close()
+		return PDFOutput{}, fmt.Errorf("write pdf: %w", err)
+	}
+	f.Close()
+
+	absPath, _ := filepath.Abs(f.Name())
+	return PDFOutput{Path: absPath}, nil
 }
