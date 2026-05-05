@@ -105,6 +105,8 @@ func (m *SessionManager) Create(headless bool) (*Session, error) {
 			chromedp.Flag("no-first-run", true),
 			chromedp.Flag("disable-extensions", true),
 			chromedp.Flag("disable-default-apps", true),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"),
 			chromedp.WindowSize(1280, 720),
 		)
 		if m.config.ChromePath != "" {
