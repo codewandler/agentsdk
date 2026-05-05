@@ -137,12 +137,12 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 			// Merge hint values with CommandConfig-level fields.
 			// CommandConfig fields take precedence (direct callers of
 			// NewCommand); hints fill in when CommandConfig is zero.
-			embeddedBase := cfg.EmbeddedBase
-			embeddedBaseRoot := cfg.EmbeddedBaseRoot
+			var embeddedSources []app.EmbeddedSource
 			embeddedOnly := cfg.EmbeddedOnly
-			if embeddedBase == nil && hints.EmbeddedFS != nil {
-				embeddedBase = hints.EmbeddedFS
-				embeddedBaseRoot = hints.EmbeddedRoot
+			if cfg.EmbeddedBase != nil {
+				embeddedSources = []app.EmbeddedSource{{FS: cfg.EmbeddedBase, Root: cfg.EmbeddedBaseRoot}}
+			} else if len(hints.EmbeddedSources) > 0 {
+				embeddedSources = hints.EmbeddedSources
 				embeddedOnly = hints.EmbeddedOnly
 			}
 			if hints.NoDefaultPlugins {
@@ -157,12 +157,12 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				if len(paths) == 0 {
 					paths = []string{"."}
 				}
-				if embeddedBase != nil && embeddedOnly {
+				if len(embeddedSources) > 0 && embeddedOnly {
 					// Use only the embedded resources; do not merge from -d paths.
 					// The app operates ON the target directory, not WITH its resources.
-					resources = EmbeddedResources(embeddedBase, embeddedBaseRoot)
-				} else if embeddedBase != nil {
-					resources = EmbeddedWithDirResources(embeddedBase, embeddedBaseRoot, paths)
+					resources = MultiEmbeddedResources(embeddedSources)
+				} else if len(embeddedSources) > 0 {
+					resources = MultiEmbeddedWithDirResources(embeddedSources, paths)
 				} else {
 					resources = MultiDirResources(paths)
 				}

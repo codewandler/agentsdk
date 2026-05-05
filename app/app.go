@@ -64,8 +64,7 @@ type config struct {
 	toolMiddlewares []tool.Middleware
 
 	// Pre-construction hints read by cli.Mount / hosts before app.New.
-	embeddedFS       fs.FS
-	embeddedRoot     string
+	embeddedTargets  []embeddedTarget
 	embeddedOnly     bool
 	noDefaultPlugins bool
 }
@@ -206,14 +205,20 @@ func WithToolMiddlewares(middlewares ...tool.Middleware) Option {
 	return func(c *config) { c.toolMiddlewares = append(c.toolMiddlewares, middlewares...) }
 }
 
-// WithEmbeddedResources sets an embedded filesystem as the primary resource
-// source. The root parameter is the path prefix inside the FS (e.g. "resources").
-// This option is read by hosts (e.g. cli.Mount) before app construction to
-// control resource resolution.
+// embeddedTarget pairs an embedded filesystem with its root path.
+type embeddedTarget struct {
+	FS   fs.FS
+	Root string
+}
+
+// WithEmbeddedResources adds an embedded filesystem as a resource source.
+// The root parameter is the path prefix inside the FS (e.g. "resources").
+// May be called multiple times to compose resources from several embedded
+// filesystems. This option is read by hosts (e.g. cli.Mount) before app
+// construction to control resource resolution.
 func WithEmbeddedResources(fsys fs.FS, root string) Option {
 	return func(c *config) {
-		c.embeddedFS = fsys
-		c.embeddedRoot = root
+		c.embeddedTargets = append(c.embeddedTargets, embeddedTarget{FS: fsys, Root: root})
 	}
 }
 
@@ -231,12 +236,17 @@ func WithoutDefaultPlugins() Option {
 	return func(c *config) { c.noDefaultPlugins = true }
 }
 
+// EmbeddedSource pairs an embedded filesystem with its root path.
+type EmbeddedSource struct {
+	FS   fs.FS
+	Root string
+}
+
 // PreConstructionHints holds option values that hosts (e.g. cli.Mount) need
 // to read before calling [New]. Call [ResolveHints] to extract them from an
 // option slice.
 type PreConstructionHints struct {
-	EmbeddedFS       fs.FS
-	EmbeddedRoot     string
+	EmbeddedSources  []EmbeddedSource
 	EmbeddedOnly     bool
 	NoDefaultPlugins bool
 }
@@ -250,9 +260,12 @@ func ResolveHints(opts []Option) PreConstructionHints {
 			opt(&cfg)
 		}
 	}
+	sources := make([]EmbeddedSource, len(cfg.embeddedTargets))
+	for i, t := range cfg.embeddedTargets {
+		sources[i] = EmbeddedSource{FS: t.FS, Root: t.Root}
+	}
 	return PreConstructionHints{
-		EmbeddedFS:       cfg.embeddedFS,
-		EmbeddedRoot:     cfg.embeddedRoot,
+		EmbeddedSources:  sources,
 		EmbeddedOnly:     cfg.embeddedOnly,
 		NoDefaultPlugins: cfg.noDefaultPlugins,
 	}

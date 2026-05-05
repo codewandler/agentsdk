@@ -5,6 +5,7 @@ import (
 	"io/fs"
 
 	"github.com/codewandler/agentsdk/agentdir"
+	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
 )
 
@@ -80,6 +81,61 @@ func EmbeddedWithDirResources(fsys fs.FS, root string, dirs []string) Resources 
 func EmbeddedResources(fsys fs.FS, root string) Resources {
 	return ResourceFunc(func(resource.DiscoveryPolicy) (agentdir.Resolution, error) {
 		return agentdir.ResolveFS(fsys, root)
+	})
+}
+
+// MultiEmbeddedResources resolves multiple embedded filesystems and merges
+// their contributions. The first source is the primary; additional sources
+// are appended.
+func MultiEmbeddedResources(sources []app.EmbeddedSource) Resources {
+	return ResourceFunc(func(resource.DiscoveryPolicy) (agentdir.Resolution, error) {
+		if len(sources) == 0 {
+			return agentdir.Resolution{}, fmt.Errorf("cli: no embedded sources")
+		}
+		primary, err := agentdir.ResolveFS(sources[0].FS, sources[0].Root)
+		if err != nil {
+			return agentdir.Resolution{}, err
+		}
+		for _, src := range sources[1:] {
+			resolved, err := agentdir.ResolveFS(src.FS, src.Root)
+			if err != nil {
+				return agentdir.Resolution{}, err
+			}
+			primary.Bundle.Append(resolved.Bundle)
+			primary.Sources = append(primary.Sources, resolved.Sources...)
+		}
+		return primary, nil
+	})
+}
+
+// MultiEmbeddedWithDirResources resolves multiple embedded filesystems as
+// the primary sources and merges additional directory roots on top.
+func MultiEmbeddedWithDirResources(sources []app.EmbeddedSource, dirs []string) Resources {
+	return ResourceFunc(func(policy resource.DiscoveryPolicy) (agentdir.Resolution, error) {
+		if len(sources) == 0 {
+			return agentdir.Resolution{}, fmt.Errorf("cli: no embedded sources")
+		}
+		primary, err := agentdir.ResolveFS(sources[0].FS, sources[0].Root)
+		if err != nil {
+			return agentdir.Resolution{}, err
+		}
+		for _, src := range sources[1:] {
+			resolved, err := agentdir.ResolveFS(src.FS, src.Root)
+			if err != nil {
+				return agentdir.Resolution{}, err
+			}
+			primary.Bundle.Append(resolved.Bundle)
+			primary.Sources = append(primary.Sources, resolved.Sources...)
+		}
+		for _, dir := range dirs {
+			resolved, err := agentdir.ResolveDirWithOptions(dir, agentdir.ResolveOptions{Policy: policy})
+			if err != nil {
+				return agentdir.Resolution{}, fmt.Errorf("resolve discovery root %q: %w", dir, err)
+			}
+			primary.Bundle.Append(resolved.Bundle)
+			primary.Sources = append(primary.Sources, resolved.Sources...)
+		}
+		return primary, nil
 	})
 }
 
