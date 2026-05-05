@@ -44,6 +44,7 @@ type App struct {
 	commandResources      []resource.CommandContribution
 	tools                 *tool.Catalog
 	defaultTools          []tool.Tool
+	resourceIndex         *resource.ResourceIndex
 }
 
 type Option func(*config)
@@ -86,16 +87,17 @@ func New(opts ...Option) (*App, error) {
 	}
 
 	a := &App{
-		commands:     command.NewRegistry(),
-		specs:        map[string]agent.Spec{},
-		specCommands: map[string][]string{},
-		defaultAgent: cfg.defaultAgent,
-		plugins:      map[string]Plugin{},
-		skillSources: discoveredSources,
-		agentOptions: append([]agent.Option(nil), cfg.agentOptions...),
-		actions:      action.NewRegistry(),
-		datasources:  datasource.NewRegistry(),
-		workflows:    map[string]workflow.Definition{},
+		commands:      command.NewRegistry(),
+		specs:         map[string]agent.Spec{},
+		specCommands:  map[string][]string{},
+		defaultAgent:  cfg.defaultAgent,
+		plugins:       map[string]Plugin{},
+		skillSources:  discoveredSources,
+		agentOptions:  append([]agent.Option(nil), cfg.agentOptions...),
+		actions:       action.NewRegistry(),
+		datasources:   datasource.NewRegistry(),
+		workflows:     map[string]workflow.Definition{},
+		resourceIndex: resource.NewResourceIndex(),
 	}
 	defaultTools := append([]tool.Tool(nil), cfg.defaultTools...)
 	catalog, err := tool.NewCatalog(cfg.catalogTools...)
@@ -610,23 +612,45 @@ func (a *App) registerResourceBundle(bundle resource.ContributionBundle) error {
 		if err := a.registerAgentSpec(spec); err != nil {
 			return err
 		}
+		a.resourceIndex.Add(resource.DeriveResourceID(bundle.Source, "agent", spec.Name))
 	}
 	for _, contribution := range bundle.DataSources {
 		if err := a.registerDataSources(datasourceFromContribution(contribution)); err != nil {
 			return err
 		}
+		a.indexContribution(contribution.RID)
 	}
 	for _, contribution := range bundle.Workflows {
 		if err := a.registerWorkflows(workflowFromContribution(contribution)); err != nil {
 			return err
 		}
+		a.indexContribution(contribution.RID)
 	}
 	for _, contribution := range bundle.CommandResources {
 		a.commandResources = append(a.commandResources, cloneCommandContribution(contribution))
+		a.indexContribution(contribution.RID)
+	}
+	for _, contribution := range bundle.Skills {
+		a.indexContribution(contribution.RID)
+	}
+	for _, contribution := range bundle.Actions {
+		a.indexContribution(contribution.RID)
+	}
+	for _, contribution := range bundle.Triggers {
+		a.indexContribution(contribution.RID)
+	}
+	for _, contribution := range bundle.Tools {
+		a.indexContribution(contribution.RID)
 	}
 	a.skillSources = append(a.skillSources, bundle.SkillSources...)
 	a.diagnostics = append(a.diagnostics, bundle.Diagnostics...)
 	return nil
+}
+
+func (a *App) indexContribution(rid resource.ResourceID) {
+	if !rid.IsZero() {
+		a.resourceIndex.Add(rid)
+	}
 }
 
 func datasourceFromContribution(c resource.DataSourceContribution) datasource.Definition {
@@ -843,6 +867,14 @@ func (a *App) ToolCatalog() *tool.Catalog {
 		return nil
 	}
 	return a.tools
+}
+
+// ResourceIndex returns the index of all registered resources.
+func (a *App) ResourceIndex() *resource.ResourceIndex {
+	if a == nil {
+		return nil
+	}
+	return a.resourceIndex
 }
 
 func (a *App) agentSkillSources(spec agent.Spec) []skill.Source {
