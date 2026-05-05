@@ -23,11 +23,16 @@ func (p *Plugin) executeRead(_ action.Ctx, input ReadInput) (ReadOutput, error) 
 	var text string
 	if input.Selector != "" {
 		err = chromedp.Run(ctx,
-			chromedp.Text(input.Selector, &text, chromedp.NodeVisible),
+			chromedp.WaitVisible(input.Selector),
+			chromedp.Text(input.Selector, &text),
 		)
 	} else {
+		// Full page read: use WaitReady (DOM present) not WaitVisible
+		// to avoid timeouts on JS-heavy pages where body may not pass
+		// chromedp's visibility heuristic.
 		err = chromedp.Run(ctx,
-			chromedp.Text("body", &text, chromedp.NodeVisible),
+			chromedp.WaitReady("body"),
+			chromedp.Text("body", &text),
 		)
 	}
 	if err != nil {
