@@ -102,6 +102,12 @@ func (p *Plugin) browserTool() tool.Tool {
 		func(ctx tool.Ctx, params BrowserParams) (tool.Result, error) {
 			return p.executeBrowser(ctx, params)
 		},
+		tool.WithGuidance[BrowserParams](
+			"Each element in the operations array must have EXACTLY ONE field set (e.g. {\"navigate\": {\"url\": \"...\"}}).\n"+
+				"Do NOT set multiple operation fields in the same array element.\n"+
+				"The first call should include an {\"open\": {}} operation. Subsequent calls reuse the returned session_id.\n"+
+				"Always close sessions when done to free resources.\n"+
+				"Example: {\"operations\": [{\"open\": {}}, {\"navigate\": {\"url\": \"https://example.com\"}}, {\"read\": {\"selector\": \"h1\"}}]}"),
 	)
 }
 
@@ -110,6 +116,15 @@ func (p *Plugin) browserTool() tool.Tool {
 func (p *Plugin) executeBrowser(_ tool.Ctx, params BrowserParams) (tool.Result, error) {
 	if len(params.Operations) == 0 {
 		return nil, fmt.Errorf("at least one operation is required")
+	}
+
+	// Validate: each operation must have exactly one field set.
+	for i, op := range params.Operations {
+		if n := opFieldCount(op); n == 0 {
+			return nil, fmt.Errorf("operation[%d]: no operation field set", i)
+		} else if n > 1 {
+			return nil, fmt.Errorf("operation[%d]: exactly one operation field must be set, got %d (set only one of: open, navigate, click, type, select, read, screenshot, evaluate, wait, back, forward, close)", i, n)
+		}
 	}
 
 	// Determine if first op is open.
@@ -268,6 +283,48 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// opFieldCount returns how many operation fields are non-nil.
+func opFieldCount(op BrowserOperation) int {
+	n := 0
+	if op.Open != nil {
+		n++
+	}
+	if op.Navigate != nil {
+		n++
+	}
+	if op.Click != nil {
+		n++
+	}
+	if op.Type != nil {
+		n++
+	}
+	if op.Select != nil {
+		n++
+	}
+	if op.Read != nil {
+		n++
+	}
+	if op.Screenshot != nil {
+		n++
+	}
+	if op.Evaluate != nil {
+		n++
+	}
+	if op.Wait != nil {
+		n++
+	}
+	if op.Back != nil {
+		n++
+	}
+	if op.Forward != nil {
+		n++
+	}
+	if op.Close != nil {
+		n++
+	}
+	return n
+}
 
 // opName returns a human-readable name for the operation.
 func opName(op BrowserOperation) string {
