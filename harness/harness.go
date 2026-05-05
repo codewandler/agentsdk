@@ -469,10 +469,25 @@ func (s *Session) resolveCommandPath(path []string) []string {
 	return out
 }
 
+// resolveResourceName resolves a qualified resource name (containing ":")
+// to its leaf name via the session's Resolver. If the name is unqualified
+// or resolution fails, the original name is returned unchanged.
+func (s *Session) resolveResourceName(kind, name string) string {
+	if s.Resolver == nil || !strings.Contains(name, ":") {
+		return name
+	}
+	resolved, err := s.Resolver.Resolve(kind, name)
+	if err != nil {
+		return name
+	}
+	return resolved.Name
+}
+
 func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...workflow.ExecuteOption) action.Result {
 	if s == nil || s.App == nil {
 		return action.Result{Error: fmt.Errorf("harness: app is required")}
 	}
+	workflowName = s.resolveResourceName("workflow", workflowName)
 	execOpts, recorder := s.workflowExecutionOptions(workflowName, input, opts)
 	result := s.App.ExecuteWorkflow(ctx, workflowName, input, execOpts...)
 	if recorder != nil {
@@ -489,6 +504,7 @@ func (s *Session) StartWorkflow(ctx context.Context, workflowName string, input 
 }
 
 func (s *Session) StartWorkflowWithRunID(ctx context.Context, runID workflow.RunID, workflowName string, input any, opts ...workflow.ExecuteOption) {
+	workflowName = s.resolveResourceName("workflow", workflowName)
 	if ctx == nil {
 		ctx = context.Background()
 	}

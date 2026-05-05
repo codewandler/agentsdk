@@ -1,7 +1,8 @@
 # DESIGN: Resource Identity and Resolution
 
-Status: draft
+Status: implemented (core)
 Date: 2026-05-05
+Implemented: 2026-05-06
 
 ## Problem
 
@@ -383,3 +384,33 @@ resolution:
   aliases are user-local state, not app configuration.
 - **`LoadResult.ParentID` auto-generates `plugin:<name>:<resource>` aliases.**
   Always useful, costs nothing. Plugins that don't set `ParentID` opt out.
+
+## Implementation Status
+
+### Implemented
+
+- `resource.Namespace` type with segments, suffix matching, append
+- `resource.ResourceID` with Kind, Origin, Namespace, Name
+- `resource.ResourceIndex` with O(1) name lookup and ref matching
+- `resource.Resolver` with aliases, resolved cache, policy dispatch
+- `resource.PrecedencePolicy` and `resource.ErrorPolicy`
+- `RID` field on all contribution types
+- `resource.DeriveResourceID` from SourceRef (origin from scope, namespace
+  from go.mod module name or parent dir)
+- `agentdir.LoadFSWithSource` stamps RIDs on all contributions
+- `agentdir.appendResolvedBundle` preserves bundle Source for provenance
+- `app.App.ResourceIndex()` populated during registration
+- `harness.Session.Resolver` initialized from App.ResourceIndex
+- Qualified command dispatch in `ExecuteCommand` (`/engineer:commit`)
+- Qualified workflow dispatch in `ExecuteWorkflow` and `StartWorkflowWithRunID`
+- `agentsdk discover` default tree output grouped by origin
+- `-o json|yaml|pretty` output format flag
+- Sources and diagnostics in discover output
+
+### Not Yet Implemented
+
+- `AskPolicy` for interactive REPL resolution
+- Alias persistence in `.agentsdk/resolution.yaml`
+- Plugin provenance (`LoadResult.ParentID`) and auto-generated aliases
+- App configuration for resolution precedence and aliases
+- Embedded app origin (`embedded:engineer` vs `local:resources`)

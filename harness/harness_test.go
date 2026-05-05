@@ -918,6 +918,30 @@ func TestResolveCommandPathQualifiedRef(t *testing.T) {
 	require.Equal(t, []string{"agentsdk:commit"}, path)
 }
 
+func TestResolveResourceNameQualifiedWorkflow(t *testing.T) {
+	idx := resource.NewResourceIndex()
+	idx.Add(resource.ResourceID{Kind: "workflow", Origin: "local", Namespace: resource.NewNamespace("my-app"), Name: "deploy"})
+	idx.Add(resource.ResourceID{Kind: "workflow", Origin: "agentsdk", Namespace: resource.NewNamespace("engineer"), Name: "review"})
+
+	session := &Session{
+		Resolver: resource.NewResolver(resource.ResolverConfig{Index: idx}),
+	}
+
+	// Qualified ref resolves to leaf name.
+	require.Equal(t, "deploy", session.resolveResourceName("workflow", "local:deploy"))
+	require.Equal(t, "review", session.resolveResourceName("workflow", "agentsdk:engineer:review"))
+
+	// Unqualified passes through.
+	require.Equal(t, "deploy", session.resolveResourceName("workflow", "deploy"))
+
+	// Unknown passes through.
+	require.Equal(t, "unknown:missing", session.resolveResourceName("workflow", "unknown:missing"))
+
+	// Nil resolver passes through.
+	nilSession := &Session{}
+	require.Equal(t, "local:deploy", nilSession.resolveResourceName("workflow", "local:deploy"))
+}
+
 func TestServiceOpenListResumeAndCloseSessions(t *testing.T) {
 	ctx := context.Background()
 	storeDir := t.TempDir()
