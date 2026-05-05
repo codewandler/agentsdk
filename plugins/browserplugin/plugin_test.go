@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/agentcontext"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/tool"
@@ -278,13 +277,3 @@ func resultText(t *testing.T, r tool.Result) string {
 	require.NoError(t, err)
 	return string(raw)
 }
-
-// Ensure action.Ctx accepts nil (context.Background is used internally).
-var _ action.Ctx = (*nilCtx)(nil)
-
-type nilCtx struct{}
-
-func (*nilCtx) Deadline() (interface{}, bool) { return nil, false }
-func (*nilCtx) Done() <-chan struct{}          { return nil }
-func (*nilCtx) Err() error                    { return nil }
-func (*nilCtx) Value(any) any                 { return nil }

@@ -9,6 +9,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
+	"github.com/codewandler/agentsdk/plugins/browserplugin"
 	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/filesystem"
@@ -64,6 +65,8 @@ func (p *Plugin) CatalogTools() []tool.Tool {
 	if opts.WebSearchProvider == nil {
 		tools = append(tools, web.SearchTool(nil))
 	}
+	// Browser automation (CDP) — catalog tool, opt-in via toolmgmt.
+	tools = append(tools, browserplugin.New().CatalogTools()...)
 	return tools
 }
 
