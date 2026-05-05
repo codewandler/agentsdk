@@ -253,7 +253,6 @@ func sessionAppOptions(cfg SessionLoadConfig) []app.Option {
 	}
 	if appCfg.Workspace != "" {
 		opts = append(opts,
-			app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: appCfg.Workspace, IncludeGlobalUserResources: appCfg.IncludeGlobalUserResources}),
 			app.WithAgentOptions(agent.WithWorkspace(appCfg.Workspace)),
 		)
 	}

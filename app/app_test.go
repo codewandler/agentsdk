@@ -507,6 +507,13 @@ func TestAppDiscoversDefaultSkillSources(t *testing.T) {
 	writeAppFile(t, filepath.Join(home, ".agents", "skills", "home", "SKILL.md"), "---\nname: home-skill\ndescription: Home skill\n---\n# Home")
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 
+	// Load skill sources from directories via agentdir instead of
+	// the removed WithDefaultSkillSourceDiscovery.
+	wsBundle, err := agentdir.LoadDir(filepath.Join(workspace, ".claude"))
+	require.NoError(t, err)
+	homeBundle, err := agentdir.LoadDir(filepath.Join(home, ".agents"))
+	require.NoError(t, err)
+
 	app, err := New(
 		WithAgentSpec(agent.Spec{
 			Name:      "coder",
@@ -514,7 +521,8 @@ func TestAppDiscoversDefaultSkillSources(t *testing.T) {
 			Inference: agent.InferenceOptions{Model: "test/model", MaxTokens: 1000},
 			Skills:    []string{"project-skill", "home-skill"},
 		}),
-		WithDefaultSkillSourceDiscovery(SkillSourceDiscovery{WorkspaceDir: workspace, HomeDir: home, IncludeGlobalUserResources: true}),
+		WithResourceBundle(wsBundle),
+		WithResourceBundle(homeBundle),
 	)
 	require.NoError(t, err)
 	inst, err := app.InstantiateAgent("coder", agent.WithClient(client), agent.WithWorkspace(workspace))

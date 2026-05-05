@@ -55,7 +55,6 @@ type config struct {
 	defaultAgent    string
 	plugins         []Plugin
 	bundles         []resource.ContributionBundle
-	discoveries     []SkillSourceDiscovery
 	agentOptions    []agent.Option
 	actions         []action.Action
 	datasources     []datasource.Definition
@@ -77,22 +76,12 @@ func New(opts ...Option) (*App, error) {
 			opt(&cfg)
 		}
 	}
-	discoveredSources := []skill.Source{}
-	for _, discovery := range cfg.discoveries {
-		sources, err := DiscoverDefaultSkillSources(discovery)
-		if err != nil {
-			return nil, err
-		}
-		discoveredSources = append(discoveredSources, sources...)
-	}
-
 	a := &App{
 		commands:      command.NewRegistry(),
 		specs:         map[string]agent.Spec{},
 		specCommands:  map[string][]string{},
 		defaultAgent:  cfg.defaultAgent,
 		plugins:       map[string]Plugin{},
-		skillSources:  discoveredSources,
 		agentOptions:  append([]agent.Option(nil), cfg.agentOptions...),
 		actions:       action.NewRegistry(),
 		datasources:   datasource.NewRegistry(),
@@ -167,10 +156,6 @@ func WithPlugin(plugin Plugin) Option {
 			c.plugins = append(c.plugins, plugin)
 		}
 	}
-}
-
-func WithDefaultSkillSourceDiscovery(discovery SkillSourceDiscovery) Option {
-	return func(c *config) { c.discoveries = append(c.discoveries, discovery) }
 }
 
 func WithAgentOptions(opts ...agent.Option) Option {
