@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strings"
 	"time"
@@ -61,6 +62,12 @@ type config struct {
 	defaultTools    []tool.Tool
 	catalogTools    []tool.Tool
 	toolMiddlewares []tool.Middleware
+
+	// Pre-construction hints read by cli.Mount / hosts before app.New.
+	embeddedFS       fs.FS
+	embeddedRoot     string
+	embeddedOnly     bool
+	noDefaultPlugins bool
 }
 
 func New(opts ...Option) (*App, error) {
@@ -197,6 +204,58 @@ func WithWorkflows(defs ...workflow.Definition) Option {
 // innermost) before any plugin-contributed middlewares.
 func WithToolMiddlewares(middlewares ...tool.Middleware) Option {
 	return func(c *config) { c.toolMiddlewares = append(c.toolMiddlewares, middlewares...) }
+}
+
+// WithEmbeddedResources sets an embedded filesystem as the primary resource
+// source. The root parameter is the path prefix inside the FS (e.g. "resources").
+// This option is read by hosts (e.g. cli.Mount) before app construction to
+// control resource resolution.
+func WithEmbeddedResources(fsys fs.FS, root string) Option {
+	return func(c *config) {
+		c.embeddedFS = fsys
+		c.embeddedRoot = root
+	}
+}
+
+// WithEmbeddedOnly prevents merging directory resources from discovery paths
+// into the app's resource set. Only meaningful when WithEmbeddedResources is
+// also set. Used by apps that operate ON a target project and must not load
+// the target's .agents directory as their own resources.
+func WithEmbeddedOnly() Option {
+	return func(c *config) { c.embeddedOnly = true }
+}
+
+// WithoutDefaultPlugins disables the built-in default plugin (e.g. local_cli).
+// This option is read by hosts before app construction.
+func WithoutDefaultPlugins() Option {
+	return func(c *config) { c.noDefaultPlugins = true }
+}
+
+// PreConstructionHints holds option values that hosts (e.g. cli.Mount) need
+// to read before calling [New]. Call [ResolveHints] to extract them from an
+// option slice.
+type PreConstructionHints struct {
+	EmbeddedFS       fs.FS
+	EmbeddedRoot     string
+	EmbeddedOnly     bool
+	NoDefaultPlugins bool
+}
+
+// ResolveHints applies opts to an empty config and returns the
+// pre-construction hints without building an App.
+func ResolveHints(opts []Option) PreConstructionHints {
+	var cfg config
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	return PreConstructionHints{
+		EmbeddedFS:       cfg.embeddedFS,
+		EmbeddedRoot:     cfg.embeddedRoot,
+		EmbeddedOnly:     cfg.embeddedOnly,
+		NoDefaultPlugins: cfg.noDefaultPlugins,
+	}
 }
 
 func (a *App) Commands() *command.Registry {

@@ -121,6 +121,34 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Resolve deferred app options from factory first so
+			// pre-construction hints (embedded resources, plugin
+			// defaults) are available for resource resolution.
+			appOpts := append([]app.Option(nil), cfg.AppOptions...)
+			if cfg.AppOptionsFactory != nil {
+				extra, factoryErr := cfg.AppOptionsFactory()
+				if factoryErr != nil {
+					return factoryErr
+				}
+				appOpts = append(appOpts, extra...)
+			}
+			hints := app.ResolveHints(appOpts)
+
+			// Merge hint values with CommandConfig-level fields.
+			// CommandConfig fields take precedence (direct callers of
+			// NewCommand); hints fill in when CommandConfig is zero.
+			embeddedBase := cfg.EmbeddedBase
+			embeddedBaseRoot := cfg.EmbeddedBaseRoot
+			embeddedOnly := cfg.EmbeddedOnly
+			if embeddedBase == nil && hints.EmbeddedFS != nil {
+				embeddedBase = hints.EmbeddedFS
+				embeddedBaseRoot = hints.EmbeddedRoot
+				embeddedOnly = hints.EmbeddedOnly
+			}
+			if hints.NoDefaultPlugins {
+				noDefaultPlugins = true
+			}
+
 			resources := cfg.Resources
 			taskArgs := args
 			if cfg.DiscoverFlag {
@@ -129,12 +157,12 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				if len(paths) == 0 {
 					paths = []string{"."}
 				}
-				if cfg.EmbeddedBase != nil && cfg.EmbeddedOnly {
+				if embeddedBase != nil && embeddedOnly {
 					// Use only the embedded resources; do not merge from -d paths.
 					// The app operates ON the target directory, not WITH its resources.
-					resources = EmbeddedResources(cfg.EmbeddedBase, cfg.EmbeddedBaseRoot)
-				} else if cfg.EmbeddedBase != nil {
-					resources = EmbeddedWithDirResources(cfg.EmbeddedBase, cfg.EmbeddedBaseRoot, paths)
+					resources = EmbeddedResources(embeddedBase, embeddedBaseRoot)
+				} else if embeddedBase != nil {
+					resources = EmbeddedWithDirResources(embeddedBase, embeddedBaseRoot, paths)
 				} else {
 					resources = MultiDirResources(paths)
 				}
@@ -193,15 +221,6 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				flags.Changed("temperature") ||
 				flags.Changed("thinking") ||
 				flags.Changed("effort")
-			// Resolve deferred app options from factory.
-			appOpts := append([]app.Option(nil), cfg.AppOptions...)
-			if cfg.AppOptionsFactory != nil {
-				extra, factoryErr := cfg.AppOptionsFactory()
-				if factoryErr != nil {
-					return factoryErr
-				}
-				appOpts = append(appOpts, extra...)
-			}
 			runCfg := Config{
 				Resources:          resources,
 				AgentName:          agentName,

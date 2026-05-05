@@ -10,12 +10,8 @@ import (
 // Spec returns the app.Spec for the builder application.
 func Spec() app.Spec {
 	return app.Spec{
-		Name:             "build",
-		Description:      "Start the first-party agentsdk builder app",
-		EmbeddedFS:       Resources(),
-		EmbeddedRoot:     ResourcesRoot,
-		EmbeddedOnly:     true,
-		NoDefaultPlugins: true,
+		Name:        "build",
+		Description: "Start the first-party agentsdk builder app",
 		Options: func() ([]app.Option, error) {
 			workspace, err := os.Getwd()
 			if err != nil {
@@ -30,7 +26,10 @@ func Spec() app.Spec {
 				return nil, err
 			}
 			return []app.Option{
+				app.WithEmbeddedResources(Resources(), ResourcesRoot),
+				app.WithEmbeddedOnly(),
 				app.WithDefaultAgent("builder"),
+				app.WithoutDefaultPlugins(),
 				app.WithPlugin(Plugin{cfg: cfg}),
 			}, nil
 		},

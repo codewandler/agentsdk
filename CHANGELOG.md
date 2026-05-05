@@ -13,8 +13,12 @@ match these entries as the project starts publishing releases.
 ### Added
 
 - **`app.Spec`** — new type that declares a first-party application's identity
-  (name, description), pre-construction settings (embedded resources, plugin
-  defaults), and a deferred `Options` factory that returns `[]app.Option`.
+  (name, description) and a deferred `Options` factory that returns
+  `[]app.Option`.
+- **`app.WithEmbeddedResources`**, **`app.WithEmbeddedOnly`**,
+  **`app.WithoutDefaultPlugins`** — new `app.Option` constructors for
+  pre-construction hints. Hosts extract them via `app.ResolveHints` before
+  calling `app.New`.
 - **`cli.Mount`** — registers one or more `app.Spec` values as cobra
   subcommands with the full standard flag surface. Prompt is derived
   automatically as `$name> `.

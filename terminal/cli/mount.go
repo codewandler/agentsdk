@@ -13,6 +13,8 @@ import (
 //
 // The spec's Options factory is called at RunE time — after flags are
 // parsed — so app-specific setup (e.g. os.Getwd) happens lazily.
+// Pre-construction hints (embedded resources, plugin defaults) are
+// extracted from the options via [app.ResolveHints].
 //
 // The REPL prompt defaults to "$name> ".
 func Mount(root *cobra.Command, specs ...app.Spec) {
@@ -25,21 +27,25 @@ func mountOne(s app.Spec) *cobra.Command {
 	prompt := fmt.Sprintf("%s> ", s.Name)
 
 	return NewCommand(CommandConfig{
-		Name:             "agentsdk",
-		Use:              s.Name + " [task]",
-		Short:            s.Description,
-		DiscoverFlag:     true,
-		AgentFlag:        true,
-		EmbeddedBase:     s.EmbeddedFS,
-		EmbeddedBaseRoot: s.EmbeddedRoot,
-		EmbeddedOnly:     s.EmbeddedOnly,
-		NoDefaultPlugins: s.NoDefaultPlugins,
-		Prompt:           prompt,
+		Name:         "agentsdk",
+		Use:          s.Name + " [task]",
+		Short:        s.Description,
+		DiscoverFlag: true,
+		AgentFlag:    true,
+		Prompt:       prompt,
 		AppOptionsFactory: func() ([]app.Option, error) {
 			if s.Options == nil {
 				return nil, nil
 			}
-			return s.Options()
+			opts, err := s.Options()
+			if err != nil {
+				return nil, err
+			}
+			// Extract pre-construction hints and apply them to the
+			// CommandConfig-level fields via wrapper options that
+			// mountOne cannot set statically (they're only known
+			// after the factory runs).
+			return opts, nil
 		},
 	})
 }

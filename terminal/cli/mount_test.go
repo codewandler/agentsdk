@@ -29,15 +29,15 @@ func TestMountRegistersSubcommands(t *testing.T) {
 func TestMountedCommandRunsWithEmbeddedResources(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	var out bytes.Buffer
+	bundle := testBundle()
 
 	root := &cobra.Command{Use: "test", SilenceUsage: true, SilenceErrors: true}
 	Mount(root, app.Spec{
 		Name:        "myapp",
 		Description: "Test app",
-		EmbeddedFS:  testBundle(),
-		EmbeddedRoot: ".agents",
 		Options: func() ([]app.Option, error) {
 			return []app.Option{
+				app.WithEmbeddedResources(bundle, ".agents"),
 				app.WithDefaultAgent("coder"),
 			}, nil
 		},
@@ -47,29 +47,27 @@ func TestMountedCommandRunsWithEmbeddedResources(t *testing.T) {
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})
 
-	// Inject test client via CommandConfig.AgentOptions is not available
-	// through Mount, so we test via the NewCommand path with AppOptionsFactory.
-	// Instead, verify the command was registered and has the right metadata.
+	// Verify the command was registered with the right metadata.
 	cmd, _, err := root.Find([]string{"myapp"})
 	require.NoError(t, err)
 	require.Equal(t, "myapp [task]", cmd.Use)
 	require.Equal(t, "Test app", cmd.Short)
-	_ = client // client would be used in a full integration test
+	_ = client
 }
 
 func TestMountedCommandCallsOptionsFactory(t *testing.T) {
 	client := runnertest.NewClient(runnertest.TextStream("ok"))
 	var out bytes.Buffer
 	called := false
+	bundle := testBundle()
 
 	spec := app.Spec{
 		Name:        "factorytest",
 		Description: "Factory test",
-		EmbeddedFS:  testBundle(),
-		EmbeddedRoot: ".agents",
 		Options: func() ([]app.Option, error) {
 			called = true
 			return []app.Option{
+				app.WithEmbeddedResources(bundle, ".agents"),
 				app.WithDefaultAgent("coder"),
 				app.WithAgentOptions(agent.WithClient(client)),
 			}, nil
@@ -91,14 +89,14 @@ func TestMountedCommandCallsOptionsFactory(t *testing.T) {
 func TestMountedPromptDerivedFromName(t *testing.T) {
 	client := runnertest.NewClient()
 	var out bytes.Buffer
+	bundle := testBundle()
 
 	spec := app.Spec{
 		Name:        "mydev",
 		Description: "Dev app",
-		EmbeddedFS:  testBundle(),
-		EmbeddedRoot: ".agents",
 		Options: func() ([]app.Option, error) {
 			return []app.Option{
+				app.WithEmbeddedResources(bundle, ".agents"),
 				app.WithDefaultAgent("coder"),
 				app.WithAgentOptions(agent.WithClient(client)),
 			}, nil
