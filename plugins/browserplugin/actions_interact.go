@@ -125,8 +125,8 @@ func (p *Plugin) executeWait(_ action.Ctx, input WaitInput) (WaitOutput, error) 
 	ctx, cancel := context.WithTimeout(sess.browserCtx, timeout)
 	defer cancel()
 
-	if err := chromedp.Run(ctx, chromedp.WaitVisible(input.Selector)); err != nil {
-		return WaitOutput{}, fmt.Errorf("wait timeout: element %q not visible within %v: %w", input.Selector, timeout, err)
+	if err := chromedp.Run(ctx, chromedp.WaitReady(input.Selector)); err != nil {
+		return WaitOutput{}, fmt.Errorf("wait timeout: element %q not ready within %v: %w", input.Selector, timeout, err)
 	}
 	return WaitOutput{}, nil
 }

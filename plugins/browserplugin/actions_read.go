@@ -21,18 +21,19 @@ func (p *Plugin) executeRead(_ action.Ctx, input ReadInput) (ReadOutput, error) 
 	defer cancel()
 
 	var text string
-	if input.Selector != "" {
-		err = chromedp.Run(ctx,
-			chromedp.WaitVisible(input.Selector),
-			chromedp.Text(input.Selector, &text),
-		)
-	} else {
+	selector := input.Selector
+	if selector == "" || selector == "body" {
 		// Full page read: use WaitReady (DOM present) not WaitVisible
 		// to avoid timeouts on JS-heavy pages where body may not pass
 		// chromedp's visibility heuristic.
 		err = chromedp.Run(ctx,
 			chromedp.WaitReady("body"),
 			chromedp.Text("body", &text),
+		)
+	} else {
+		err = chromedp.Run(ctx,
+			chromedp.WaitReady(selector),
+			chromedp.Text(selector, &text),
 		)
 	}
 	if err != nil {
