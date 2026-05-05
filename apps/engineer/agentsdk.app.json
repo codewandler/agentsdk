@@ -8,5 +8,8 @@
   },
   "sources": [
     "resources/.agents"
+  ],
+  "plugins": [
+    {"name": "browser"}
   ]
 }

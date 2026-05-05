@@ -65,8 +65,6 @@ func (p *Plugin) CatalogTools() []tool.Tool {
 	if opts.WebSearchProvider == nil {
 		tools = append(tools, web.SearchTool(nil))
 	}
-	// Browser automation (CDP) — catalog tool, opt-in via toolmgmt.
-	tools = append(tools, browserplugin.New().CatalogTools()...)
 	return tools
 }
 
@@ -80,15 +78,32 @@ type Factory struct{}
 
 func NewFactory() Factory { return Factory{} }
 
-func (Factory) PluginForName(_ context.Context, name string, _ map[string]any) (app.Plugin, error) {
+func (Factory) PluginForName(_ context.Context, name string, config map[string]any) (app.Plugin, error) {
 	switch name {
 	case PluginName:
 		return New(), nil
 	case plannerplugin.PluginName:
 		return plannerplugin.New(), nil
+	case "browser":
+		return newBrowserPlugin(config), nil
 	default:
 		return nil, fmt.Errorf("localcli: plugin %q not registered", name)
 	}
+}
+
+func newBrowserPlugin(config map[string]any) *browserplugin.Plugin {
+	var opts []browserplugin.Option
+	if url, ok := config["remote_url"].(string); ok && url != "" {
+		opts = append(opts, browserplugin.WithMode(browserplugin.ModeAttach))
+		opts = append(opts, browserplugin.WithRemoteURL(url))
+	}
+	if headless, ok := config["headless"].(bool); ok {
+		opts = append(opts, browserplugin.WithHeadless(headless))
+	}
+	if path, ok := config["chrome_path"].(string); ok && path != "" {
+		opts = append(opts, browserplugin.WithChromePath(path))
+	}
+	return browserplugin.New(opts...)
 }
 
 // PluginForName creates a built-in plugin available to the local CLI host.
