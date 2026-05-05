@@ -372,12 +372,14 @@ resolution:
 - Aliases are opt-in configuration
 - Custom resolver policies are opt-in for library consumers
 
-## Open Questions
+## Decisions
 
-- Should wildcard aliases be supported or is explicit-only safer?
-- Should the resolver be on `app.App` or a standalone component injected
-  via `app.Option`?
-- How are persisted alias choices (from `AskPolicy`) stored? In
-  `agentsdk.app.json`? In a separate `.agentsdk/resolution.yaml`?
-- Should `LoadResult.ParentID` auto-generate `plugin:<name>:*` aliases,
-  or should that be opt-in per plugin?
+- **No wildcard aliases.** Explicit-only. Wildcards add complexity for a
+  marginal use case. Broad scope preferences are handled by precedence.
+- **Resolver is standalone**, not on `app.App`. Injected via `app.Option`
+  or constructed by the host. Used by harness, CLI, and channels.
+- **Persisted alias choices** (from `AskPolicy`) are stored in
+  `.agentsdk/resolution.yaml` — separate from `agentsdk.app.json` because
+  aliases are user-local state, not app configuration.
+- **`LoadResult.ParentID` auto-generates `plugin:<name>:<resource>` aliases.**
+  Always useful, costs nothing. Plugins that don't set `ParentID` opt out.
