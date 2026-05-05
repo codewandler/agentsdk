@@ -51,9 +51,12 @@ type Config struct {
 	// parameter but is still capped by this value.
 	OpTimeout time.Duration
 
-	// UserDataDir is the default Chrome profile directory for sessions that
-	// don't specify their own. Defaults to ~/.config/agentsdk/browser-profile
-	// (or platform equivalent). Set to empty string to use ephemeral profiles.
+	// UserDataDir is the default Chrome profile directory for sessions.
+	// Defaults to the user's Chrome profile directory if it exists,
+	// giving access to existing cookies, logins, and consent state.
+	// Set to empty string to use ephemeral profiles.
+	// Note: Chrome locks its profile — if Chrome is already running,
+	// the session will use a copy or fail. chromedp handles this gracefully.
 	UserDataDir string
 }
 
@@ -113,22 +116,32 @@ func WithUserDataDir(dir string) Option {
 	return func(c *Config) { c.UserDataDir = dir }
 }
 
-// defaultUserDataDir returns the platform-appropriate persistent profile path.
+// defaultUserDataDir returns the user's Chrome profile directory if it exists.
 func defaultUserDataDir() string {
-	var base string
+	var candidates []string
 	switch runtime.GOOS {
 	case "darwin":
 		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, "Library", "Application Support", "agentsdk")
+		candidates = []string{
+			filepath.Join(home, "Library", "Application Support", "Google", "Chrome"),
+			filepath.Join(home, "Library", "Application Support", "Chromium"),
+		}
 	case "windows":
-		base = filepath.Join(os.Getenv("LOCALAPPDATA"), "agentsdk")
+		candidates = []string{
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "User Data"),
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "User Data"),
+		}
 	default: // linux, freebsd, etc.
-		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-			base = filepath.Join(xdg, "agentsdk")
-		} else {
-			home, _ := os.UserHomeDir()
-			base = filepath.Join(home, ".config", "agentsdk")
+		home, _ := os.UserHomeDir()
+		candidates = []string{
+			filepath.Join(home, ".config", "google-chrome"),
+			filepath.Join(home, ".config", "chromium"),
 		}
 	}
-	return filepath.Join(base, "browser-profile")
+	for _, dir := range candidates {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	return "" // no Chrome profile found, use ephemeral
 }
