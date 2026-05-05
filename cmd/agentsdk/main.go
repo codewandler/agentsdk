@@ -647,6 +647,7 @@ func uniqueModelSelections(selections []adapterconfig.UseCaseModelSelection) []a
 func discoverCmd() *cobra.Command {
 	var localOnly bool
 	var jsonOutput bool
+	var treeOutput bool
 	cmd := &cobra.Command{
 		Use:           "discover [path]",
 		Short:         "Discover agent resources without running them",
@@ -674,11 +675,15 @@ func discoverCmd() *cobra.Command {
 			if jsonOutput {
 				return printDiscoveryJSON(cmd.OutOrStdout(), resolved)
 			}
+			if treeOutput {
+				return printDiscoveryTree(cmd.OutOrStdout(), resolved)
+			}
 			return printDiscovery(cmd.OutOrStdout(), resolved)
 		},
 	}
 	cmd.Flags().BoolVar(&localOnly, "local", false, "Only inspect the specified workspace/path")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print machine-readable discovery output")
+	cmd.Flags().BoolVar(&treeOutput, "tree", false, "Print origin-grouped resource tree")
 	return cmd
 }
 
@@ -908,6 +913,120 @@ func printDiscovery(out discoveryWriter, resolved agentdir.Resolution) error {
 	}
 	for _, diag := range diagnostics {
 		fmt.Fprintf(out, "  %s  %s  %s\n", diag.Severity, diag.Source.Label(), diag.Message)
+	}
+	return nil
+}
+
+func printDiscoveryTree(out io.Writer, resolved agentdir.Resolution) error {
+	imported, err := app.New(app.WithResourceBundle(resolved.Bundle))
+	if err != nil {
+		return err
+	}
+	idx := imported.ResourceIndex()
+	if idx == nil {
+		fmt.Fprintln(out, "(no resources)")
+		return nil
+	}
+	all := idx.All()
+	if len(all) == 0 {
+		fmt.Fprintln(out, "(no resources)")
+		return nil
+	}
+
+	// Group by origin:namespace → kind → name.
+	type originKey struct {
+		Origin    string
+		Namespace string
+	}
+	type kindEntry struct {
+		names []string
+	}
+	origins := map[originKey]map[string]*kindEntry{}
+	var originOrder []originKey
+	for _, rid := range all {
+		key := originKey{Origin: rid.Origin, Namespace: rid.Namespace.String()}
+		if _, ok := origins[key]; !ok {
+			origins[key] = map[string]*kindEntry{}
+			originOrder = append(originOrder, key)
+		}
+		kinds := origins[key]
+		if kinds[rid.Kind] == nil {
+			kinds[rid.Kind] = &kindEntry{}
+		}
+		kinds[rid.Kind].names = append(kinds[rid.Kind].names, rid.Name)
+	}
+
+	// Sort origins and render.
+	sort.Slice(originOrder, func(i, j int) bool {
+		if originOrder[i].Origin != originOrder[j].Origin {
+			return originOrder[i].Origin < originOrder[j].Origin
+		}
+		return originOrder[i].Namespace < originOrder[j].Namespace
+	})
+
+	kindOrder := []string{"agent", "command", "workflow", "action", "skill", "datasource", "trigger", "tool", "hook"}
+
+	// Build a resolver to show resolution results.
+	resolver := resource.NewResolver(resource.ResolverConfig{Index: idx})
+
+	for i, key := range originOrder {
+		if i > 0 {
+			fmt.Fprintln(out)
+		}
+		label := key.Origin
+		if key.Namespace != "" {
+			label += ":" + key.Namespace
+		}
+		fmt.Fprintf(out, "%s\n", label)
+		kinds := origins[key]
+		for _, kind := range kindOrder {
+			entry, ok := kinds[kind]
+			if !ok {
+				continue
+			}
+			sort.Strings(entry.names)
+			fmt.Fprintf(out, "├── %ss\n", kind)
+			for j, name := range entry.names {
+				connector := "│   ├── "
+				if j == len(entry.names)-1 {
+					connector = "│   └── "
+				}
+				// Check for shadows.
+				candidates := idx.Lookup(kind, name)
+				shadow := ""
+				if len(candidates) > 1 {
+					resolved, resolveErr := resolver.Resolve(kind, name)
+					if resolveErr == nil && resolved.Origin != key.Origin {
+						shadow = fmt.Sprintf(" ⚠ shadowed by %s", resolved.Address())
+					} else if resolveErr == nil && resolved.Origin == key.Origin {
+						// This origin wins.
+						for _, c := range candidates {
+							if c.Origin != key.Origin {
+								shadow = fmt.Sprintf(" ⚠ shadows %s", c.Address())
+								break
+							}
+						}
+					}
+				}
+				fmt.Fprintf(out, "%s%s%s\n", connector, name, shadow)
+			}
+		}
+	}
+
+	// Resolution summary.
+	fmt.Fprintf(out, "\nResolution:\n")
+	seen := map[string]bool{}
+	for _, rid := range all {
+		if seen[rid.Kind+":"+rid.Name] {
+			continue
+		}
+		seen[rid.Kind+":"+rid.Name] = true
+		resolved, resolveErr := resolver.Resolve(rid.Kind, rid.Name)
+		if resolveErr != nil {
+			fmt.Fprintf(out, "  %-20s ⚠ %s\n", rid.Name, resolveErr)
+		} else {
+			fmt.Fprintf(out, "  %-20s → %s\n", rid.Name, resolved.Address())
+		}
 	}
 	return nil
 }
