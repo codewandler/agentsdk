@@ -427,6 +427,8 @@ func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[s
 	if s == nil || s.App == nil {
 		return command.Result{}, fmt.Errorf("harness: app is required")
 	}
+	// Resolve qualified command references (e.g. "engineer:commit" → "commit").
+	path = s.resolveCommandPath(path)
 	commands, err := s.Commands()
 	if err != nil {
 		return command.Result{}, err
@@ -434,6 +436,37 @@ func (s *Session) ExecuteCommand(ctx context.Context, path []string, input map[s
 	result, err := commands.ExecuteMap(ctx, path, input)
 	s.publish(SessionEvent{Type: SessionEventCommand, CommandPath: append([]string(nil), path...), CommandResult: result, Error: err})
 	return result, err
+}
+
+// resolveCommandPath checks if the first path segment contains a ":" qualifier
+// and resolves it via the session's Resolver. If resolution succeeds, the
+// qualified reference is replaced with the resolved resource name.
+func (s *Session) resolveCommandPath(path []string) []string {
+	if len(path) == 0 || s.Resolver == nil {
+		return path
+	}
+	first := path[0]
+	// Strip leading "/" from slash-commands.
+	ref := strings.TrimPrefix(first, "/")
+	if !strings.Contains(ref, ":") {
+		return path
+	}
+	resolved, err := s.Resolver.Resolve("command", ref)
+	if err != nil {
+		// Resolution failed — pass through unmodified and let the
+		// command registry produce its normal error.
+		return path
+	}
+	// Replace the qualified reference with the resolved name,
+	// preserving the leading "/" if present.
+	prefix := ""
+	if strings.HasPrefix(first, "/") {
+		prefix = "/"
+	}
+	out := make([]string, len(path))
+	copy(out, path)
+	out[0] = prefix + resolved.Name
+	return out
 }
 
 func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, input any, opts ...workflow.ExecuteOption) action.Result {

@@ -16,6 +16,7 @@ import (
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/plugins/plannerplugin"
+	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/runnertest"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/thread"
@@ -884,6 +885,37 @@ func TestSessionExecuteCommandReportsInvalidPathAndUnknownRoot(t *testing.T) {
 	var unknown command.ErrUnknown
 	require.ErrorAs(t, err, &unknown)
 	require.Equal(t, "missing", unknown.Name)
+}
+
+func TestResolveCommandPathQualifiedRef(t *testing.T) {
+	idx := resource.NewResourceIndex()
+	idx.Add(resource.ResourceID{Kind: "command", Origin: "agentsdk", Namespace: resource.NewNamespace("engineer"), Name: "commit"})
+	idx.Add(resource.ResourceID{Kind: "command", Origin: "local", Namespace: resource.NewNamespace("my-app"), Name: "deploy"})
+
+	session := &Session{
+		Resolver: resource.NewResolver(resource.ResolverConfig{Index: idx}),
+	}
+
+	// Qualified ref resolves to the name.
+	path := session.resolveCommandPath([]string{"agentsdk:engineer:commit"})
+	require.Equal(t, []string{"commit"}, path)
+
+	// With leading slash.
+	path = session.resolveCommandPath([]string{"/agentsdk:commit"})
+	require.Equal(t, []string{"/commit"}, path)
+
+	// Unqualified ref passes through.
+	path = session.resolveCommandPath([]string{"session", "info"})
+	require.Equal(t, []string{"session", "info"}, path)
+
+	// Unknown qualified ref passes through.
+	path = session.resolveCommandPath([]string{"unknown:missing"})
+	require.Equal(t, []string{"unknown:missing"}, path)
+
+	// Nil resolver passes through.
+	nilSession := &Session{}
+	path = nilSession.resolveCommandPath([]string{"agentsdk:commit"})
+	require.Equal(t, []string{"agentsdk:commit"}, path)
 }
 
 func TestServiceOpenListResumeAndCloseSessions(t *testing.T) {
