@@ -12,6 +12,14 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- **`plugins/browserplugin`** — Browser automation via Chrome DevTools Protocol.
+  Single `browser` tool with batched operations (oneOf discriminated union):
+  open, navigate, click, type, select, read, screenshot, evaluate, wait, scroll,
+  hover, pdf, back, forward, close. Includes context provider that injects
+  interactable page elements into agent context. Core operations are registered
+  as `action.Action` for reuse in YAML workflows.
+- **`agentsdk dev` auto-loads browser plugin** — no `--plugin browser` flag
+  needed. The browser tool is always available to the engineer agent.
 - **`agentsdk dev` subcommand** — runs the embedded engineer agent with the
   current working directory as a discovery root. Supports all standard flags
   (model, session, runtime, inference, etc.).
