@@ -6,7 +6,8 @@ import "github.com/codewandler/agentsdk/action"
 
 // OpenInput is the input for browser.open.
 type OpenInput struct {
-	Headless bool `json:"headless,omitempty"`
+	Headless    bool   `json:"headless,omitempty"`
+	UserDataDir string `json:"user_data_dir,omitempty"`
 }
 
 // OpenOutput is the output for browser.open.

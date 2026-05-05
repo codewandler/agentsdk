@@ -66,7 +66,8 @@ func (BrowserOperation) JSONSchema() *jsonschema.Schema {
 
 // OpenOp opens a new browser session.
 type OpenOp struct {
-	Headless *bool `json:"headless,omitempty" jsonschema:"description=Run browser in headless mode (default true)."`
+	Headless    *bool  `json:"headless,omitempty" jsonschema:"description=Run browser in headless mode (default true)."`
+	UserDataDir string `json:"user_data_dir,omitempty" jsonschema:"description=Chrome profile directory to persist cookies/state across sessions. When set cookies accepted once stay accepted."`
 }
 
 // NavigateOp navigates to a URL.
@@ -204,7 +205,10 @@ func (p *Plugin) dispatchToAction(session *Session, op BrowserOperation) action.
 		if op.Open.Headless != nil {
 			headless = *op.Open.Headless
 		}
-		out, err := p.executeOpen(nil, OpenInput{Headless: headless})
+		out, err := p.executeOpen(nil, OpenInput{
+			Headless:    headless,
+			UserDataDir: op.Open.UserDataDir,
+		})
 		if err != nil {
 			return action.Failed(err)
 		}

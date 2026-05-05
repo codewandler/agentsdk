@@ -10,7 +10,10 @@ import (
 )
 
 func (p *Plugin) executeOpen(_ action.Ctx, input OpenInput) (OpenOutput, error) {
-	sess, err := p.sessions.Create(input.Headless)
+	sess, err := p.sessions.Create(CreateOpts{
+		Headless:    input.Headless,
+		UserDataDir: input.UserDataDir,
+	})
 	if err != nil {
 		return OpenOutput{}, err
 	}

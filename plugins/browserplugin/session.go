@@ -65,11 +65,12 @@ func NewSessionManager(cfg Config) *SessionManager {
 	return m
 }
 
-// Resolve returns the session for the given ID, or creates one if the first
-// operation is an open. Returns an error if neither condition is met.
+// Resolve returns the session for the given ID, or nil if the first operation
+// is open (the open action will create the session). Returns an error if
+// neither condition is met.
 func (m *SessionManager) Resolve(sessionID string, hasOpen bool) (*Session, error) {
 	if hasOpen && sessionID == "" {
-		return m.Create(m.config.Headless)
+		return nil, nil // open action will create the session
 	}
 	if sessionID == "" {
 		return nil, fmt.Errorf("session_id required or first operation must be open")
@@ -77,8 +78,14 @@ func (m *SessionManager) Resolve(sessionID string, hasOpen bool) (*Session, erro
 	return m.Get(sessionID)
 }
 
+// CreateOpts holds options for creating a new session.
+type CreateOpts struct {
+	Headless    bool
+	UserDataDir string
+}
+
 // Create launches or attaches a new browser session.
-func (m *SessionManager) Create(headless bool) (*Session, error) {
+func (m *SessionManager) Create(opts CreateOpts) (*Session, error) {
 	m.mu.Lock()
 	if m.config.MaxSessions > 0 && len(m.sessions) >= m.config.MaxSessions {
 		m.mu.Unlock()
@@ -99,8 +106,8 @@ func (m *SessionManager) Create(headless bool) (*Session, error) {
 		allocCtx, allocCancel = chromedp.NewRemoteAllocator(context.Background(), m.config.RemoteURL)
 
 	default: // ModeLaunch
-		opts := append(chromedp.DefaultExecAllocatorOptions[:],
-			chromedp.Flag("headless", headless),
+		chromeOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.Flag("headless", opts.Headless),
 			chromedp.Flag("disable-gpu", true),
 			chromedp.Flag("no-first-run", true),
 			chromedp.Flag("disable-extensions", true),
@@ -109,12 +116,15 @@ func (m *SessionManager) Create(headless bool) (*Session, error) {
 			chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"),
 			chromedp.WindowSize(1280, 720),
 		)
-		if m.config.ChromePath != "" {
-			opts = append(opts, chromedp.ExecPath(m.config.ChromePath))
-		} else if envPath := os.Getenv("CHROME_PATH"); envPath != "" {
-			opts = append(opts, chromedp.ExecPath(envPath))
+		if opts.UserDataDir != "" {
+			chromeOpts = append(chromeOpts, chromedp.UserDataDir(opts.UserDataDir))
 		}
-		allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
+		if m.config.ChromePath != "" {
+			chromeOpts = append(chromeOpts, chromedp.ExecPath(m.config.ChromePath))
+		} else if envPath := os.Getenv("CHROME_PATH"); envPath != "" {
+			chromeOpts = append(chromeOpts, chromedp.ExecPath(envPath))
+		}
+		allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), chromeOpts...)
 	}
 
 	browserCtx, browserStop := chromedp.NewContext(allocCtx)
