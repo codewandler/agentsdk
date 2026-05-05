@@ -6,6 +6,7 @@ import (
 
 	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/tool"
+	"github.com/invopop/jsonschema"
 )
 
 // ── Tool-level parameter types ────────────────────────────────────────────────
@@ -18,18 +19,48 @@ type BrowserParams struct {
 
 // BrowserOperation is a discriminated union — exactly one field must be set.
 type BrowserOperation struct {
-	Open       *OpenOp       `json:"open,omitempty"       jsonschema:"description=Open a new browser session."`
-	Navigate   *NavigateOp   `json:"navigate,omitempty"   jsonschema:"description=Navigate to a URL."`
-	Click      *ClickOp      `json:"click,omitempty"      jsonschema:"description=Click an element."`
-	Type       *TypeOp       `json:"type,omitempty"       jsonschema:"description=Type text into an element."`
-	Select     *SelectOp     `json:"select,omitempty"     jsonschema:"description=Select option(s) in a select element."`
-	Read       *ReadOp       `json:"read,omitempty"       jsonschema:"description=Read text content from the page or an element."`
-	Screenshot *ScreenshotOp `json:"screenshot,omitempty" jsonschema:"description=Take a screenshot of the page or an element."`
-	Evaluate   *EvaluateOp   `json:"evaluate,omitempty"   jsonschema:"description=Execute JavaScript in the page context."`
-	Wait       *WaitOp       `json:"wait,omitempty"       jsonschema:"description=Wait for an element or condition."`
-	Back       *BackOp       `json:"back,omitempty"       jsonschema:"description=Navigate back in history."`
-	Forward    *ForwardOp    `json:"forward,omitempty"    jsonschema:"description=Navigate forward in history."`
-	Close      *CloseOp      `json:"close,omitempty"      jsonschema:"description=Close the browser session."`
+	Open       *OpenOp       `json:"open,omitempty"`
+	Navigate   *NavigateOp   `json:"navigate,omitempty"`
+	Click      *ClickOp      `json:"click,omitempty"`
+	Type       *TypeOp       `json:"type,omitempty"`
+	Select     *SelectOp     `json:"select,omitempty"`
+	Read       *ReadOp       `json:"read,omitempty"`
+	Screenshot *ScreenshotOp `json:"screenshot,omitempty"`
+	Evaluate   *EvaluateOp   `json:"evaluate,omitempty"`
+	Wait       *WaitOp       `json:"wait,omitempty"`
+	Back       *BackOp       `json:"back,omitempty"`
+	Forward    *ForwardOp    `json:"forward,omitempty"`
+	Close      *CloseOp      `json:"close,omitempty"`
+}
+
+// JSONSchema returns a oneOf discriminated union schema for BrowserOperation.
+func (BrowserOperation) JSONSchema() *jsonschema.Schema {
+	makeVariant := func(key string, inner *jsonschema.Schema) *jsonschema.Schema {
+		props := jsonschema.NewProperties()
+		props.Set(key, inner)
+		return &jsonschema.Schema{
+			Type:                 "object",
+			Properties:           props,
+			Required:             []string{key},
+			AdditionalProperties: jsonschema.FalseSchema,
+		}
+	}
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			makeVariant("open", tool.SchemaFor[OpenOp]()),
+			makeVariant("navigate", tool.SchemaFor[NavigateOp]()),
+			makeVariant("click", tool.SchemaFor[ClickOp]()),
+			makeVariant("type", tool.SchemaFor[TypeOp]()),
+			makeVariant("select", tool.SchemaFor[SelectOp]()),
+			makeVariant("read", tool.SchemaFor[ReadOp]()),
+			makeVariant("screenshot", tool.SchemaFor[ScreenshotOp]()),
+			makeVariant("evaluate", tool.SchemaFor[EvaluateOp]()),
+			makeVariant("wait", tool.SchemaFor[WaitOp]()),
+			makeVariant("back", tool.SchemaFor[BackOp]()),
+			makeVariant("forward", tool.SchemaFor[ForwardOp]()),
+			makeVariant("close", tool.SchemaFor[CloseOp]()),
+		},
+	}
 }
 
 // ── Operation structs ─────────────────────────────────────────────────────────
