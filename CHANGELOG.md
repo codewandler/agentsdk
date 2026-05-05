@@ -27,6 +27,25 @@ match these entries as the project starts publishing releases.
 - `apps/engineer.Spec()` and `apps/builder.Spec()` — each first-party app now
   owns its own `app.Spec`, including embedded resources, default agent, plugin
   wiring, and CLI metadata.
+- **`resource.ResourceID`** — structured resource identity with `Kind`,
+  `Origin`, `Namespace`, and `Name`. Canonical address format:
+  `origin:namespace:name`. Supports suffix-based resolution matching.
+- **`resource.Namespace`** — typed wrapper over `[]string` segments with
+  suffix matching, append, and `"/"`-joined `String()` rendering.
+- **`resource.ResourceIndex`** — O(1) name-based lookup via
+  `map[string][]ResourceID` with kind filtering and ref-based resolution.
+- **`resource.Resolver`** — resolves user-typed references using aliases,
+  a resolved cache, index lookup, and pluggable `ResolverPolicy`.
+- **`resource.PrecedencePolicy`** — resolves ambiguity by origin precedence
+  (default: explicit > local > user > embedded).
+- **`resource.ErrorPolicy`** — always errors on ambiguity with candidate list.
+- **`RID` field** on all contribution types (`ToolContribution`,
+  `SkillContribution`, `WorkflowContribution`, etc.) for structured identity.
+- **`resource.DeriveResourceID`** — derives `ResourceID` from `SourceRef`,
+  kind, and name. Wired into `agentdir.LoadFSWithSource` to stamp all
+  contributions automatically.
+- **`app.App.ResourceIndex()`** — exposes the index of all registered
+  resources for use by resolvers and discovery commands.
 
 ### Changed
 
