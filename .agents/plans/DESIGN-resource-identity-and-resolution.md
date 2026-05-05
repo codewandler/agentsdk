@@ -16,184 +16,297 @@ are dumped into a flat namespace. Name collisions are handled by first-wins
 
 ## Design
 
-### Canonical ID
+### Resource ID
 
-Every resource gets a canonical ID encoding its origin:
+Every resource has a structured identity:
+
+```go
+type ResourceID struct {
+    Kind      string   // "command", "agent", "workflow", "skill", "action"
+    Origin    string   // opaque origin token assigned by the loader
+    Namespace []string // origin-local namespace path
+    Name      string   // leaf resource name
+}
+```
+
+`Kind` is metadata — it scopes resolution but is not part of the user-facing
+address. Users never type the kind; it's inferred from context (`/commit` is
+a command, `--agent main` is an agent).
+
+The **canonical address** (what users can type to disambiguate) is:
 
 ```
-<origin>:<namespace>:<kind>:<name>
+<origin>:<namespace[0]>:<namespace[1]>:...:<name>
 ```
-
-Segments:
-
-| Segment | Examples | Source |
-|---|---|---|
-| origin | `agentsdk`, `local`, `github`, `user` | Derived from SourceRef ecosystem/scope |
-| namespace | `engineer`, `my-app`, `user/repo:skills` | Derived from app name, project dir, repo path |
-| kind | `command`, `agent`, `workflow`, `skill`, `action` | Resource type |
-| name | `commit`, `main`, `deploy` | Resource name |
 
 Examples:
 
 ```
-agentsdk:engineer:command:commit       ← embedded in engineer app
-local:my-app:command:commit            ← .agents/commands/commit.md in project
-github:acme/tools:command:lint         ← remote repo contribution
-user:global:agent:reviewer             ← ~/.agents/agents/reviewer.md
+agentsdk:engineer:commit       ← embedded in engineer app
+local:my-app:commit            ← .agents/commands/commit.md in project
+github.com:acme/tools:lint     ← remote repo contribution
+user:global:reviewer           ← ~/.agents/agents/reviewer.md
 ```
+
+### Origin
+
+Origin is an opaque token assigned by the loader that produced the resource.
+It identifies *how* the resource was loaded, not where it lives.
+
+| Load mechanism | Origin |
+|---|---|
+| Embedded in app binary | app name (e.g. `agentsdk`) |
+| Local filesystem `.agents/` | `local` |
+| `~/.agents/` or `~/.claude/` | `user` |
+| Explicit `--resource` flag or config ref | loader-assigned (e.g. `github.com`) |
+| Custom protocol | loader-assigned (e.g. `tcp+myproto`) |
+
+Origin is always a single token (no `:` inside it). The boundary between
+origin and namespace is unambiguous.
+
+### Namespace
+
+`Namespace []string` is the origin-local path that scopes the resource.
+What populates it depends on the origin:
+
+| Origin | Namespace source | Example |
+|---|---|---|
+| `agentsdk` | App name from `app.Spec.Name` | `["engineer"]` |
+| `local` | Project directory basename | `["my-app"]` |
+| `user` | Fixed | `["global"]` |
+| `github.com` | Repo path | `["acme/tools"]` |
+| Plugin | Plugin name | `["gitplugin"]` |
 
 ### Resolution
 
-User-facing references omit `kind` (it's implied by context — `/commit` is
-always a command, agent selection is always an agent).
+Resolution is always scoped by kind (you never resolve across kinds).
+Input: `(kind, ref)` where `ref` is what the user typed.
 
-Resolution path: **suffix match** on `origin:namespace:name`, walking from
-right (name) to left (origin).
+Resolution path: **suffix match** on the canonical address.
 
 ```
 /commit                → all commands named "commit" across all origins
-/engineer:commit       → commands named "commit" in namespace "engineer"
+/engineer:commit       → commands where namespace+name suffix matches
 /agentsdk:engineer:commit → fully qualified
-/local:commit          → commands named "commit" from local scope
+/local:commit          → commands from origin "local" named "commit"
 ```
 
 Resolution rules:
 
-1. Collect all resources matching the suffix
-2. If exactly one → use it
-3. If multiple and no scope precedence configured → error with qualified suggestions
-4. If scope precedence is configured → apply precedence (see below)
+1. Check aliases → if match, rewrite ref, continue
+2. Collect all resources of matching kind whose canonical address ends with ref
+3. If exactly one → use it
+4. If multiple → apply resolver policy
 
-### Scope Precedence
+### Resolver Policy
 
-Default precedence (closest wins):
+Resolution of ambiguous names is controlled by a pluggable `ResolverPolicy`:
+
+```go
+type ResolverPolicy interface {
+    Resolve(kind string, ref string, candidates []ResourceID) (ResourceID, error)
+}
+```
+
+Built-in policies:
+
+| Policy | Behavior |
+|---|---|
+| `PrecedencePolicy` | Pick by origin precedence order; default |
+| `ErrorPolicy` | Always error on ambiguity with candidate list |
+| `AskPolicy` | Prompt the user to choose; optionally persist choice as alias |
+
+#### Default Precedence
+
+The default `PrecedencePolicy` uses explicitness as the axis — more
+specific/explicit wins:
 
 ```
-local > user > remote > embedded
+alias > explicit-load > local > user > embedded
 ```
 
-When `/commit` matches both `local:my-app:command:commit` and
-`agentsdk:engineer:command:commit`, the local one wins silently.
+- **alias**: configured rewrite, always wins
+- **explicit-load**: `--resource` flag or config file reference
+- **local**: project `.agents/` directory
+- **user**: `~/.agents/` or `~/.claude/`
+- **embedded**: shipped with the app binary
 
-This can be overridden per-app via aliases (see below).
+When `/commit` matches both `local:my-app:commit` and
+`agentsdk:engineer:commit`, the local one wins because `local` has higher
+precedence than `embedded`. The original is still reachable via
+`/agentsdk:engineer:commit`.
+
+Precedence order is configurable per-app.
+
+#### Ask Policy
+
+Interactive hosts (REPL, TUI) can use `AskPolicy`:
+
+```
+? Multiple commands match "commit":
+  1. local:my-app:commit
+  2. agentsdk:engineer:commit
+  Choose [1-2], or 'r' to remember choice: _
+```
+
+Choosing 'r' persists the selection as an alias in the app's resolution
+config, so the question is never asked again.
 
 ### Aliases
 
 App configuration can define aliases that rewrite resolution:
 
 ```yaml
-aliases:
-  # Short name → canonical ID prefix
-  commit: local:commit                    # always prefer local commit
-  deploy: github:ops-team/deploy:deploy   # pin to specific origin
-  gc: agentsdk:engineer:commit            # short alias for long path
-  
-  # Wildcard: all unqualified commands prefer local
-  "*": local:*
+resolution:
+  aliases:
+    commit: local:commit                    # always prefer local
+    deploy: github.com:ops-team/deploy:deploy
+    gc: agentsdk:engineer:commit            # short alias
 ```
 
-Aliases are checked before suffix resolution. An alias maps a user-facing
-name to a canonical ID prefix, bypassing the normal resolution walk.
+Aliases are checked first, before suffix matching. An alias maps a
+user-facing name to a canonical address prefix.
 
-### Override Semantics
+### Override and Extension
 
 With canonical IDs + precedence, override is natural:
 
-- User defines `.agents/commands/commit.md` → gets ID `local:my-app:command:commit`
-- Engineer app has `agentsdk:engineer:command:commit`
-- `/commit` resolves to local (precedence: local > embedded)
+- User defines `.agents/commands/commit.md` → ID `local:my-app:commit`
+- Engineer app has `agentsdk:engineer:commit`
+- `/commit` resolves to local (precedence)
 - `/agentsdk:engineer:commit` still reaches the original
-- Workflow steps can reference either by canonical ID
 
-### Extension
-
-A local command can reference the base command it extends:
+Extension via `extends`:
 
 ```markdown
 ---
 name: commit
-extends: agentsdk:engineer:command:commit
+extends: agentsdk:engineer:commit
 ---
 Additional commit rules on top of the base.
 ```
 
-The `extends` field is a canonical ID reference. The runtime merges the
-extended resource's content/config with the local overrides. Exact merge
-semantics are resource-type-specific (e.g. system prompt concatenation for
-agents, step prepend/append for workflows).
+The `extends` field is a canonical address. The runtime merges the extended
+resource's content with the local overrides. Merge semantics are
+resource-type-specific (e.g. system prompt concatenation for agents, step
+append for workflows).
+
+### Discovery Tree
+
+`agentsdk discover` renders the resolution as a tree grouped by origin:
+
+```
+agentsdk:engineer (embedded)
+├── agents
+│   └── main
+├── commands
+│   ├── commit
+│   └── review
+└── skills
+    ├── architecture
+    └── code-review
+
+local:my-project (.agents)
+├── agents
+│   └── main  ⚠ shadows agentsdk:engineer:main
+├── commands
+│   └── deploy
+└── skills
+    └── go
+
+user:global (~/.agents)
+└── commands
+    └── scratch
+
+Resolution:
+  main     → local:my-project:main (local > embedded)
+  commit   → agentsdk:engineer:commit
+  deploy   → local:my-project:deploy
+  review   → agentsdk:engineer:review
+  scratch  → user:global:scratch
+```
 
 ## Implementation Layers
 
-### 1. `resource.QualifiedName`
+### 1. `resource.ResourceID`
 
 ```go
-type QualifiedName struct {
-    Origin    string // "agentsdk", "local", "github", "user"
-    Namespace string // "engineer", "my-app", "user/repo"
-    Kind      string // "command", "agent", "workflow", etc.
-    Name      string // "commit", "main", "deploy"
+type ResourceID struct {
+    Kind      string   // "command", "agent", "workflow", "skill", "action"
+    Origin    string   // opaque loader token, no ":" allowed
+    Namespace []string // origin-local namespace path
+    Name      string   // leaf name
 }
 
-func (q QualifiedName) String() string // "agentsdk:engineer:command:commit"
-func (q QualifiedName) MatchesSuffix(suffix string) bool
+func (r ResourceID) Address() string    // "agentsdk:engineer:commit"
+func (r ResourceID) MatchesSuffix(ref string) bool
 ```
 
 ### 2. `resource.ContributionBundle` changes
 
-Each contribution type gains a `QualifiedName` field alongside the existing
+Each contribution type gains a `ResourceID` field alongside the existing
 `Name string`. The `Name` field remains for backward compatibility; the
-`QualifiedName` is populated during loading from `SourceRef` context.
+`ResourceID` is populated during loading from `SourceRef` context.
 
 ### 3. `app.App` registration
 
-Registration uses `QualifiedName` as the primary key. The existing `Name`
+Registration uses `ResourceID` as the primary key. The existing `Name`
 becomes a shortcut index for unqualified lookup. Duplicate short names are
-allowed (stored as a list); resolution picks based on precedence or errors
-on ambiguity.
+allowed (stored as a list); resolution picks via policy.
 
-### 4. Resolution service
+### 4. Resolver
 
 ```go
 type Resolver struct {
-    precedence []string           // ["local", "user", "remote", "embedded"]
-    aliases    map[string]string   // user-facing name → canonical prefix
+    policy  ResolverPolicy
+    aliases map[string]string  // user-facing name → canonical address prefix
 }
 
-func (r *Resolver) Resolve(kind, ref string) (QualifiedName, error)
+func (r *Resolver) Resolve(kind, ref string, all []ResourceID) (ResourceID, error)
 ```
 
-### 5. SourceRef → QualifiedName derivation
+Hosts inject their preferred policy. CLI uses `PrecedencePolicy` by default,
+REPL can use `AskPolicy`.
+
+### 5. SourceRef → ResourceID derivation
 
 `SourceRef` already has `Ecosystem`, `Scope`, `Root`, `Path`. The mapping:
 
-| SourceRef field | QualifiedName segment |
+| SourceRef field | ResourceID field |
 |---|---|
-| Scope=embedded, app name known | origin="agentsdk", namespace=app name |
-| Scope=project | origin="local", namespace=project dir basename |
-| Scope=user | origin="user", namespace="global" |
-| Ecosystem="github" | origin="github", namespace=repo path |
+| Scope=embedded + app name | Origin=app name, Namespace=[app spec name] |
+| Scope=project | Origin="local", Namespace=[dir basename] |
+| Scope=user | Origin="user", Namespace=["global"] |
+| Ecosystem="github" | Origin="github.com", Namespace=[repo path] |
+| Plugin contribution | Origin=plugin origin, Namespace=[plugin name] |
 
 ### 6. App configuration
 
 ```yaml
-# In agentsdk.app.json or app config YAML
 resolution:
-  precedence: [local, user, remote, embedded]
+  precedence: [alias, explicit, local, user, embedded]
   aliases:
     commit: local:commit
-    deploy: github:ops-team/deploy:deploy
+    deploy: github.com:ops-team/deploy:deploy
 ```
 
 ## Migration
 
-- Existing apps with no collisions: zero change, unqualified names resolve as before
-- Existing apps with collisions: behavior changes from first-wins to precedence-based
-- New `QualifiedName` fields are additive; `Name` string stays for backward compat
+- Existing apps with no collisions: zero change, unqualified names resolve
+  as before (single candidate, no policy needed)
+- Existing apps with collisions: behavior changes from first-wins/error to
+  policy-based resolution (default: precedence)
+- New `ResourceID` fields are additive; `Name` string stays for compat
 - Aliases are opt-in configuration
+- Custom resolver policies are opt-in for library consumers
 
 ## Open Questions
 
 - Should `extends` be a first-class concept or handled per-resource-type?
 - Should wildcard aliases (`"*": local:*`) be supported or is explicit-only safer?
-- How does this interact with plugin-contributed resources? Plugin name as namespace?
-- Should the resolution service be on `app.App` or a standalone component?
+- How does this interact with plugin-contributed resources? Plugin name as
+  namespace segment, but what origin? The app that loaded the plugin?
+- Should the resolver be on `app.App` or a standalone component injected
+  via `app.Option`?
+- How are persisted alias choices stored? In `agentsdk.app.json`? In a
+  separate `.agentsdk/resolution.yaml`?
