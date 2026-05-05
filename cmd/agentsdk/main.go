@@ -921,16 +921,22 @@ func printDiscoveryTree(out io.Writer, resolved agentdir.Resolution) error {
 	if err != nil {
 		return err
 	}
+
+	// Sources.
+	fmt.Fprintln(out, "Sources:")
+	if len(resolved.Sources) == 0 {
+		fmt.Fprintln(out, "  (none)")
+	}
+	for _, source := range resolved.Sources {
+		fmt.Fprintf(out, "  %s\n", source)
+	}
+
 	idx := imported.ResourceIndex()
-	if idx == nil {
-		fmt.Fprintln(out, "(no resources)")
+	if idx == nil || idx.Len() == 0 {
+		fmt.Fprintln(out, "\n(no resources)")
 		return nil
 	}
 	all := idx.All()
-	if len(all) == 0 {
-		fmt.Fprintln(out, "(no resources)")
-		return nil
-	}
 
 	// Group by origin:namespace → kind → name.
 	type originKey struct {
@@ -1025,6 +1031,15 @@ func printDiscoveryTree(out io.Writer, resolved agentdir.Resolution) error {
 			fmt.Fprintf(out, "  %-20s ⚠ %s\n", rid.Name, resolveErr)
 		} else {
 			fmt.Fprintf(out, "  %-20s → %s\n", rid.Name, resolved.Address())
+		}
+	}
+
+	// Diagnostics.
+	diagnostics := imported.Diagnostics()
+	if len(diagnostics) > 0 {
+		fmt.Fprintf(out, "\nDiagnostics:\n")
+		for _, diag := range diagnostics {
+			fmt.Fprintf(out, "  %s  %s\n", diag.Severity, diag.Message)
 		}
 	}
 	return nil
