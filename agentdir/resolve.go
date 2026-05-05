@@ -256,7 +256,7 @@ func (r *Resolution) UpdateAgentSpec(name string, update func(*agentconfig.Spec)
 }
 
 func resolveManifest(dir string, manifestPath string, manifest AppManifest, opts ResolveOptions) (Resolution, error) {
-	out := Resolution{Manifest: &manifest, DefaultAgent: manifest.DefaultAgent, Sources: []string{manifestPath}}
+	out := Resolution{Manifest: &manifest, DefaultAgent: manifest.DefaultAgent}
 	if policy, ok, err := manifest.ModelPolicy.AgentPolicy(dir); err != nil {
 		return Resolution{}, err
 	} else if ok {
@@ -377,7 +377,13 @@ func appendResolvedBundle(out *Resolution, source string, bundle resource.Contri
 	}
 	out.Bundle.Append(bundle)
 	if bundleHasResources(bundle) {
-		out.Sources = append(out.Sources, source)
+		// Use the bundle's resolved root path as the source, not the
+		// raw URI. This ensures sources are actual agentdir roots.
+		root := bundle.Source.Root
+		if root == "" {
+			root = source
+		}
+		out.Sources = append(out.Sources, root)
 	}
 }
 
