@@ -116,8 +116,12 @@ func (m *SessionManager) Create(opts CreateOpts) (*Session, error) {
 			chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"),
 			chromedp.WindowSize(1280, 720),
 		)
-		if opts.UserDataDir != "" {
-			chromeOpts = append(chromeOpts, chromedp.UserDataDir(opts.UserDataDir))
+		userDataDir := opts.UserDataDir
+		if userDataDir == "" {
+			userDataDir = m.config.UserDataDir
+		}
+		if userDataDir != "" {
+			chromeOpts = append(chromeOpts, chromedp.UserDataDir(userDataDir))
 		}
 		if m.config.ChromePath != "" {
 			chromeOpts = append(chromeOpts, chromedp.ExecPath(m.config.ChromePath))

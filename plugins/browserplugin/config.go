@@ -3,7 +3,12 @@
 // context provider that renders the current page's interactable elements.
 package browserplugin
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"time"
+)
 
 // Mode determines how the plugin connects to Chrome.
 type Mode string
@@ -45,6 +50,11 @@ type Config struct {
 	// Default: 30 seconds. The wait operation uses its own timeout_ms
 	// parameter but is still capped by this value.
 	OpTimeout time.Duration
+
+	// UserDataDir is the default Chrome profile directory for sessions that
+	// don't specify their own. Defaults to ~/.config/agentsdk/browser-profile
+	// (or platform equivalent). Set to empty string to use ephemeral profiles.
+	UserDataDir string
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -55,6 +65,7 @@ func DefaultConfig() Config {
 		IdleTimeout: 10 * time.Minute,
 		MaxSessions: 3,
 		OpTimeout:   30 * time.Second,
+		UserDataDir: defaultUserDataDir(),
 	}
 }
 
@@ -94,4 +105,30 @@ func WithMaxSessions(n int) Option {
 // WithOpTimeout sets the per-operation timeout.
 func WithOpTimeout(d time.Duration) Option {
 	return func(c *Config) { c.OpTimeout = d }
+}
+
+// WithUserDataDir sets the default Chrome profile directory.
+// Set to empty string to use ephemeral (temp) profiles.
+func WithUserDataDir(dir string) Option {
+	return func(c *Config) { c.UserDataDir = dir }
+}
+
+// defaultUserDataDir returns the platform-appropriate persistent profile path.
+func defaultUserDataDir() string {
+	var base string
+	switch runtime.GOOS {
+	case "darwin":
+		home, _ := os.UserHomeDir()
+		base = filepath.Join(home, "Library", "Application Support", "agentsdk")
+	case "windows":
+		base = filepath.Join(os.Getenv("LOCALAPPDATA"), "agentsdk")
+	default: // linux, freebsd, etc.
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			base = filepath.Join(xdg, "agentsdk")
+		} else {
+			home, _ := os.UserHomeDir()
+			base = filepath.Join(home, ".config", "agentsdk")
+		}
+	}
+	return filepath.Join(base, "browser-profile")
 }
