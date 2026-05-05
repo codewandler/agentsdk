@@ -8,163 +8,203 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseMinimalConfig(t *testing.T) {
+func TestParseConfigKind(t *testing.T) {
 	data := []byte(`
 name: my-app
 default_agent: main
-agents:
-  main:
-    description: Main agent
-    tools: [bash, grep]
-    system: You are helpful.
+include:
+  - .agents/**/*.yaml
 `)
-	cfg, err := Parse(data, "test.yaml")
+	docs, err := parseDocuments(data, "test.yaml")
 	require.NoError(t, err)
-	require.Equal(t, "my-app", cfg.Name)
-	require.Equal(t, "main", cfg.DefaultAgent)
-	require.Len(t, cfg.Agents, 1)
-	require.Equal(t, "Main agent", cfg.Agents["main"].Description)
-	require.Equal(t, []string{"bash", "grep"}, cfg.Agents["main"].Tools)
-	require.Equal(t, "You are helpful.", cfg.Agents["main"].System)
+	require.Len(t, docs, 1)
+	require.Equal(t, KindConfig, docs[0].Kind)
 }
 
-func TestParseFullConfig(t *testing.T) {
+func TestParseMultiDocYAML(t *testing.T) {
 	data := []byte(`
+kind: config
 name: my-app
 default_agent: main
-sources:
-  - .agents
-  - ~/.agents
-agents:
-  main:
-    description: Main agent
-    model: gpt-5
-    tools: [bash]
-    system: Be helpful.
-commands:
-  deploy:
-    description: Deploy the app
-    target:
-      workflow: deploy_flow
-workflows:
-  deploy_flow:
-    description: Deployment workflow
-    steps:
-      - id: build
-        action: shell.exec
-actions:
-  notify:
-    description: Send notification
-    kind: builtin
-datasources:
-  docs:
-    description: Documentation
-    kind: corpus
-triggers:
-  hourly:
-    description: Hourly check
-    source:
-      interval: 1h
-    target:
-      workflow: deploy_flow
-resolution:
-  precedence: [local, embedded]
-  aliases:
-    deploy: local:deploy
-plugins:
-  - name: local_cli
+---
+kind: agent
+name: main
+description: Main agent
+tools: [bash, grep]
+system: You are helpful.
+---
+kind: workflow
+name: deploy
+description: Deploy workflow
 `)
-	cfg, err := Parse(data, "test.yaml")
+	docs, err := parseDocuments(data, "test.yaml")
 	require.NoError(t, err)
-	require.Equal(t, "my-app", cfg.Name)
-	require.Len(t, cfg.Sources, 2)
-	require.Len(t, cfg.Agents, 1)
-	require.Len(t, cfg.Commands, 1)
-	require.Equal(t, "deploy_flow", cfg.Commands["deploy"].Target.Workflow)
-	require.Len(t, cfg.Workflows, 1)
-	require.Len(t, cfg.Actions, 1)
-	require.Len(t, cfg.Datasources, 1)
-	require.Len(t, cfg.Triggers, 1)
-	require.NotNil(t, cfg.Resolution)
-	require.Equal(t, []string{"local", "embedded"}, cfg.Resolution.Precedence)
-	require.Equal(t, "local:deploy", cfg.Resolution.Aliases["deploy"])
-	require.Len(t, cfg.Plugins, 1)
+	require.Len(t, docs, 3)
+	require.Equal(t, KindConfig, docs[0].Kind)
+	require.Equal(t, KindAgent, docs[1].Kind)
+	require.Equal(t, KindWorkflow, docs[2].Kind)
+}
+
+func TestParseJSON(t *testing.T) {
+	data := []byte(`{"name": "json-app", "default_agent": "main"}`)
+	docs, err := parseDocuments(data, "test.json")
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	require.Equal(t, KindConfig, docs[0].Kind)
+}
+
+func TestLoadFileMultiDoc(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "agentsdk.app.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+kind: config
+name: multi-test
+default_agent: main
+---
+kind: agent
+name: main
+description: Main
+system: Be helpful.
+---
+kind: command
+name: deploy
+description: Deploy
+target:
+  workflow: deploy_flow
+---
+kind: workflow
+name: deploy_flow
+description: Deploy workflow
+`), 0o644))
+
+	result, err := LoadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "multi-test", result.Config.Name)
+	require.Equal(t, "main", result.Config.DefaultAgent)
+	require.Len(t, result.Agents, 1)
+	require.Equal(t, "main", result.Agents[0].Name)
+	require.Len(t, result.Commands, 1)
+	require.Equal(t, "deploy", result.Commands[0].Name)
+	require.Len(t, result.Workflows, 1)
+	require.Equal(t, "deploy_flow", result.Workflows[0].Name)
+}
+
+func TestLoadFileJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "agentsdk.app.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{"name": "json-test", "default_agent": "main"}`), 0o644))
+
+	result, err := LoadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "json-test", result.Config.Name)
+}
+
+func TestLoadWithIncludes(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources"), 0o755))
+
+	// Entry file with include glob.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte(`
+kind: config
+name: include-test
+default_agent: main
+include:
+  - resources/*.yaml
+`), 0o644))
+
+	// Included agent file.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agent.yaml"), []byte(`
+kind: agent
+name: main
+description: Main agent
+system: Hello.
+`), 0o644))
+
+	// Included workflow file.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "deploy.yaml"), []byte(`
+kind: workflow
+name: deploy
+description: Deploy
+`), 0o644))
+
+	// Non-YAML file should be ignored.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "README.md"), []byte("not yaml"), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	require.Equal(t, "include-test", result.Config.Name)
+	require.Len(t, result.Agents, 1)
+	require.Equal(t, "main", result.Agents[0].Name)
+	require.Len(t, result.Workflows, 1)
+	require.Equal(t, "deploy", result.Workflows[0].Name)
+}
+
+func TestFindEntryFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// No entry file.
+	_, ok := FindEntryFile(dir)
+	require.False(t, ok)
+
+	// YAML entry.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte("name: test"), 0o644))
+	path, ok := FindEntryFile(dir)
+	require.True(t, ok)
+	require.Contains(t, path, "agentsdk.app.yaml")
+}
+
+func TestToAppOptions(t *testing.T) {
+	result := LoadResult{
+		Config: Config{Name: "test", DefaultAgent: "main"},
+		Agents: []AgentDoc{{Name: "main", Description: "Main", System: "Hi"}},
+		Workflows: []WorkflowDoc{{Name: "deploy", Description: "Deploy"}},
+	}
+
+	opts := result.ToAppOptions()
+	require.NotEmpty(t, opts)
 }
 
 func TestToContributionBundle(t *testing.T) {
-	cfg := Config{
-		Name: "test-app",
-		Workflows: map[string]WorkflowConfig{
-			"deploy": {Description: "Deploy"},
-		},
-		Commands: map[string]CommandConfig{
-			"run-deploy": {
-				Description: "Run deploy",
-				Target:      &CommandTarget{Workflow: "deploy"},
-			},
-		},
-		Actions: map[string]ActionConfig{
-			"notify": {Description: "Notify", Kind: "builtin"},
-		},
-		Datasources: map[string]DatasourceConfig{
-			"docs": {Description: "Docs", Kind: "corpus"},
-		},
-		Triggers: map[string]TriggerConfig{
-			"hourly": {
-				Description: "Hourly",
-				Source:      map[string]any{"interval": "1h"},
-				Target:      map[string]any{"workflow": "deploy"},
-			},
+	result := LoadResult{
+		Config: Config{Name: "test-app"},
+		Workflows: []WorkflowDoc{{Name: "deploy", Description: "Deploy"}},
+		Commands:  []CommandDoc{{Name: "run", Description: "Run", Target: &CommandTarget{Workflow: "deploy"}}},
+		Actions:   []ActionDoc{{Name: "notify", Description: "Notify"}},
+	}
+
+	bundle := result.ToContributionBundle()
+	require.Len(t, bundle.Workflows, 1)
+	require.Equal(t, "config:test-app:deploy", bundle.Workflows[0].RID.Address())
+	require.Len(t, bundle.CommandResources, 1)
+	require.Len(t, bundle.Actions, 1)
+}
+
+func TestToAgentSpecs(t *testing.T) {
+	result := LoadResult{
+		Agents: []AgentDoc{
+			{Name: "main", Description: "Main", Model: "gpt-5", MaxSteps: 50, System: "Be helpful."},
 		},
 	}
 
-	bundle := cfg.ToContributionBundle()
-	require.Len(t, bundle.Workflows, 1)
-	require.Equal(t, "deploy", bundle.Workflows[0].Name)
-	require.Equal(t, "config:test-app:deploy", bundle.Workflows[0].RID.Address())
-
-	require.Len(t, bundle.CommandResources, 1)
-	require.Equal(t, "run-deploy", bundle.CommandResources[0].Name)
-	require.Equal(t, "config:test-app:run-deploy", bundle.CommandResources[0].RID.Address())
-
-	require.Len(t, bundle.Actions, 1)
-	require.Equal(t, "notify", bundle.Actions[0].Name)
-
-	require.Len(t, bundle.DataSources, 1)
-	require.Equal(t, "docs", bundle.DataSources[0].Name)
-
-	require.Len(t, bundle.Triggers, 1)
-	require.Equal(t, "hourly", bundle.Triggers[0].Name)
+	specs := result.ToAgentSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "main", specs[0].Name)
+	require.Equal(t, "gpt-5", specs[0].Inference.Model)
+	require.Equal(t, 50, specs[0].MaxSteps)
+	require.Equal(t, "Be helpful.", specs[0].System)
 }
 
-func TestLoadFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "app.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("name: file-test\ndefault_agent: main\n"), 0o644))
+func TestExpandVars(t *testing.T) {
+	base := "/home/user/project"
 
-	cfg, err := LoadFile(path)
-	require.NoError(t, err)
-	require.Equal(t, "file-test", cfg.Name)
-}
+	// Relative path.
+	require.Equal(t, "/home/user/project/foo/*.yaml", expandVars("foo/*.yaml", base))
 
-func TestLoadDir(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "01-base.yaml"), []byte("name: dir-test\ndefault_agent: main\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "02-workflows.yaml"), []byte("workflows:\n  deploy:\n    description: Deploy\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("not yaml"), 0o644))
+	// Absolute path stays absolute.
+	require.Equal(t, "/etc/agents/*.yaml", expandVars("/etc/agents/*.yaml", base))
 
-	cfg, err := LoadDir(dir)
-	require.NoError(t, err)
-	require.Equal(t, "dir-test", cfg.Name)
-	require.Len(t, cfg.Workflows, 1)
-}
-
-func TestMergeConfigOverlay(t *testing.T) {
-	base := Config{Name: "base", DefaultAgent: "a"}
-	overlay := Config{DefaultAgent: "b", Agents: map[string]AgentConfig{"x": {Description: "X"}}}
-
-	merged := mergeConfig(base, overlay)
-	require.Equal(t, "base", merged.Name) // overlay Name is empty, base preserved
-	require.Equal(t, "b", merged.DefaultAgent)
-	require.Len(t, merged.Agents, 1)
+	// ~ expansion.
+	result := expandVars("~/.agents/*.yaml", base)
+	require.NotContains(t, result, "~")
+	require.Contains(t, result, ".agents/*.yaml")
 }
