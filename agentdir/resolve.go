@@ -369,6 +369,12 @@ func SourceExists(fsys fs.FS, dir string) bool {
 }
 
 func appendResolvedBundle(out *Resolution, source string, bundle resource.ContributionBundle) {
+	// Preserve the first non-empty Source so the merged bundle retains
+	// provenance for resources that don't carry their own SourceRef
+	// (e.g. agentconfig.Spec).
+	if out.Bundle.Source.ID == "" && bundle.Source.ID != "" {
+		out.Bundle.Source = bundle.Source
+	}
 	out.Bundle.Append(bundle)
 	if bundleHasResources(bundle) {
 		out.Sources = append(out.Sources, source)
