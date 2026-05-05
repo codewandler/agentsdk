@@ -18,6 +18,7 @@ import (
 	"github.com/codewandler/agentsdk/agent"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/agentsdk/resource"
 	"github.com/codewandler/agentsdk/thread"
 	threadjsonlstore "github.com/codewandler/agentsdk/thread/jsonlstore"
 	"github.com/codewandler/agentsdk/trigger"
@@ -35,10 +36,11 @@ type Service struct {
 }
 
 type Session struct {
-	App    *app.App
-	Agent  *agent.Instance
-	Name   string
-	turnID int
+	App      *app.App
+	Agent    *agent.Instance
+	Name     string
+	Resolver *resource.Resolver
+	turnID   int
 
 	service         *Service
 	threadStore     thread.Store
@@ -204,7 +206,10 @@ func (s *Service) attachSession(name string, inst *agent.Instance, store thread.
 	if out == nil {
 		out = io.Discard
 	}
-	session := &Session{App: s.App, Agent: inst, Name: name, service: s, threadStore: store, storeDir: storeDir, out: out, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
+	resolver := resource.NewResolver(resource.ResolverConfig{
+		Index: s.App.ResourceIndex(),
+	})
+	session := &Session{App: s.App, Agent: inst, Name: name, Resolver: resolver, service: s, threadStore: store, storeDir: storeDir, out: out, subs: map[int]chan SessionEvent{}, workflowCancels: map[workflow.RunID]context.CancelFunc{}}
 	inst.AddCompactionEventHandler(func(event agent.CompactionEvent) {
 		session.publish(SessionEvent{Type: SessionEventCompaction, CompactionEvent: event})
 	})
