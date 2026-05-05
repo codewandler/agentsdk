@@ -167,7 +167,7 @@ resolution:
 Aliases are checked first, before suffix matching. An alias maps a
 user-facing name to a canonical address prefix.
 
-### Override and Extension
+### Override
 
 With canonical IDs + precedence, override is natural:
 
@@ -175,21 +175,6 @@ With canonical IDs + precedence, override is natural:
 - Engineer app has `agentsdk:engineer:commit`
 - `/commit` resolves to local (precedence)
 - `/agentsdk:engineer:commit` still reaches the original
-
-Extension via `extends`:
-
-```markdown
----
-name: commit
-extends: agentsdk:engineer:commit
----
-Additional commit rules on top of the base.
-```
-
-The `extends` field is a canonical address. The runtime merges the extended
-resource's content with the local overrides. Merge semantics are
-resource-type-specific (e.g. system prompt concatenation for agents, step
-append for workflows).
 
 ### Discovery Tree
 
@@ -302,7 +287,6 @@ resolution:
 
 ## Open Questions
 
-- Should `extends` be a first-class concept or handled per-resource-type?
 - Should wildcard aliases (`"*": local:*`) be supported or is explicit-only safer?
 - How does this interact with plugin-contributed resources? Plugin name as
   namespace segment, but what origin? The app that loaded the plugin?
