@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
@@ -123,7 +124,7 @@ func applyOptions(opts []Option) Options {
 }
 
 type basicToolCtx struct {
-	context.Context
+	action.BaseCtx
 	workDir   string
 	agentID   string
 	sessionID string

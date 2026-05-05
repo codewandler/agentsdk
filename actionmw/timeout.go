@@ -41,8 +41,12 @@ func (m *TimeoutMiddleware) OnContext(ctx action.Ctx, state action.CallState) (a
 	if dur <= 0 {
 		return ctx, nil
 	}
-	newCtx, cancel := context.WithTimeout(ctx, dur)
-	return newCtx, cancel
+	deadlineCtx, cancel := context.WithTimeout(ctx, dur)
+	wrapped := action.NewCtx(deadlineCtx,
+		action.WithOutput(ctx.Output()),
+		action.WithEmit(ctx.Emit),
+	)
+	return wrapped, cancel
 }
 
 func (m *TimeoutMiddleware) OnResult(_ action.Ctx, _ action.Action, _ any, result action.Result, state action.CallState) action.Result {

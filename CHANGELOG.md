@@ -12,6 +12,26 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- **`action.Ctx` streaming** — `action.Ctx` now exposes `Output() io.Writer`
+  for streaming unstructured output and `Emit(event)` for dispatching structured
+  events (e.g. `action.StatusEvent`, `action.OutputEvent`) during execution.
+  All execution units — actions, tools, commands, workflow steps — can produce
+  incremental output through these methods.
+- **`action.NewCtx`** — constructor with functional options (`WithOutput`,
+  `WithEmit`) for building contexts with streaming support.
+- **`action.BaseCtx`** — embeddable struct providing no-op defaults for
+  `Output()` and `Emit()`, simplifying test stubs and simple context types.
+- **`action.OutputEvent`**, **`action.StatusEvent`** — structured event types
+  for streaming output chunks and progress/status updates.
+
+### Changed
+
+- **`action.Ctx` interface** — now requires `Output() io.Writer` and
+  `Emit(event)` methods. Existing implementations must add these methods or
+  embed `action.BaseCtx`.
+- **`runtime.ToolContext`** — supports `WithToolOutput` and `WithToolEmit`
+  options for wiring streaming into tool execution contexts.
+
 - **`app.Spec`** — new type that declares a first-party application's identity
   (name, description) and a deferred `Options` factory that returns
   `[]app.Option`.

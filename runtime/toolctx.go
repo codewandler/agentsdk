@@ -2,14 +2,18 @@ package runtime
 
 import (
 	"context"
+	"io"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/skill"
 	"github.com/codewandler/agentsdk/toolactivation"
 )
 
 type ToolContext struct {
 	context.Context
+	output    io.Writer
+	emit      func(action.Event)
 	workDir   string
 	agentID   string
 	sessionID string
@@ -52,6 +56,16 @@ func WithToolExtra(key string, value any) ToolContextOption {
 	}
 }
 
+// WithToolOutput sets the streaming output writer for tool execution.
+func WithToolOutput(w io.Writer) ToolContextOption {
+	return func(c *ToolContext) { c.output = w }
+}
+
+// WithToolEmit sets the event emitter for tool execution.
+func WithToolEmit(fn func(action.Event)) ToolContextOption {
+	return func(c *ToolContext) { c.emit = fn }
+}
+
 func WithToolActivation(state toolactivation.State) ToolContextOption {
 	return WithToolExtra(toolactivation.ContextKey, state)
 }
@@ -70,6 +84,19 @@ func (c *ToolContext) Extra() map[string]any {
 		c.extra = map[string]any{}
 	}
 	return c.extra
+}
+
+func (c *ToolContext) Output() io.Writer {
+	if c.output == nil {
+		return io.Discard
+	}
+	return c.output
+}
+
+func (c *ToolContext) Emit(event action.Event) {
+	if c.emit != nil {
+		c.emit(event)
+	}
 }
 
 func (c *ToolContext) Deadline() (time.Time, bool) {

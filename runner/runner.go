@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/llmadapter/unified"
@@ -59,7 +60,7 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 	options := applyOptions(opts)
 	if options.ToolCtx == nil {
 		options.ToolCtx = &basicToolCtx{
-			Context:   ctx,
+			BaseCtx:   action.BaseCtx{Context: ctx},
 			sessionID: history.SessionID(),
 			extra:     map[string]any{},
 		}

@@ -1,15 +1,28 @@
 // Package action provides surface-neutral Go-native executable primitives.
 package action
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // Ctx is the execution context passed to actions.
 //
-// It intentionally starts as only context.Context. Runtime, workflow, tool, or
-// command-specific values can be layered on later through context values or
-// narrower adapter interfaces without making action depend on those packages.
+// It extends context.Context with streaming output and structured event
+// emission so that any execution unit (action, tool, command, workflow step)
+// can produce incremental output during execution.
 type Ctx interface {
 	context.Context
+
+	// Output returns a writer for streaming unstructured output during
+	// execution. The returned writer is never nil; when no output sink is
+	// configured it returns io.Discard.
+	Output() io.Writer
+
+	// Emit dispatches a structured event during execution. Events flow
+	// through the runtime's event system to presentation layers, persistence,
+	// or other observers. Typical payloads include OutputEvent and StatusEvent.
+	Emit(event Event)
 }
 
 // Event is an action-emitted event payload.

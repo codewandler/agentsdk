@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codewandler/agentsdk/action"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -123,7 +124,7 @@ func textFromParts(parts []unified.ContentPart) string {
 
 func withContext(base tool.Ctx, ctx context.Context) tool.Ctx {
 	if base == nil {
-		return &basicToolCtx{Context: ctx, extra: map[string]any{}}
+		return &basicToolCtx{BaseCtx: action.BaseCtx{Context: ctx}, extra: map[string]any{}}
 	}
 	return tool.WrapCtx(base, ctx)
 }

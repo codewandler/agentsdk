@@ -489,7 +489,7 @@ func (s *Session) ExecuteWorkflow(ctx context.Context, workflowName string, inpu
 	}
 	workflowName = s.resolveResourceName("workflow", workflowName)
 	execOpts, recorder := s.workflowExecutionOptions(workflowName, input, opts)
-	result := s.App.ExecuteWorkflow(ctx, workflowName, input, execOpts...)
+	result := s.App.ExecuteWorkflow(action.NewCtx(ctx), workflowName, input, execOpts...)
 	if recorder != nil {
 		result.Error = errors.Join(result.Error, recorder.Err())
 	}

@@ -499,10 +499,15 @@ func (e Executor) executeStep(ctx action.Ctx, def Definition, step Step, initial
 	var last action.Result
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		stepCtx := context.Context(ctx)
+		stepCtx := action.Ctx(ctx)
 		cancel := func() {}
 		if step.Timeout > 0 {
-			stepCtx, cancel = context.WithTimeout(stepCtx, step.Timeout)
+			deadlineCtx, deadlineCancel := context.WithTimeout(ctx, step.Timeout)
+			stepCtx = action.NewCtx(deadlineCtx,
+				action.WithOutput(ctx.Output()),
+				action.WithEmit(ctx.Emit),
+			)
+			cancel = deadlineCancel
 		}
 		emit(StepStarted{RunID: runID, WorkflowName: def.Name, StepID: step.ID, ActionName: step.Action.Name, ActionVersion: step.Action.Version, Attempt: attempt, IdempotencyKey: step.IdempotencyKey, At: now()})
 		last = a.Execute(stepCtx, stepInput)

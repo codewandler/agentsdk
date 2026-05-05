@@ -36,7 +36,7 @@ func TestNewTypedExecutesAndInfersTypes(t *testing.T) {
 	require.NotNil(t, spec.Input.Schema)
 	require.NotNil(t, spec.Output.Schema)
 
-	result := a.Execute(context.Background(), typedInput{Name: "Ada", Age: 42})
+	result := a.Execute(NewCtx(context.Background()), typedInput{Name: "Ada", Age: 42})
 	require.NoError(t, result.Error)
 	require.Equal(t, typedOutput{Greeting: "hello Ada"}, result.Data)
 }
@@ -47,7 +47,7 @@ func TestNewTypedMapsHandlerErrorToResult(t *testing.T) {
 		return typedOutput{}, want
 	})
 
-	result := a.Execute(context.Background(), typedInput{Name: "Ada"})
+	result := a.Execute(NewCtx(context.Background()), typedInput{Name: "Ada"})
 	require.ErrorIs(t, result.Error, want)
 	require.Nil(t, result.Data)
 }
@@ -57,7 +57,7 @@ func TestNewTypedInvalidInputReturnsResultError(t *testing.T) {
 		return typedOutput{}, nil
 	})
 
-	result := a.Execute(context.Background(), "not input")
+	result := a.Execute(NewCtx(context.Background()), "not input")
 	require.Error(t, result.Error)
 	var invalid ErrInvalidInput
 	require.ErrorAs(t, result.Error, &invalid)
@@ -118,7 +118,7 @@ func TestHandlerMiddlewareWrapsExecution(t *testing.T) {
 		}
 	}))
 
-	result := wrapped.Execute(context.Background(), nil)
+	result := wrapped.Execute(NewCtx(context.Background()), nil)
 	require.Equal(t, "base", result.Data)
 	require.Equal(t, []Event{"wrapped"}, result.Events)
 }
@@ -133,7 +133,7 @@ func TestHooksMiddlewarePhases(t *testing.T) {
 	wrapped := Apply(a, HooksMiddleware(&testHooks{cleaned: &cleaned}))
 	require.Equal(t, "wrapped", wrapped.Spec().Name)
 
-	result := wrapped.Execute(context.Background(), "original")
+	result := wrapped.Execute(NewCtx(context.Background()), "original")
 	require.Equal(t, "base wrapped", result.Data)
 	require.Equal(t, []Event{"input", "result"}, result.Events)
 	require.True(t, cleaned)
@@ -146,7 +146,7 @@ func TestHooksMiddlewareShortCircuit(t *testing.T) {
 	})
 
 	wrapped := Apply(a, HooksMiddleware(&shortCircuitHooks{}))
-	result := wrapped.Execute(context.Background(), "original")
+	result := wrapped.Execute(NewCtx(context.Background()), "original")
 	require.Equal(t, "denied observed", result.Data)
 }
 
@@ -233,7 +233,7 @@ func TestExtractIntentFromActionProviderAndMiddleware(t *testing.T) {
 	base := intentAction{Action: New(Spec{Name: "read_file"}, func(Ctx, any) Result { return Result{} })}
 	wrapped := Apply(base, HooksMiddleware(&intentAmendingHooks{}))
 
-	intent := ExtractIntent(wrapped, context.Background(), "input")
+	intent := ExtractIntent(wrapped, NewCtx(context.Background()), "input")
 	require.Equal(t, "read_file", intent.Action)
 	require.Equal(t, "filesystem_read", intent.Class)
 	require.Equal(t, []string{"filesystem_read", "audited"}, intent.Behaviors)
@@ -242,7 +242,7 @@ func TestExtractIntentFromActionProviderAndMiddleware(t *testing.T) {
 
 func TestExtractIntentOpaqueFallback(t *testing.T) {
 	a := New(Spec{Name: "unknown"}, func(Ctx, any) Result { return Result{} })
-	intent := ExtractIntent(a, context.Background(), nil)
+	intent := ExtractIntent(a, NewCtx(context.Background()), nil)
 	require.Equal(t, "unknown", intent.Action)
 	require.Equal(t, "unknown", intent.Class)
 	require.True(t, intent.Opaque)
