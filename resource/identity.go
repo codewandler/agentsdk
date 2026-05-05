@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -209,20 +210,21 @@ func DeriveOrigin(source SourceRef) string {
 	}
 }
 
-// DeriveNamespace returns the namespace for a SourceRef. For project scope,
-// it uses the basename of the root directory. For user scope, it returns
-// "global". For embedded scope, it uses the root path. For other scopes,
-// it uses the root path cleaned of leading dots and separators.
+// DeriveNamespace returns the namespace for a SourceRef.
+//
+// For project scope, the namespace is the project name derived from (in order):
+//  1. Go module name (last path segment of module path in go.mod)
+//  2. Parent directory name (directory containing the agentdir root)
+//
+// For user scope, returns "global".
+// For embedded scope, uses the root path stripped of leading dots.
+// For other scopes, uses the root path.
 func DeriveNamespace(source SourceRef) Namespace {
 	switch source.Scope {
 	case ScopeUser:
 		return NewNamespace("global")
 	case ScopeProject:
-		base := filepath.Base(source.Root)
-		if base == "." || base == "/" || base == "" {
-			return NewNamespace()
-		}
-		return NewNamespace(base)
+		return NewNamespace(deriveProjectName(source.Root))
 	case ScopeEmbedded:
 		root := strings.TrimPrefix(source.Root, ".")
 		root = strings.TrimPrefix(root, "/")
@@ -236,6 +238,50 @@ func DeriveNamespace(source SourceRef) Namespace {
 		}
 		return NewNamespace()
 	}
+}
+
+// deriveProjectName determines the project name from an agentdir root path.
+// It walks up from the agentdir root to find a go.mod, then falls back to
+// the parent directory name.
+func deriveProjectName(agentdirRoot string) string {
+	// The agentdir root is e.g. /home/user/myproject/.agents.
+	// The project dir is the parent.
+	projectDir := filepath.Dir(agentdirRoot)
+	if projectDir == "." || projectDir == "/" || projectDir == "" {
+		projectDir = agentdirRoot
+	}
+
+	// Try go.mod in the project dir.
+	if name := goModuleName(projectDir); name != "" {
+		return name
+	}
+
+	// Fall back to directory basename.
+	base := filepath.Base(projectDir)
+	if base == "." || base == "/" || base == "" {
+		return filepath.Base(agentdirRoot)
+	}
+	return base
+}
+
+// goModuleName reads go.mod from dir and returns the last segment of the
+// module path, or "" if no go.mod exists.
+func goModuleName(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			mod := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+			if i := strings.LastIndex(mod, "/"); i >= 0 {
+				return mod[i+1:]
+			}
+			return mod
+		}
+	}
+	return ""
 }
 
 // DeriveResourceID builds a ResourceID from a SourceRef, kind, and name.

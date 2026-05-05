@@ -646,8 +646,7 @@ func uniqueModelSelections(selections []adapterconfig.UseCaseModelSelection) []a
 
 func discoverCmd() *cobra.Command {
 	var localOnly bool
-	var jsonOutput bool
-	var treeOutput bool
+	var outputFormat string
 	cmd := &cobra.Command{
 		Use:           "discover [path]",
 		Short:         "Discover agent resources without running them",
@@ -672,18 +671,18 @@ func discoverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if jsonOutput {
+			switch outputFormat {
+			case "json":
 				return printDiscoveryJSON(cmd.OutOrStdout(), resolved)
-			}
-			if treeOutput {
+			case "yaml":
+				return printDiscoveryYAML(cmd.OutOrStdout(), resolved)
+			default:
 				return printDiscoveryTree(cmd.OutOrStdout(), resolved)
 			}
-			return printDiscovery(cmd.OutOrStdout(), resolved)
 		},
 	}
 	cmd.Flags().BoolVar(&localOnly, "local", false, "Only inspect the specified workspace/path")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print machine-readable discovery output")
-	cmd.Flags().BoolVar(&treeOutput, "tree", false, "Print origin-grouped resource tree")
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pretty", "Output format: pretty|json|yaml")
 	return cmd
 }
 
@@ -1077,6 +1076,25 @@ func printDiscoveryJSON(out discoveryWriter, resolved agentdir.Resolution) error
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
+}
+
+func printDiscoveryYAML(out discoveryWriter, resolved agentdir.Resolution) error {
+	imported, err := app.New(app.WithResourceBundle(resolved.Bundle))
+	if err != nil {
+		return err
+	}
+	payload := buildDiscoveryOutput(resolved, imported)
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	var shaped any
+	if err := yaml.Unmarshal(raw, &shaped); err != nil {
+		return err
+	}
+	enc := yaml.NewEncoder(out)
+	enc.SetIndent(2)
+	return enc.Encode(shaped)
 }
 
 func buildDiscoveryOutput(resolved agentdir.Resolution, imported *app.App) discoveryOutput {

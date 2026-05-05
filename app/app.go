@@ -592,6 +592,7 @@ func (a *App) registerResourceBundle(bundle resource.ContributionBundle) error {
 		if err := a.registerCommandFromSource(cmd, bundle.Source); err != nil {
 			return err
 		}
+		a.resourceIndex.Add(resource.DeriveResourceID(bundle.Source, "command", cmd.Descriptor().Name))
 	}
 	for _, spec := range bundle.AgentSpecs {
 		if err := a.registerAgentSpec(spec); err != nil {

@@ -174,7 +174,7 @@ func TestDeriveNamespace(t *testing.T) {
 		want   string
 	}{
 		{"user scope", SourceRef{Scope: ScopeUser, Root: "/home/user/.agents"}, "global"},
-		{"project scope", SourceRef{Scope: ScopeProject, Root: "/home/user/projects/my-app/.agents"}, ".agents"},
+		{"project scope parent dir", SourceRef{Scope: ScopeProject, Root: "/home/user/projects/my-app/.agents"}, "my-app"},
 		{"embedded scope", SourceRef{Scope: ScopeEmbedded, Root: "resources"}, "resources"},
 		{"embedded dot-agents", SourceRef{Scope: ScopeEmbedded, Root: ".agents"}, "agents"},
 		{"remote scope", SourceRef{Scope: ScopeRemote, Root: "github.com/acme/tools"}, "github.com/acme/tools"},
@@ -191,5 +191,5 @@ func TestDeriveResourceID(t *testing.T) {
 	require.Equal(t, "command", id.Kind)
 	require.Equal(t, "local", id.Origin)
 	require.Equal(t, "commit", id.Name)
-	require.Equal(t, "local:.agents:commit", id.Address())
+	require.Equal(t, "local:my-app:commit", id.Address())
 }
