@@ -20,6 +20,7 @@ tools:
   - web_search
   - vision
   - phone
+  - browser
   - skill
 commands: [review, design, deploy]
 capabilities: [planner]
