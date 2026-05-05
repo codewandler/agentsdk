@@ -171,6 +171,9 @@ func Actions(cfg Config) []action.Action {
 		action.NewTyped(action.Spec{Name: "builder_write_project_file", Description: "Write one file under the current project directory with path-safety checks."}, func(ctx action.Ctx, input WriteProjectFileInput) (WriteProjectFileOutput, error) {
 			return WriteProjectFile(ctx, cfg, input)
 		}),
+		action.NewTyped(action.Spec{Name: "builder_validate_target", Description: "Validate the current project for structural correctness: manifest, agents, skills, workflows, commands. Returns checks with passed/warning/error status."}, func(ctx action.Ctx, input ValidateTargetInput) (agentdir.ValidationResult, error) {
+			return ValidateTarget(ctx, cfg, input)
+		}),
 	}
 }
 
@@ -349,12 +352,54 @@ func ScaffoldResourceApp(ctx context.Context, cfg Config, input ScaffoldResource
 	if description == "" {
 		description = "Generated agentsdk resource app."
 	}
+	manifest := `{
+  "default_agent": "main",
+  "discovery": {
+    "include_global_user_resources": true,
+    "include_external_ecosystems": false,
+    "allow_remote": false
+  },
+  "sources": [".agents"]
+}
+`
+	// Quote description for safe YAML embedding.
+	safeDesc := strings.ReplaceAll(description, `"`, `\"`)
+	agentSpec := fmt.Sprintf(`---
+name: main
+description: "%s"
+tools:
+  - bash
+  - file_read
+  - file_write
+  - file_edit
+  - file_stat
+  - file_delete
+  - grep
+  - glob
+  - dir_tree
+  - dir_list
+  - git_status
+  - git_diff
+  - git_add
+  - git_commit
+  - web_fetch
+  - web_search
+  - skill
+  - tools_*
+capabilities: [planner]
+max-steps: 100
+---
+You are the main assistant for %s.
+
+%s
+`, safeDesc, name, description)
+
+	readme := fmt.Sprintf("# %s\n\n%s\n\n## Run\n\n```bash\nagentsdk validate .\nagentsdk run .\n```\n", name, description)
+
 	files := map[string]string{
-		"agentsdk.app.json":             "{\n  \"sources\": [\".agents\"]\n}\n",
-		"README.md":                     "# " + name + "\n\n" + description + "\n\n## Run\n\n```bash\nagentsdk discover --local .\nagentsdk run .\n```\n",
-		".agents/agents/main.md":        "---\nname: main\ndescription: " + description + "\n---\nYou are the main assistant for " + name + ".\n",
-		".agents/workflows/verify.yaml": "name: verify_app\ndescription: Verify the generated app.\nsteps:\n  - id: echo\n    action: echo\n",
-		".agents/actions/echo.yaml":     "name: echo\ndescription: Placeholder generated action.\nkind: placeholder\n",
+		"agentsdk.app.json":      manifest,
+		"README.md":              readme,
+		".agents/agents/main.md": agentSpec,
 	}
 	out := ScaffoldResourceAppOutput{}
 	for rel, content := range files {
@@ -389,6 +434,21 @@ func WriteProjectFile(ctx context.Context, cfg Config, input WriteProjectFileInp
 	}
 	cfg, _ = NormalizeConfig(cfg)
 	return WriteProjectFileOutput{ProjectDir: cfg.ProjectDir, Path: rel, Bytes: len([]byte(input.Content))}, nil
+}
+
+type ValidateTargetInput struct{}
+
+func ValidateTarget(ctx context.Context, cfg Config, _ ValidateTargetInput) (agentdir.ValidationResult, error) {
+	cfg, err := NormalizeConfig(cfg)
+	if err != nil {
+		return agentdir.ValidationResult{}, err
+	}
+	select {
+	case <-ctx.Done():
+		return agentdir.ValidationResult{}, ctx.Err()
+	default:
+	}
+	return agentdir.Validate(cfg.ProjectDir, agentdir.ValidateOptions{})
 }
 
 func writeUnderProject(ctx context.Context, cfg Config, rel string, content string, overwrite bool) (string, error) {

@@ -47,6 +47,7 @@ func TestBuilderAppOptionsExposeActionsAndProjectContext(t *testing.T) {
 		names = append(names, a.Spec().Name)
 	}
 	require.Contains(t, names, "builder_inspect_project")
+	require.Contains(t, names, "builder_validate_target")
 
 	// Verify the full tool catalog includes filesystem, shell, git, and web tools.
 	catalog := loaded.ToolCatalog()
@@ -74,6 +75,7 @@ func TestBuilderAppOptionsExposeActionsAndProjectContext(t *testing.T) {
 	require.Contains(t, catalogNames, "tools_list")
 	require.Contains(t, catalogNames, "builder_inspect_project")
 	require.Contains(t, catalogNames, "builder_discover_target")
+	require.Contains(t, catalogNames, "builder_validate_target")
 }
 
 func TestBuilderHelpersInspectDiscoverAndSmokeTarget(t *testing.T) {
@@ -95,6 +97,34 @@ func TestBuilderHelpersInspectDiscoverAndSmokeTarget(t *testing.T) {
 	require.Contains(t, smoke.Checks, SmokeCheck{Name: "discover target app", Status: "passed"})
 }
 
+func TestValidateTargetReportsStructuralIssues(t *testing.T) {
+	dir := t.TempDir()
+	// Manifest with no sources, agent with no frontmatter — should produce errors.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"name":"broken"}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".agents", "agents", "main.md"), []byte("# No frontmatter\nJust prose."), 0o644))
+
+	result, err := ValidateTarget(context.Background(), Config{ProjectDir: dir}, ValidateTargetInput{})
+	require.NoError(t, err)
+	require.False(t, result.OK())
+	require.True(t, result.Manifest.Found)
+	require.Empty(t, result.Manifest.Sources)
+	require.Len(t, result.Agents, 1)
+	require.False(t, result.Agents[0].HasFrontmatter)
+}
+
+func TestValidateTargetPassesValidApp(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"default_agent":"main","sources":[".agents"]}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".agents", "agents", "main.md"), []byte("---\nname: main\ndescription: Test\ntools: [bash]\n---\nSystem prompt."), 0o644))
+
+	result, err := ValidateTarget(context.Background(), Config{ProjectDir: dir}, ValidateTargetInput{})
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Equal(t, "main", result.Manifest.DefaultAgent)
+}
+
 func TestWriteProjectFileRejectsEscapes(t *testing.T) {
 	dir := t.TempDir()
 	_, err := WriteProjectFile(context.Background(), Config{ProjectDir: dir}, WriteProjectFileInput{Path: "../escape.txt", Content: "bad"})
@@ -103,6 +133,32 @@ func TestWriteProjectFileRejectsEscapes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "docs/ok.md", out.Path)
 	require.FileExists(t, filepath.Join(dir, "docs", "ok.md"))
+}
+
+func TestScaffoldProducesValidApp(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{ProjectDir: dir}
+	out, err := ScaffoldResourceApp(context.Background(), cfg, ScaffoldResourceAppInput{
+		Name:        "test-app",
+		Description: "A test application",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, out.Files)
+	require.Contains(t, out.Files, "agentsdk.app.json")
+	require.Contains(t, out.Files, ".agents/agents/main.md")
+	require.Contains(t, out.Files, "README.md")
+
+	// The scaffolded app must pass validation with zero errors.
+	// Use agentdir.Validate directly with a fake HomeDir to isolate from global resources.
+	result, valErr := agentdir.Validate(dir, agentdir.ValidateOptions{HomeDir: t.TempDir()})
+	require.NoError(t, valErr)
+	require.True(t, result.OK(), "scaffold produced validation errors: %+v", result.Checks)
+	require.Equal(t, "main", result.Manifest.DefaultAgent)
+	require.Equal(t, []string{".agents"}, result.Manifest.Sources)
+	require.Len(t, result.Agents, 1)
+	require.True(t, result.Agents[0].HasFrontmatter)
+	require.NotEmpty(t, result.Agents[0].Tools)
+	require.NotEmpty(t, result.Agents[0].Capabilities)
 }
 
 func TestBuilderCLILoadsEmbeddedResourcesWithProjectWorkspace(t *testing.T) {
