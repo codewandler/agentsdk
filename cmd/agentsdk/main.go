@@ -23,7 +23,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	builderapp "github.com/codewandler/agentsdk/apps/builder"
 	engineerapp "github.com/codewandler/agentsdk/apps/engineer"
-	"github.com/codewandler/agentsdk/plugins/browserplugin"
+	"github.com/codewandler/agentsdk/apps/runapp"
 	"github.com/codewandler/agentsdk/command"
 	"github.com/codewandler/agentsdk/daemon"
 	"github.com/codewandler/agentsdk/resource"
@@ -59,16 +59,12 @@ func rootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(cli.NewCommand(cli.CommandConfig{
-		Name:         "agentsdk",
-		Use:          "run [task]",
-		Short:        "Run an agent resource bundle",
-		DiscoverFlag: true,
-		AgentFlag:    true,
-	}))
-	cmd.AddCommand(devCmd())
+	cli.Mount(cmd,
+		runapp.Spec(),
+		engineerapp.Spec(),
+		builderapp.Spec(),
+	)
 	cmd.AddCommand(serveCmd())
-	cmd.AddCommand(buildCmd())
 	cmd.AddCommand(discoverCmd())
 	cmd.AddCommand(validateCmd())
 	cmd.AddCommand(modelsCmd())
@@ -76,61 +72,7 @@ func rootCmd() *cobra.Command {
 	return cmd
 }
 
-func devCmd() *cobra.Command {
-	return cli.NewCommand(cli.CommandConfig{
-		Name:             "agentsdk",
-		Use:              "dev [task]",
-		Short:            "Run the first-party engineer agent with project discovery",
-		Long:             "Run the embedded engineer agent (apps/engineer) with the current working directory as a discovery root. Additional roots can be added with -d/--discover.",
-		DiscoverFlag:     true,
-		AgentFlag:        true,
-		EmbeddedBase:     engineerapp.Resources(),
-		EmbeddedBaseRoot: engineerapp.ResourcesRoot,
-		DefaultAgent:     "main",
-		AppOptions:       devAppOptions(),
-	})
-}
 
-func devAppOptions() []app.Option {
-	return []app.Option{
-		app.WithPlugin(browserplugin.New()),
-	}
-}
-
-func buildCmd() *cobra.Command {
-	return cli.NewCommand(cli.CommandConfig{
-		Name:             "agentsdk",
-		Use:              "build [task]",
-		Short:            "Start the first-party agentsdk builder app",
-		Long:             "Run the embedded builder agent with the current working directory as the project under construction. The builder uses only its own embedded resources and does not load the target project's .agents directory.",
-		DiscoverFlag:     true,
-		AgentFlag:        true,
-		EmbeddedBase:     builderapp.Resources(),
-		EmbeddedBaseRoot: builderapp.ResourcesRoot,
-		EmbeddedOnly:     true,
-		DefaultAgent:     "builder",
-		NoDefaultPlugins: true,
-		Prompt:           "builder> ",
-		AppOptions:       builderAppOptions(),
-	})
-}
-
-func builderAppOptions() []app.Option {
-	workspace, err := os.Getwd()
-	if err != nil {
-		return nil
-	}
-	workspace, _ = filepath.Abs(workspace)
-	builderCfg, err := builderapp.NormalizeConfig(builderapp.Config{ProjectDir: workspace})
-	if err != nil {
-		return nil
-	}
-	appOpts, err := builderapp.AppOptions(builderCfg)
-	if err != nil {
-		return nil
-	}
-	return appOpts
-}
 
 func serveCmd() *cobra.Command {
 	var (

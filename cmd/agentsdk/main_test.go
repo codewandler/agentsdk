@@ -101,7 +101,7 @@ func TestBuildCommandStartsEmbeddedBuilderFromWorkingDirectory(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	text := out.String()
-	require.Contains(t, text, "builder> ")
+	require.Contains(t, text, "build> ")
 }
 
 func TestDiscoverPrintsResourcesAndDisabledSuggestions(t *testing.T) {

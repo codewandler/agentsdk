@@ -58,10 +58,11 @@ type CommandConfig struct {
 	ModelCompleter ModelCompleter
 	Profile        Profile
 
-	NoDefaultPlugins bool
-	AgentOptions    []agent.Option
-	AppOptions      []app.Option
-	PluginFactory   app.PluginFactory
+	NoDefaultPlugins  bool
+	AgentOptions      []agent.Option
+	AppOptions        []app.Option
+	AppOptionsFactory func() ([]app.Option, error)
+	PluginFactory     app.PluginFactory
 
 	In  io.Reader
 	Out io.Writer
@@ -192,6 +193,15 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				flags.Changed("temperature") ||
 				flags.Changed("thinking") ||
 				flags.Changed("effort")
+			// Resolve deferred app options from factory.
+			appOpts := append([]app.Option(nil), cfg.AppOptions...)
+			if cfg.AppOptionsFactory != nil {
+				extra, factoryErr := cfg.AppOptionsFactory()
+				if factoryErr != nil {
+					return factoryErr
+				}
+				appOpts = append(appOpts, extra...)
+			}
 			runCfg := Config{
 				Resources:          resources,
 				AgentName:          agentName,
@@ -216,7 +226,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				DebugMessage:       debugMessage,
 				Prompt:             cfg.Prompt,
 				AgentOptions:       append([]agent.Option(nil), cfg.AgentOptions...),
-				AppOptions:         append([]app.Option(nil), cfg.AppOptions...),
+				AppOptions:         appOpts,
 				PluginNames:        append([]string(nil), pluginNames...),
 				NoDefaultPlugins:   noDefaultPlugins,
 				PluginFactory:      cfg.PluginFactory,

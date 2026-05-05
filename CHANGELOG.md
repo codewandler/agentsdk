@@ -12,6 +12,26 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- **`app.Spec`** — new type that declares a first-party application's identity
+  (name, description), pre-construction settings (embedded resources, plugin
+  defaults), and a deferred `Options` factory that returns `[]app.Option`.
+- **`cli.Mount`** — registers one or more `app.Spec` values as cobra
+  subcommands with the full standard flag surface. Prompt is derived
+  automatically as `$name> `.
+- **`apps/runapp`** — new package exporting `Spec()` for the default `run`
+  application, completing the three-app model (`run`, `dev`, `build`).
+- `apps/engineer.Spec()` and `apps/builder.Spec()` — each first-party app now
+  owns its own `app.Spec`, including embedded resources, default agent, plugin
+  wiring, and CLI metadata.
+
+### Changed
+
+- **`agentsdk build` prompt** changed from `builder> ` to `build> ` to match
+  the command name consistently.
+- First-party app wiring (`devCmd`, `buildCmd`, `devAppOptions`,
+  `builderAppOptions`) moved out of `cmd/agentsdk/main.go` into the respective
+  app packages. `main.go` now uses `cli.Mount` with three `app.Spec` values.
+
 - **`plugins/browserplugin`** — Browser automation via Chrome DevTools Protocol.
   Single `browser` tool with batched operations (oneOf discriminated union):
   open, navigate, click, type, select, read, screenshot, evaluate, wait, scroll,
