@@ -146,18 +146,6 @@ type PluginRef struct {
 	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
-// LoadResult holds all parsed documents from the entry file and its includes.
-type LoadResult struct {
-	Config     Config
-	Agents     []AgentDoc
-	Commands   []CommandDoc
-	Workflows  []WorkflowDoc
-	Actions    []ActionDoc
-	Datasources []DatasourceDoc
-	Triggers   []TriggerDoc
-	EntryPath  string
-}
-
 // FindEntryFile searches dir for a known entry file name.
 func FindEntryFile(dir string) (string, bool) {
 	for _, name := range EntryFileNames {
@@ -169,19 +157,22 @@ func FindEntryFile(dir string) (string, bool) {
 	return "", false
 }
 
-// Load finds the entry file in dir, parses it and all includes, and returns
-// the merged LoadResult.
+// Load finds the entry file in dir and loads it with all includes.
 func Load(dir string) (LoadResult, error) {
-	path, ok := FindEntryFile(dir)
-	if !ok {
-		return LoadResult{}, fmt.Errorf("appconfig: no entry file found in %s (tried %s)", dir, strings.Join(EntryFileNames, ", "))
-	}
-	return LoadFile(path)
+	return NewLoader().Load(WithWorkDir(dir), WithoutUserConfig())
 }
 
-// LoadFile parses the entry file and all its includes using the Loader.
+// LoadFile loads a specific config file with all its includes.
 func LoadFile(path string) (LoadResult, error) {
-	return NewLoader().Load(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return LoadResult{}, err
+	}
+	return NewLoader().Load(
+		WithConfigRoots(abs),
+		WithWorkDir(filepath.Dir(abs)),
+		WithoutUserConfig(),
+	)
 }
 
 // ToAppOptions converts the LoadResult into []app.Option for app.New.
