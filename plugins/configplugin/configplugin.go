@@ -50,6 +50,9 @@ func (p *Plugin) Commands() []command.Command {
 		Sub("validate", command.Typed(p.validateCommand),
 			command.Description("Validate configuration structure"),
 		).
+		Sub("schema", command.Typed(schemaCommand),
+			command.Description("Show app config JSON Schema"),
+		).
 		Build()
 	if err != nil {
 		return nil
@@ -59,6 +62,7 @@ func (p *Plugin) Commands() []command.Command {
 
 type configPrintInput struct{}
 type configValidateInput struct{}
+type configSchemaInput struct{}
 
 func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Result, error) {
 	result, err := p.loadConfig()
@@ -102,6 +106,11 @@ func (p *Plugin) validateCommand(_ context.Context, _ configValidateInput) (comm
 	return command.Display(command.TextPayload{Text: b.String()}), nil
 }
 
+func schemaCommand(_ context.Context, _ configSchemaInput) (command.Result, error) {
+	schema := appconfig.GenerateJSONSchema()
+	return command.Display(ConfigSchemaPayload{Schema: schema}), nil
+}
+
 func (p *Plugin) loadConfig() (appconfig.LoadResult, error) {
 	dir := p.workspace
 	if dir == "" {
@@ -109,8 +118,6 @@ func (p *Plugin) loadConfig() (appconfig.LoadResult, error) {
 	}
 	return appconfig.Load(dir)
 }
-
-
 
 // Compile-time interface checks.
 var (

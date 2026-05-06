@@ -125,3 +125,4 @@ func TestCommandHelpPayloadSortsSubcommands(t *testing.T) {
 		"/skill refs - Refs"
 	require.Equal(t, expected, text)
 }
+
