@@ -30,6 +30,8 @@ match these entries as the project starts publishing releases.
   render real-time tool output and status in the terminal.
 - **Tool call summaries** — compact tool-start display now shows key parameters
   (path, pattern, cmd, url, etc.) per tool instead of just the tool name.
+- **Shell escape (`!`)** — typing `!<command>` in the REPL executes the command
+  directly via bash, streaming output to the terminal. No agent turn is created.
 - **`capability.ObservableRuntime`** — wraps a `capability.Runtime` with a
   `ThreadEventObserver` that fires after events are persisted. Enables
   presentation layers to observe all persisted thread events (capability

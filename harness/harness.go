@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -90,6 +91,7 @@ const (
 	SessionEventCommand    SessionEventType = "command"
 	SessionEventWorkflow   SessionEventType = "workflow"
 	SessionEventCompaction SessionEventType = "compaction"
+	SessionEventShell      SessionEventType = "shell"
 	SessionEventDiagnostic SessionEventType = "diagnostic"
 	SessionEventClosed     SessionEventType = "closed"
 )
@@ -335,6 +337,9 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 	if trimmed == "" {
 		return command.Handled(), nil
 	}
+	if strings.HasPrefix(trimmed, "!") {
+		return s.executeShell(ctx, strings.TrimPrefix(trimmed, "!"))
+	}
 	if strings.HasPrefix(trimmed, "/") {
 		name, params, err := command.Parse(trimmed)
 		if err != nil {
@@ -360,6 +365,27 @@ func (s *Session) Send(ctx context.Context, input string) (command.Result, error
 		}
 	}
 	return s.runAgentTurn(ctx, trimmed, 0)
+}
+
+func (s *Session) executeShell(ctx context.Context, cmd string) (command.Result, error) {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		return command.Handled(), nil
+	}
+	out := s.out
+	if out == nil {
+		out = os.Stdout
+	}
+	c := exec.CommandContext(ctx, "bash", "-c", cmd)
+	c.Stdout = out
+	c.Stderr = out
+	c.Stdin = os.Stdin
+	err := c.Run()
+	s.publish(SessionEvent{Type: SessionEventShell, Input: cmd, Error: err})
+	if err != nil {
+		return command.Display(fmt.Sprintf("exit: %v", err)), nil
+	}
+	return command.Handled(), nil
 }
 
 func (s *Session) applyResult(ctx context.Context, result command.Result, turnID int) (command.Result, error) {
