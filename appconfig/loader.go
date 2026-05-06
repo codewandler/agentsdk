@@ -116,13 +116,17 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	}
 	workDir, _ = filepath.Abs(workDir)
 
-	// 0. Default agentdir includes — always probe .agents and .claude in workdir.
-	for _, dir := range []string{
-		filepath.Join(workDir, ".agents"),
-		filepath.Join(workDir, ".claude"),
-	} {
-		if err := l.loadInclude(dir, dir); err != nil {
-			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", dir, err)
+	// 0. Default agentdir includes — add .agents and .claude in workdir to config.
+	for _, name := range []string{".agents", ".claude"} {
+		dir := filepath.Join(workDir, name)
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			l.result.Config.Include = append(l.result.Config.Include, dir)
+		}
+	}
+	// Load the default includes.
+	for _, inc := range l.result.Config.Include {
+		if err := l.loadInclude(inc, inc); err != nil {
+			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", inc, err)
 		}
 	}
 
@@ -208,14 +212,12 @@ func (l *Loader) loadRoot(path string) error {
 		Config: l.result.Config,
 	})
 
-	// Process includes.
-	includes := l.result.Config.Include
-	l.result.Config.Include = nil
-	// Restore includes that were there before this file.
+	// Process new includes from this file. The visited map prevents
+	// re-processing includes that were already loaded.
 	_ = before
 
 	baseDir := filepath.Dir(abs)
-	for _, pattern := range includes {
+	for _, pattern := range l.result.Config.Include {
 		expanded := expandVars(pattern, baseDir)
 		if !isGlob(expanded) {
 			if err := l.loadInclude(expanded, pattern); err != nil {
