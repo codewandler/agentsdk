@@ -33,7 +33,9 @@ import (
 )
 
 // EntryFileNames are the filenames searched for the root config entry.
-var EntryFileNames = []string{"agentsdk.app.yaml", "agentsdk.app.yml", "agentsdk.app.json"}
+// Only YAML entry files are searched — JSON manifests (agentsdk.app.json)
+// are handled by the agentdir loader for backward compatibility.
+var EntryFileNames = []string{"agentsdk.app.yaml", "agentsdk.app.yml"}
 
 // Kind identifies the document type.
 type Kind string
