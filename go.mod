@@ -7,6 +7,7 @@ require (
 	github.com/amitybell/piper v0.0.0-20250621082041-2bb74e3a4a55
 	github.com/amitybell/piper-voice-jenny v0.0.0-20231118093224-dcf0d49e46b7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000
 	github.com/codewandler/llmadapter v1.0.0-rc.32
@@ -52,7 +53,6 @@ require (
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect

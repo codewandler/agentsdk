@@ -467,3 +467,37 @@ func TestValidateJSONFailsBrokenApp(t *testing.T) {
 	require.ErrorContains(t, cmd.Execute(), "validation failed")
 	require.Contains(t, out.String(), "\"found\": true")
 }
+
+func TestConfigSchemaWritesToStdout(t *testing.T) {
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"config", "schema"})
+	require.NoError(t, cmd.Execute())
+
+	text := out.String()
+	require.Contains(t, text, `"$schema":`)
+	require.Contains(t, text, `"AppDocument"`)
+	// Must be valid JSON.
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
+}
+
+func TestConfigSchemaOutDirWritesFile(t *testing.T) {
+	dir := t.TempDir()
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"config", "schema", "--out-dir", dir})
+	require.NoError(t, cmd.Execute())
+
+	require.Contains(t, out.String(), "agentsdk.schema.json")
+
+	data, err := os.ReadFile(filepath.Join(dir, "agentsdk.schema.json"))
+	require.NoError(t, err)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(data, &parsed))
+	require.Contains(t, parsed, "$schema")
+}

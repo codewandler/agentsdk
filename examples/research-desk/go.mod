@@ -38,6 +38,9 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
+	github.com/chromedp/chromedp v0.15.1 // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000 // indirect
 	github.com/codewandler/llmadapter v1.0.0-rc.32 // indirect
 	github.com/codewandler/markdown v0.46.2 // indirect
@@ -47,6 +50,7 @@ require (
 	github.com/emiago/dtls/v3 v3.0.0-20260122183559-8b8d23e359c0 // indirect
 	github.com/emiago/sipgo v1.3.1 // indirect
 	github.com/go-audio/riff v1.0.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect

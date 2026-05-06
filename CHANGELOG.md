@@ -122,6 +122,8 @@ match these entries as the project starts publishing releases.
   resource counts.
 - **`--source` flag** on `config print` and `config validate` to load
   additional source files.
+- **`agentsdk config schema`** — prints the app config JSON Schema to stdout
+  or writes `agentsdk.schema.json` with `--out-dir`.
 
 ### Changed
 

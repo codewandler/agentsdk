@@ -126,11 +126,41 @@ func configCmd() *cobra.Command {
 		},
 	}
 
+	var outDir string
+	schemaCmd := &cobra.Command{
+		Use:           "schema",
+		Short:         "Print the app config JSON Schema",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := appconfig.GenerateJSONSchemaBytes()
+			if err != nil {
+				return fmt.Errorf("generating schema: %w", err)
+			}
+			if outDir != "" {
+				if err := os.MkdirAll(outDir, 0o755); err != nil {
+					return fmt.Errorf("creating output directory: %w", err)
+				}
+				path := filepath.Join(outDir, "agentsdk.schema.json")
+				if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+					return fmt.Errorf("writing schema: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Schema written to %s\n", path)
+				return nil
+			}
+			_, err = cmd.OutOrStdout().Write(append(data, '\n'))
+			return err
+		},
+	}
+	schemaCmd.Flags().StringVar(&outDir, "out-dir", "", "Write schema to <out-dir>/agentsdk.schema.json instead of stdout")
+
 	printCmd.Flags().StringSliceVar(&sources, "source", nil, "Additional source file(s) to load (repeatable)")
 	validateSubCmd.Flags().StringSliceVar(&sources, "source", nil, "Additional source file(s) to load (repeatable)")
 
 	cmd.AddCommand(printCmd)
 	cmd.AddCommand(validateSubCmd)
+	cmd.AddCommand(schemaCmd)
 	return cmd
 }
 
@@ -151,126 +181,12 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 	fmt.Fprintln(&buf, "```yaml")
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-
-	// Build a combined view.
-	view := map[string]any{}
-	if result.Config.Name != "" {
-		view["name"] = result.Config.Name
-	}
-	if result.Config.DefaultAgent != "" {
-		view["default_agent"] = result.Config.DefaultAgent
-	}
-	if len(result.Config.Include) > 0 {
-		view["include"] = result.Config.Include
-	}
-	if len(result.Config.Plugins) > 0 {
-		plugins := make([]map[string]any, len(result.Config.Plugins))
-		for i, p := range result.Config.Plugins {
-			plugins[i] = map[string]any{"name": p.Name}
-			if len(p.Config) > 0 {
-				plugins[i]["config"] = p.Config
-			}
-		}
-		view["plugins"] = plugins
-	}
-	if result.Config.Resolution != nil {
-		view["resolution"] = result.Config.Resolution
-	}
-
-	if len(result.Agents) > 0 {
-		agents := make([]map[string]any, 0, len(result.Agents))
-		for _, a := range result.Agents {
-			agent := map[string]any{"name": a.Name}
-			if a.Description != "" {
-				agent["description"] = a.Description
-			}
-			if a.Model != "" {
-				agent["model"] = a.Model
-			}
-			if len(a.Tools) > 0 {
-				agent["tools"] = a.Tools
-			}
-			if a.System != "" {
-				agent["system"] = a.System
-			}
-			agents = append(agents, agent)
-		}
-		view["agents"] = agents
-	}
-
-	if len(result.Workflows) > 0 {
-		workflows := make([]map[string]any, 0, len(result.Workflows))
-		for _, w := range result.Workflows {
-			wf := map[string]any{"name": w.Name}
-			if w.Description != "" {
-				wf["description"] = w.Description
-			}
-			workflows = append(workflows, wf)
-		}
-		view["workflows"] = workflows
-	}
-
-	if len(result.Commands) > 0 {
-		commands := make([]map[string]any, 0, len(result.Commands))
-		for _, c := range result.Commands {
-			cmd := map[string]any{"name": c.Name}
-			if c.Description != "" {
-				cmd["description"] = c.Description
-			}
-			if c.Target != nil {
-				cmd["target"] = c.Target
-			}
-			commands = append(commands, cmd)
-		}
-		view["commands"] = commands
-	}
-
-	if len(result.Actions) > 0 {
-		view["actions"] = result.Actions
-	}
-	if len(result.Datasources) > 0 {
-		view["datasources"] = result.Datasources
-	}
-	if len(result.Triggers) > 0 {
-		view["triggers"] = result.Triggers
-	}
-
-	// Include resources from agentdir bundles.
-	for _, b := range result.Bundles {
-		for _, spec := range b.AgentSpecs {
-			agents, _ := view["agents"].([]map[string]any)
-			agent := map[string]any{"name": spec.Name}
-			if spec.Description != "" {
-				agent["description"] = spec.Description
-			}
-			if len(spec.Tools) > 0 {
-				agent["tools"] = spec.Tools
-			}
-			view["agents"] = append(agents, agent)
-		}
-		for _, cmd := range b.Commands {
-			desc := cmd.Descriptor()
-			cmds, _ := view["commands"].([]map[string]any)
-			view["commands"] = append(cmds, map[string]any{"name": desc.Name, "description": desc.Description})
-		}
-		for _, wf := range b.Workflows {
-			wfs, _ := view["workflows"].([]map[string]any)
-			view["workflows"] = append(wfs, map[string]any{"name": wf.Name, "description": wf.Description})
-		}
-		for _, sk := range b.Skills {
-			sks, _ := view["skills"].([]map[string]any)
-			view["skills"] = append(sks, map[string]any{"name": sk.Name, "description": sk.Description})
-		}
-	}
-
-	if err := enc.Encode(view); err != nil {
+	if err := enc.Encode(result.Config); err != nil {
 		return err
 	}
 	fmt.Fprintln(&buf, "```")
 	return markdown.RenderToWriter(out, buf.String())
 }
-
-
 
 func serveCmd() *cobra.Command {
 	var (

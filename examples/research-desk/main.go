@@ -122,7 +122,6 @@ func newResearchApp() (*app.App, error) {
 	return app.New(
 		app.WithResourceBundle(resolved.Bundle),
 		app.WithDefaultAgent(name),
-		app.WithDefaultSkillSourceDiscovery(app.SkillSourceDiscovery{WorkspaceDir: "."}),
 		app.WithPlugin(localcli.New()),
 		app.WithAgentOptions(
 			agent.WithWorkspace("."),
