@@ -315,6 +315,36 @@ func TestRunTurnExecutesMultipleToolCallsSerially(t *testing.T) {
 	require.Equal(t, []string{"first", "second", "third"}, outputs)
 }
 
+func TestRunTurnSuppressesDuplicateToolCallExecution(t *testing.T) {
+	client := runnertest.NewClient(runnertest.ToolCallStream("resp_tool",
+		runnertest.ToolCall("lookup", "call_1", 0, `{"q":"x"}`),
+		runnertest.ToolCall("lookup", "call_2", 1, `{"q":"x"}`),
+		runnertest.ToolCall("lookup", "call_3", 2, `{"q":"x"}`),
+	))
+	var executions int32
+	executor := ToolExecutorFunc(func(_ context.Context, call unified.ToolCall) unified.ToolResult {
+		atomic.AddInt32(&executions, 1)
+		return toolResult(call, "result", false)
+	})
+
+	result, err := RunTurn(context.Background(), newTestHistory(""), client, conversation.NewRequest().User("use tools").Build(),
+		WithToolExecutor(executor),
+		WithMaxSteps(1),
+	)
+	require.ErrorIs(t, err, ErrMaxStepsReached)
+	require.EqualValues(t, 1, atomic.LoadInt32(&executions))
+	var callIDs []string
+	var outputs []string
+	for _, event := range result.Events {
+		if ev, ok := event.(ToolResultEvent); ok {
+			callIDs = append(callIDs, ev.CallID)
+			outputs = append(outputs, ev.Output)
+		}
+	}
+	require.Equal(t, []string{"call_1", "call_2", "call_3"}, callIDs)
+	require.Equal(t, []string{"result", "result", "result"}, outputs)
+}
+
 func TestRunTurnPassesThroughWarningsAndRawEvents(t *testing.T) {
 	client := runnertest.NewClient(
 		[]unified.Event{

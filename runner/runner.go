@@ -201,14 +201,18 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 
 		transcript = append(transcript, assistant)
 		results := make([]unified.ToolResult, 0, len(toolCalls))
+		executedResults := map[string]unified.ToolResult{}
 		canceled := false
 		for _, call := range toolCalls {
 			var toolResult unified.ToolResult
 			if canceled || ctx.Err() != nil {
 				canceled = true
 				toolResult = toolResultFromContext(call, context.Canceled)
+			} else if previous, ok := executedResults[toolCallDedupeKey(call)]; ok {
+				toolResult = cloneToolResultForCall(previous, call)
 			} else {
 				toolResult = executor.ExecuteTool(ctx, call)
+				executedResults[toolCallDedupeKey(call)] = toolResult
 				if ctx.Err() != nil || toolResultOutput(toolResult) == canceledToolOutput || toolResultOutput(toolResult) == timedOutToolOutput {
 					canceled = true
 				}
@@ -634,6 +638,26 @@ func shouldContinueAssistantMessage(message unified.Message) bool {
 
 func reusableMessageID(id string) bool {
 	return !strings.HasPrefix(id, "resp_")
+}
+
+func toolCallDedupeKey(call unified.ToolCall) string {
+	arguments := strings.TrimSpace(string(call.Arguments))
+	if arguments != "" {
+		var decoded any
+		if err := json.Unmarshal(call.Arguments, &decoded); err == nil {
+			if encoded, err := json.Marshal(decoded); err == nil {
+				arguments = string(encoded)
+			}
+		}
+	}
+	return call.Name + "\x00" + arguments
+}
+
+func cloneToolResultForCall(result unified.ToolResult, call unified.ToolCall) unified.ToolResult {
+	result.ToolCallID = call.ID
+	result.Name = call.Name
+	result.Content = append([]unified.ContentPart(nil), result.Content...)
+	return result
 }
 
 func upsertToolCall(calls *[]unified.ToolCall, call unified.ToolCall) {
