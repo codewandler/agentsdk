@@ -34,14 +34,22 @@ type ThreadRuntime struct {
 	source       thread.EventSource
 	capabilities *capability.Manager
 	contexts     *agentcontext.Manager
+	observer     *observerRef // mutable observer for the ObservableRuntime
+}
+
+// observerRef is a mutable holder so the engine can set the observer after
+// ThreadRuntime construction. The ObservableRuntime reads through it.
+type observerRef struct {
+	fn capability.ThreadEventObserver
 }
 
 // ThreadRuntimeOption configures a ThreadRuntime.
 type ThreadRuntimeOption func(*threadRuntimeConfig)
 
 type threadRuntimeConfig struct {
-	source  thread.EventSource
-	context *agentcontext.Manager
+	source        thread.EventSource
+	context       *agentcontext.Manager
+	eventObserver capability.ThreadEventObserver
 }
 
 // WithThreadRuntimeSource tags capability events emitted by the runtime with
@@ -54,6 +62,13 @@ func WithThreadRuntimeSource(source thread.EventSource) ThreadRuntimeOption {
 // manager for the thread runtime.
 func WithContextManager(manager *agentcontext.Manager) ThreadRuntimeOption {
 	return func(c *threadRuntimeConfig) { c.context = manager }
+}
+
+// WithThreadEventObserver registers an observer that is called after thread
+// events are persisted. This allows the runner event system to surface
+// capability state changes, compaction, and other persisted events.
+func WithThreadEventObserver(observer capability.ThreadEventObserver) ThreadRuntimeOption {
+	return func(c *threadRuntimeConfig) { c.eventObserver = observer }
 }
 
 // NewThreadRuntime creates the capability and context runtime for a live thread.
@@ -71,8 +86,16 @@ func NewThreadRuntime(live thread.Live, registry capability.Registry, opts ...Th
 			opt(&cfg)
 		}
 	}
-	runtime := capability.NewRuntime(live, cfg.source)
-	capabilities := capability.NewManager(registry, runtime)
+	obs := &observerRef{fn: cfg.eventObserver}
+	var capRuntime capability.Runtime = capability.ObservableRuntime{
+		Inner: capability.NewRuntime(live, cfg.source),
+		Observer: func(ctx context.Context, events []thread.Event) {
+			if obs.fn != nil {
+				obs.fn(ctx, events)
+			}
+		},
+	}
+	capabilities := capability.NewManager(registry, capRuntime)
 	contexts := cfg.context
 	if contexts == nil {
 		var err error
@@ -89,7 +112,18 @@ func NewThreadRuntime(live thread.Live, registry capability.Registry, opts ...Th
 		source:       cfg.source,
 		capabilities: capabilities,
 		contexts:     contexts,
+		observer:     obs,
 	}, nil
+}
+
+// SetEventObserver replaces the thread event observer. This is called by the
+// engine at the start of each turn so persisted events are dispatched through
+// the runner event system. Pass nil to disable observation.
+func (tr *ThreadRuntime) SetEventObserver(observer capability.ThreadEventObserver) {
+	if tr == nil || tr.observer == nil {
+		return
+	}
+	tr.observer.fn = observer
 }
 
 // ResumeThreadRuntime resumes a live thread, replays capability events, and

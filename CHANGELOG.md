@@ -28,6 +28,19 @@ match these entries as the project starts publishing releases.
   system to presentation layers.
 - **Terminal UI streaming** — `PrintToolOutputDelta` and `PrintToolStatus`
   render real-time tool output and status in the terminal.
+- **`capability.ObservableRuntime`** — wraps a `capability.Runtime` with a
+  `ThreadEventObserver` that fires after events are persisted. Enables
+  presentation layers to observe all persisted thread events (capability
+  state, compaction, context fragments) without polling.
+- **`runner.ThreadEvent`** — runner-level event carrying a persisted
+  `thread.Event`, dispatched via the observable runtime observer.
+- **`runtime.WithThreadEventObserver`** — `ThreadRuntimeOption` to register
+  an observer at construction time.
+- **`ThreadRuntime.SetEventObserver`** — allows the engine to set/clear the
+  observer per turn so persisted events flow to the runner event handler.
+- **Terminal planner rendering** — `PrintThreadEvent` renders planner
+  capability state changes (plan created, step added/removed, status
+  changes, current step) in the terminal UI.
 
 ### Changed
 

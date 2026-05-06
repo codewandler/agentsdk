@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/codewandler/agentsdk/conversation"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/llmadapter/unified"
 )
 
@@ -102,6 +103,13 @@ type ToolStatusEvent struct {
 	Name     string
 	Progress float64 // 0.0–1.0 for determinate, -1 for indeterminate
 	Message  string
+}
+
+// ThreadEvent is emitted when a thread event is persisted (capability state
+// changes, compaction, context fragments, etc.). Presentation layers can
+// inspect Event.Kind to decide how to render it.
+type ThreadEvent struct {
+	Event thread.Event
 }
 
 type ErrorEvent struct {

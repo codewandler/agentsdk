@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/codewandler/agentsdk/capability"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -34,6 +37,73 @@ func PrintToolStatus(w io.Writer, message string) {
 		return
 	}
 	fmt.Fprintf(w, "%s  ⟳ %s%s\n", Dim+Italic, message, Reset)
+}
+
+// PrintThreadEvent renders a persisted thread event. Currently handles
+// planner capability state events; other event kinds are silently ignored.
+func PrintThreadEvent(w io.Writer, event thread.Event) {
+	if event.Kind != capability.EventStateEventDispatched {
+		return
+	}
+	var dispatched capability.StateEventDispatched
+	if err := json.Unmarshal(event.Payload, &dispatched); err != nil {
+		return
+	}
+	if dispatched.CapabilityName != "planner" {
+		return
+	}
+	printPlannerEvent(w, dispatched)
+}
+
+func printPlannerEvent(w io.Writer, dispatched capability.StateEventDispatched) {
+	switch dispatched.EventName {
+	case "plan_created":
+		var p struct {
+			Title string `json:"title"`
+		}
+		_ = json.Unmarshal(dispatched.Body, &p)
+		if p.Title != "" {
+			fmt.Fprintf(w, "%s  \U0001F4CB Plan: %s%s\n", Dim, p.Title, Reset)
+		}
+	case "step_added":
+		var s struct {
+			Step struct {
+				Title string `json:"title"`
+			} `json:"step"`
+		}
+		_ = json.Unmarshal(dispatched.Body, &s)
+		if s.Step.Title != "" {
+			fmt.Fprintf(w, "%s  + %s%s\n", Dim, s.Step.Title, Reset)
+		}
+	case "step_status_changed":
+		var s struct {
+			StepID string `json:"step_id"`
+			Status string `json:"status"`
+		}
+		_ = json.Unmarshal(dispatched.Body, &s)
+		icon := "o"
+		switch s.Status {
+		case "in_progress":
+			icon = ">"
+		case "completed":
+			icon = "v"
+		}
+		fmt.Fprintf(w, "%s  %s %s -> %s%s\n", Dim, icon, s.StepID, s.Status, Reset)
+	case "step_removed":
+		var s struct {
+			StepID string `json:"step_id"`
+		}
+		_ = json.Unmarshal(dispatched.Body, &s)
+		fmt.Fprintf(w, "%s  - %s%s\n", Dim, s.StepID, Reset)
+	case "current_step_changed":
+		var s struct {
+			StepID string `json:"step_id"`
+		}
+		_ = json.Unmarshal(dispatched.Body, &s)
+		if s.StepID != "" {
+			fmt.Fprintf(w, "%s  >> current: %s%s\n", Dim, s.StepID, Reset)
+		}
+	}
 }
 
 func PrintToolResult(w io.Writer, output string, isError bool) {

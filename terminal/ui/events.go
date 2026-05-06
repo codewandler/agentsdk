@@ -116,6 +116,8 @@ func (d *EventDisplay) Handle(event runner.Event) {
 		if ev.FinishReason == unified.FinishReasonLength {
 			fmt.Fprintf(d.out, "\n%s! model hit output token limit%s\n", BrightYellow, Reset)
 		}
+	case runner.ThreadEvent:
+		PrintThreadEvent(d.out, ev.Event)
 	case runner.ErrorEvent:
 		if d.stepDisplay != nil {
 			d.stepDisplay.End()

@@ -10,6 +10,7 @@ import (
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/conversation"
 	"github.com/codewandler/agentsdk/runner"
+	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/llmadapter/unified"
 )
@@ -255,6 +256,20 @@ func (e *Engine) RunTurn(ctx context.Context, user string, opts ...TurnOption) (
 		}
 		if err := cfg.addThreadRuntime(e.threadRuntime); err != nil {
 			return runner.Result{}, err
+		}
+		// Wire thread event observer so persisted capability events
+		// (planner state, compaction, etc.) flow through the runner
+		// event system to the presentation layer.
+		if cfg.OnEvent != nil {
+			onEvent := cfg.OnEvent
+			e.threadRuntime.SetEventObserver(func(_ context.Context, events []thread.Event) {
+				for _, ev := range events {
+					onEvent(runner.ThreadEvent{Event: ev})
+				}
+			})
+			// Clear observer when the turn is done so stale handlers
+			// don't fire on capability events outside a turn.
+			defer e.threadRuntime.SetEventObserver(nil)
 		}
 	} else if e.threadContexts != nil {
 		cfg.addContextManager(e.threadContexts)
