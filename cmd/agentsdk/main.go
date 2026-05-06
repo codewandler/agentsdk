@@ -136,23 +136,13 @@ func configCmd() *cobra.Command {
 
 func loadConfig(args []string, extraSources []string) (appconfig.LoadResult, error) {
 	var opts []appconfig.LoadOption
-	var roots []string
 	if len(args) == 1 {
-		roots = append(roots, args[0])
+		opts = append(opts, appconfig.WithConfigRoots(args[0]))
 	}
-	roots = append(roots, extraSources...)
-	if len(roots) > 0 {
-		opts = append(opts, appconfig.WithConfigRoots(roots...))
+	if len(extraSources) > 0 {
+		opts = append(opts, appconfig.WithConfigRoots(extraSources...))
 	}
-	opts = append(opts, appconfig.WithoutUserConfig())
-	result, err := appconfig.NewLoader().Load(opts...)
-	if err != nil {
-		return appconfig.LoadResult{}, err
-	}
-	if len(result.Sources) == 0 && len(roots) == 0 {
-		return appconfig.LoadResult{}, fmt.Errorf("no config file specified and no entry file found in current directory")
-	}
-	return result, nil
+	return appconfig.NewLoader().Load(opts...)
 }
 
 func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {

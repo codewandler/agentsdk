@@ -101,6 +101,10 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	// Apply defaults.
 	l.result.Config = cfg.defaults
 
+	// Process includes from defaults.
+	defaultIncludes := l.result.Config.Include
+	l.result.Config.Include = nil
+
 	// Resolve work dir.
 	workDir := cfg.workDir
 	if workDir == "" {
@@ -111,6 +115,16 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 		workDir = wd
 	}
 	workDir, _ = filepath.Abs(workDir)
+
+	// 0. Default agentdir includes — always probe .agents and .claude in workdir.
+	for _, dir := range []string{
+		filepath.Join(workDir, ".agents"),
+		filepath.Join(workDir, ".claude"),
+	} {
+		if err := l.loadInclude(dir, dir); err != nil {
+			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", dir, err)
+		}
+	}
 
 	// 1. User config.
 	if !cfg.noUser {
@@ -152,6 +166,14 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	if path, ok := FindEntryFile(workDir); ok {
 		if err := l.loadRoot(path); err != nil {
 			return LoadResult{}, fmt.Errorf("appconfig: workdir: %w", err)
+		}
+	}
+
+	// 4. Process includes from defaults (after workDir is known).
+	for _, pattern := range defaultIncludes {
+		expanded := expandVars(pattern, workDir)
+		if err := l.loadInclude(expanded, pattern); err != nil {
+			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", pattern, err)
 		}
 	}
 
