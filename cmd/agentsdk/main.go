@@ -917,6 +917,13 @@ func discoverResources(dir string, policy resource.DiscoveryPolicy, localOnly bo
 		// Merge inline appconfig resources.
 		cfgBundle := cfgResult.ToContributionBundle()
 		resolved.Bundle.Append(cfgBundle)
+		// Merge agentdir bundles loaded via include directives.
+		for _, b := range cfgResult.Bundles {
+			resolved.Bundle.Append(b)
+			if resolved.Bundle.Source.ID == "" && b.Source.ID != "" {
+				resolved.Bundle.Source = b.Source
+			}
+		}
 		// Merge inline agent specs into the bundle.
 		for _, spec := range cfgResult.ToAgentSpecs() {
 			resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, spec)

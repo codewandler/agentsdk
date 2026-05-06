@@ -185,6 +185,9 @@ func (r LoadResult) ToAppOptions() []app.Option {
 	if hasContributions(bundle) {
 		opts = append(opts, app.WithResourceBundle(bundle))
 	}
+	for _, b := range r.Bundles {
+		opts = append(opts, app.WithResourceBundle(b))
+	}
 	if r.Config.DefaultAgent != "" {
 		opts = append(opts, app.WithDefaultAgent(r.Config.DefaultAgent))
 	}

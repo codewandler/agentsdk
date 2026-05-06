@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/codewandler/agentsdk/agentdir"
+	"github.com/codewandler/agentsdk/resource"
 )
 
 // LoadOption configures the loading process.
@@ -47,15 +50,16 @@ type LoadSource struct {
 
 // LoadResult holds the final merged config and all sources.
 type LoadResult struct {
-	Config    Config
-	Agents    []AgentDoc
-	Commands  []CommandDoc
-	Workflows []WorkflowDoc
-	Actions   []ActionDoc
+	Config      Config
+	Agents      []AgentDoc
+	Commands    []CommandDoc
+	Workflows   []WorkflowDoc
+	Actions     []ActionDoc
 	Datasources []DatasourceDoc
-	Triggers  []TriggerDoc
-	EntryPath string
-	Sources   []LoadSource
+	Triggers    []TriggerDoc
+	Bundles     []resource.ContributionBundle // agentdir-loaded bundles
+	EntryPath   string
+	Sources     []LoadSource
 }
 
 // UserConfigDir is the directory probed for user-level default config.
@@ -192,7 +196,7 @@ func (l *Loader) loadRoot(path string) error {
 	for _, pattern := range includes {
 		expanded := expandVars(pattern, baseDir)
 		if !isGlob(expanded) {
-			if err := l.loadRoot(expanded); err != nil {
+			if err := l.loadInclude(expanded, pattern); err != nil {
 				return fmt.Errorf("include %s: %w", pattern, err)
 			}
 			continue
@@ -203,12 +207,56 @@ func (l *Loader) loadRoot(path string) error {
 		}
 		sort.Strings(matches)
 		for _, match := range matches {
-			if err := l.loadRoot(match); err != nil {
+			if err := l.loadInclude(match, pattern); err != nil {
 				return fmt.Errorf("include %s: %w", match, err)
 			}
 		}
 	}
 
+	return nil
+}
+
+// loadInclude loads a single include path. Directories are loaded as agentdir
+// roots. Files are loaded as appconfig documents.
+func (l *Loader) loadInclude(path string, pattern string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", path, err)
+	}
+	if l.visited[abs] {
+		return nil
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // skip missing includes silently
+		}
+		return err
+	}
+	if info.IsDir() {
+		return l.loadAgentDir(abs)
+	}
+	return l.loadRoot(abs)
+}
+
+// loadAgentDir loads a directory as an agentdir layout and appends the
+// resulting ContributionBundle to the LoadResult.
+func (l *Loader) loadAgentDir(dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if l.visited[abs] {
+		return nil
+	}
+	l.visited[abs] = true
+
+	bundle, err := agentdir.LoadDir(abs)
+	if err != nil {
+		return fmt.Errorf("load agentdir %s: %w", abs, err)
+	}
+	l.result.Bundles = append(l.result.Bundles, bundle)
+	l.result.Sources = append(l.result.Sources, LoadSource{Path: abs})
 	return nil
 }
 
