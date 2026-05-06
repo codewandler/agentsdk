@@ -67,10 +67,186 @@ func rootCmd() *cobra.Command {
 	)
 	cmd.AddCommand(serveCmd())
 	cmd.AddCommand(discoverCmd())
+	cmd.AddCommand(configCmd())
 	cmd.AddCommand(validateCmd())
 	cmd.AddCommand(modelsCmd())
 	cmd.AddCommand(toolCmd())
 	return cmd
+}
+
+func configCmd() *cobra.Command {
+	var sources []string
+	cmd := &cobra.Command{
+		Use:           "config",
+		Short:         "Inspect application configuration",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	printCmd := &cobra.Command{
+		Use:           "print [path]",
+		Short:         "Print the expanded configuration as YAML",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := loadConfig(args, sources)
+			if err != nil {
+				return err
+			}
+			return printConfigYAML(cmd.OutOrStdout(), result)
+		},
+	}
+
+	validateSubCmd := &cobra.Command{
+		Use:           "validate [path]",
+		Short:         "Validate configuration for structural correctness",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := loadConfig(args, sources)
+			if err != nil {
+				return fmt.Errorf("config validation failed: %w", err)
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Config: %s\n", result.EntryPath)
+			fmt.Fprintf(out, "Name: %s\n", result.Config.Name)
+			fmt.Fprintf(out, "Default agent: %s\n", result.Config.DefaultAgent)
+			fmt.Fprintf(out, "Agents: %d\n", len(result.Agents))
+			fmt.Fprintf(out, "Commands: %d\n", len(result.Commands))
+			fmt.Fprintf(out, "Workflows: %d\n", len(result.Workflows))
+			fmt.Fprintf(out, "Actions: %d\n", len(result.Actions))
+			fmt.Fprintf(out, "Datasources: %d\n", len(result.Datasources))
+			fmt.Fprintf(out, "Triggers: %d\n", len(result.Triggers))
+			fmt.Fprintf(out, "Sources: %d\n", len(result.Config.Sources))
+			fmt.Fprintf(out, "Plugins: %d\n", len(result.Config.Plugins))
+			fmt.Fprintln(out, "\n\u2713 configuration is valid")
+			return nil
+		},
+	}
+
+	printCmd.Flags().StringSliceVar(&sources, "source", nil, "Additional source file(s) to load (repeatable)")
+	validateSubCmd.Flags().StringSliceVar(&sources, "source", nil, "Additional source file(s) to load (repeatable)")
+
+	cmd.AddCommand(printCmd)
+	cmd.AddCommand(validateSubCmd)
+	return cmd
+}
+
+func loadConfig(args []string, extraSources []string) (appconfig.LoadResult, error) {
+	var paths []string
+	if len(args) == 1 {
+		paths = append(paths, args[0])
+	} else {
+		// Try to find entry file in current directory.
+		if entryPath, ok := appconfig.FindEntryFile("."); ok {
+			paths = append(paths, entryPath)
+		}
+	}
+	paths = append(paths, extraSources...)
+	if len(paths) == 0 {
+		return appconfig.LoadResult{}, fmt.Errorf("no config file specified and no entry file found in current directory")
+	}
+	return appconfig.NewLoader().Load(paths...)
+}
+
+func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
+	fmt.Fprintf(out, "# Config: %s\n\n", result.EntryPath)
+
+	// Print config section.
+	fmt.Fprintln(out, "```yaml")
+	enc := yaml.NewEncoder(out)
+	enc.SetIndent(2)
+
+	// Build a combined view.
+	view := map[string]any{}
+	if result.Config.Name != "" {
+		view["name"] = result.Config.Name
+	}
+	if result.Config.DefaultAgent != "" {
+		view["default_agent"] = result.Config.DefaultAgent
+	}
+	if len(result.Config.Sources) > 0 {
+		view["sources"] = result.Config.Sources
+	}
+	if len(result.Config.Plugins) > 0 {
+		plugins := make([]map[string]any, len(result.Config.Plugins))
+		for i, p := range result.Config.Plugins {
+			plugins[i] = map[string]any{"name": p.Name}
+			if len(p.Config) > 0 {
+				plugins[i]["config"] = p.Config
+			}
+		}
+		view["plugins"] = plugins
+	}
+	if result.Config.Resolution != nil {
+		view["resolution"] = result.Config.Resolution
+	}
+
+	if len(result.Agents) > 0 {
+		agents := make([]map[string]any, 0, len(result.Agents))
+		for _, a := range result.Agents {
+			agent := map[string]any{"name": a.Name}
+			if a.Description != "" {
+				agent["description"] = a.Description
+			}
+			if a.Model != "" {
+				agent["model"] = a.Model
+			}
+			if len(a.Tools) > 0 {
+				agent["tools"] = a.Tools
+			}
+			if a.System != "" {
+				agent["system"] = a.System
+			}
+			agents = append(agents, agent)
+		}
+		view["agents"] = agents
+	}
+
+	if len(result.Workflows) > 0 {
+		workflows := make([]map[string]any, 0, len(result.Workflows))
+		for _, w := range result.Workflows {
+			wf := map[string]any{"name": w.Name}
+			if w.Description != "" {
+				wf["description"] = w.Description
+			}
+			workflows = append(workflows, wf)
+		}
+		view["workflows"] = workflows
+	}
+
+	if len(result.Commands) > 0 {
+		commands := make([]map[string]any, 0, len(result.Commands))
+		for _, c := range result.Commands {
+			cmd := map[string]any{"name": c.Name}
+			if c.Description != "" {
+				cmd["description"] = c.Description
+			}
+			if c.Target != nil {
+				cmd["target"] = c.Target
+			}
+			commands = append(commands, cmd)
+		}
+		view["commands"] = commands
+	}
+
+	if len(result.Actions) > 0 {
+		view["actions"] = result.Actions
+	}
+	if len(result.Datasources) > 0 {
+		view["datasources"] = result.Datasources
+	}
+	if len(result.Triggers) > 0 {
+		view["triggers"] = result.Triggers
+	}
+
+	if err := enc.Encode(view); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "```")
+	return nil
 }
 
 

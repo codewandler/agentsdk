@@ -21,7 +21,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -180,42 +179,9 @@ func Load(dir string) (LoadResult, error) {
 	return LoadFile(path)
 }
 
-// LoadFile parses the entry file and all its includes.
+// LoadFile parses the entry file and all its includes using the Loader.
 func LoadFile(path string) (LoadResult, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return LoadResult{}, err
-	}
-	result := LoadResult{EntryPath: absPath}
-	if err := loadFileInto(&result, absPath); err != nil {
-		return LoadResult{}, err
-	}
-	// Process includes from the config.
-	baseDir := filepath.Dir(absPath)
-	for _, pattern := range result.Config.Include {
-		filePath, fragment := splitFragment(pattern)
-		expanded := expandVars(filePath, baseDir)
-		matches, err := filepath.Glob(expanded)
-		if err != nil {
-			return LoadResult{}, fmt.Errorf("appconfig: glob %q (expanded: %q): %w", pattern, expanded, err)
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			if match == absPath {
-				continue // skip self
-			}
-			if fragment != nil {
-				if err := loadFileFragmentInto(&result, match, fragment); err != nil {
-					return LoadResult{}, fmt.Errorf("appconfig: include %s#%s: %w", match, strings.Join(fragment, "."), err)
-				}
-			} else {
-				if err := loadFileInto(&result, match); err != nil {
-					return LoadResult{}, fmt.Errorf("appconfig: include %s: %w", match, err)
-				}
-			}
-		}
-	}
-	return result, nil
+	return NewLoader().Load(path)
 }
 
 // ToAppOptions converts the LoadResult into []app.Option for app.New.
