@@ -156,11 +156,10 @@ func loadConfig(args []string, extraSources []string) (appconfig.LoadResult, err
 }
 
 func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
-	fmt.Fprintf(out, "# Config: %s\n\n", result.EntryPath)
-
-	// Print config section.
-	fmt.Fprintln(out, "```yaml")
-	enc := yaml.NewEncoder(out)
+	var buf strings.Builder
+	fmt.Fprintf(&buf, "# Config: %s\n\n", result.EntryPath)
+	fmt.Fprintln(&buf, "```yaml")
+	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 
 	// Build a combined view.
@@ -249,8 +248,8 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 	if err := enc.Encode(view); err != nil {
 		return err
 	}
-	fmt.Fprintln(out, "```")
-	return nil
+	fmt.Fprintln(&buf, "```")
+	return markdown.RenderToWriter(out, buf.String())
 }
 
 

@@ -13,6 +13,7 @@ import (
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/appconfig"
 	"github.com/codewandler/agentsdk/command"
+	"github.com/codewandler/markdown"
 )
 
 // Plugin implements app.Plugin and app.CommandsPlugin to expose /config.
@@ -74,7 +75,11 @@ func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Re
 		return command.Result{}, err
 	}
 	fmt.Fprintln(&b, "```")
-	return command.Display(command.TextPayload{Text: b.String()}), nil
+	rendered, err := markdown.RenderString(b.String())
+	if err != nil {
+		rendered = b.String()
+	}
+	return command.Display(command.TextPayload{Text: rendered}), nil
 }
 
 func (p *Plugin) validateCommand(_ context.Context, _ configValidateInput) (command.Result, error) {
