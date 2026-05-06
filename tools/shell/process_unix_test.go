@@ -4,6 +4,7 @@ package shell
 
 import (
 	"context"
+	"io"
 	"os/exec"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func TestRunSingle_TimeoutKillsChildProcessGroupAndReturnsPromptly(t *testing.T)
 	}, 1)
 
 	go func() {
-		r, err := runSingle(context.Background(), "sleep 30 & wait", "", 1, func(string, string) {})
+		r, err := runSingle(context.Background(), "sleep 30 & wait", "", 1, io.Discard)
 		done <- struct {
 			run bashRun
 			err error

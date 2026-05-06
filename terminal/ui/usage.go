@@ -20,6 +20,22 @@ func PrintResolvedModel(w io.Writer, model string) {
 	}
 }
 
+// PrintToolOutputDelta renders a single streaming output chunk from a tool.
+func PrintToolOutputDelta(w io.Writer, chunk string) {
+	if chunk == "" {
+		return
+	}
+	fmt.Fprintf(w, "%s  %s%s\n", Dim, chunk, Reset)
+}
+
+// PrintToolStatus renders a status/progress message from a tool.
+func PrintToolStatus(w io.Writer, message string) {
+	if message == "" {
+		return
+	}
+	fmt.Fprintf(w, "%s  ⟳ %s%s\n", Dim+Italic, message, Reset)
+}
+
 func PrintToolResult(w io.Writer, output string, isError bool) {
 	prefix := BrightGreen + "ok" + Reset
 	if isError {

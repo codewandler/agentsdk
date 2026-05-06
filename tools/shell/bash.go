@@ -181,13 +181,7 @@ Never cd into the project root — workdir already defaults there.`
 					workdir = ctx.WorkDir()
 				}
 
-				// Extract streaming output callback if available.
-				var emitOutput func(stream, chunk string)
-				if fn, ok := ctx.Extra()["tool.output"].(func(string, string)); ok {
-					emitOutput = fn
-				}
-
-				return runSequential(ctx, commands, workdir, timeout, p.FailFast, emitOutput)
+				return runSequential(ctx, commands, workdir, timeout, p.FailFast, ctx.Output())
 			},
 			tool.WithGuidance[BashParams](bashGuidance),
 			bashIntent(cfg.analyzer),
@@ -196,8 +190,8 @@ Never cd into the project root — workdir already defaults there.`
 }
 
 // runSingle executes one bash command and returns a bashRun.
-// If emitOutput is non-nil, stdout/stderr lines are emitted in real time.
-func runSingle(ctx context.Context, command, workdir string, timeoutSecs int, emitOutput func(stream, chunk string)) (bashRun, error) {
+// Output is written to w in real time when w is not io.Discard.
+func runSingle(ctx context.Context, command, workdir string, timeoutSecs int, w io.Writer) (bashRun, error) {
 	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSecs)*time.Second)
 	defer cancel()
 
@@ -210,9 +204,9 @@ func runSingle(ctx context.Context, command, workdir string, timeoutSecs int, em
 		cmd.Dir = workdir
 	}
 
-	// When streaming is available, use pipes to emit lines in real time.
-	if emitOutput != nil {
-		return runSingleStreaming(execCtx, cmd, command, workdir, timeoutSecs, start, emitOutput)
+	// When a real output writer is available, tee output for real-time streaming.
+	if w != nil && w != io.Discard {
+		return runSingleStreaming(execCtx, cmd, command, workdir, timeoutSecs, start, w)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -225,8 +219,9 @@ func runSingle(ctx context.Context, command, workdir string, timeoutSecs int, em
 	return buildRun(command, workdir, timeoutSecs, stdout.String(), stderr.String(), err, dur, execCtx), nil
 }
 
-// runSingleStreaming runs a command with real-time line-by-line output emission.
-func runSingleStreaming(ctx context.Context, cmd *exec.Cmd, command, workdir string, timeoutSecs int, start time.Time, emitOutput func(stream, chunk string)) (bashRun, error) {
+// runSingleStreaming runs a command with real-time output streaming.
+// Stdout and stderr are tee'd to w while also being captured for the final result.
+func runSingleStreaming(ctx context.Context, cmd *exec.Cmd, command, workdir string, timeoutSecs int, start time.Time, w io.Writer) (bashRun, error) {
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return bashRun{}, fmt.Errorf("stdout pipe: %w", err)
@@ -244,20 +239,23 @@ func runSingleStreaming(ctx context.Context, cmd *exec.Cmd, command, workdir str
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	scanAndEmit := func(r io.Reader, stream string, buf *strings.Builder) {
+	// Tee pipe output to both the capture buffer and the streaming writer.
+	copyAndCapture := func(r io.Reader, buf *strings.Builder) {
 		defer wg.Done()
+		// Use a scanner so output is flushed line-by-line to the writer,
+		// giving the presentation layer timely chunks.
 		scanner := bufio.NewScanner(r)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // up to 1MB per line
 		for scanner.Scan() {
 			line := scanner.Text()
 			buf.WriteString(line)
 			buf.WriteString("\n")
-			emitOutput(stream, line)
+			_, _ = fmt.Fprintln(w, line)
 		}
 	}
 
-	go scanAndEmit(stdoutPipe, "stdout", &stdoutBuf)
-	go scanAndEmit(stderrPipe, "stderr", &stderrBuf)
+	go copyAndCapture(stdoutPipe, &stdoutBuf)
+	go copyAndCapture(stderrPipe, &stderrBuf)
 
 	wg.Wait()
 	cmdErr := cmd.Wait()
@@ -311,11 +309,11 @@ func buildRun(command, workdir string, timeoutSecs int, stdout, stderr string, e
 }
 
 // runSequential runs multiple commands sequentially, optionally stopping at first failure.
-func runSequential(ctx context.Context, commands []string, workdir string, timeoutSecs int, failFast bool, emitOutput func(string, string)) (tool.Result, error) {
+func runSequential(ctx context.Context, commands []string, workdir string, timeoutSecs int, failFast bool, w io.Writer) (tool.Result, error) {
 	runs := make([]bashRun, 0, len(commands))
 
 	for _, cmd := range commands {
-		r, err := runSingle(ctx, cmd, workdir, timeoutSecs, emitOutput)
+		r, err := runSingle(ctx, cmd, workdir, timeoutSecs, w)
 		if err != nil {
 			// Infrastructure error — stop execution.
 			runs = append(runs, bashRun{

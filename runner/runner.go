@@ -65,17 +65,17 @@ func RunTurn(ctx context.Context, history History, client unified.Client, req co
 			extra:     map[string]any{},
 		}
 	}
-	executor := options.ToolExecutor
-	if executor == nil {
-		executor = newDefaultToolExecutor(options.Tools, options.ToolCtx, options.ToolTimeout)
-	}
-
 	var result Result
 	emit := func(event Event) {
 		result.Events = append(result.Events, event)
 		if options.OnEvent != nil {
 			options.OnEvent(event)
 		}
+	}
+
+	executor := options.ToolExecutor
+	if executor == nil {
+		executor = newDefaultToolExecutor(options.Tools, options.ToolCtx, options.ToolTimeout, emit)
 	}
 
 	fragment := conversation.NewTurnFragment()

@@ -89,6 +89,10 @@ func (d *EventDisplay) Handle(event runner.Event) {
 		}
 	case runner.ToolCallEvent:
 		d.printToolCall(ev.Call)
+	case runner.ToolOutputDeltaEvent:
+		PrintToolOutputDelta(d.out, ev.Chunk)
+	case runner.ToolStatusEvent:
+		PrintToolStatus(d.out, ev.Message)
 	case runner.ToolResultEvent:
 		PrintToolResult(d.out, ev.Output, ev.IsError)
 	case runner.UsageEvent:

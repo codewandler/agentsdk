@@ -87,6 +87,23 @@ type ProviderExecutionEvent struct {
 	Execution unified.ProviderExecutionEvent
 }
 
+// ToolOutputDeltaEvent is emitted when a tool writes incremental output
+// during execution. Presentation layers can render this in real time.
+type ToolOutputDeltaEvent struct {
+	CallID string
+	Name   string
+	Stream string // "stdout", "stderr", or tool-defined stream name
+	Chunk  string
+}
+
+// ToolStatusEvent is emitted when a tool reports progress during execution.
+type ToolStatusEvent struct {
+	CallID   string
+	Name     string
+	Progress float64 // 0.0–1.0 for determinate, -1 for indeterminate
+	Message  string
+}
+
 type ErrorEvent struct {
 	Err error
 }

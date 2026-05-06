@@ -23,6 +23,11 @@ match these entries as the project starts publishing releases.
   `Output()` and `Emit()`, simplifying test stubs and simple context types.
 - **`action.OutputEvent`**, **`action.StatusEvent`** — structured event types
   for streaming output chunks and progress/status updates.
+- **`runner.ToolOutputDeltaEvent`**, **`runner.ToolStatusEvent`** — runner-level
+  events that carry streaming tool output and status updates through the event
+  system to presentation layers.
+- **Terminal UI streaming** — `PrintToolOutputDelta` and `PrintToolStatus`
+  render real-time tool output and status in the terminal.
 
 ### Changed
 
@@ -31,6 +36,11 @@ match these entries as the project starts publishing releases.
   embed `action.BaseCtx`.
 - **`runtime.ToolContext`** — supports `WithToolOutput` and `WithToolEmit`
   options for wiring streaming into tool execution contexts.
+- **Bash tool** — uses `ctx.Output()` for streaming instead of the unused
+  `ctx.Extra()["tool.output"]` callback convention.
+- **Runner executor** — injects an `io.Writer` and `Emit` bridge into tool
+  contexts that emit `ToolOutputDeltaEvent`/`ToolStatusEvent` through the
+  runner event system.
 
 - **`app.Spec`** — new type that declares a first-party application's identity
   (name, description) and a deferred `Options` factory that returns
