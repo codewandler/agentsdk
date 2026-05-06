@@ -235,6 +235,34 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 		view["triggers"] = result.Triggers
 	}
 
+	// Include resources from agentdir bundles.
+	for _, b := range result.Bundles {
+		for _, spec := range b.AgentSpecs {
+			agents, _ := view["agents"].([]map[string]any)
+			agent := map[string]any{"name": spec.Name}
+			if spec.Description != "" {
+				agent["description"] = spec.Description
+			}
+			if len(spec.Tools) > 0 {
+				agent["tools"] = spec.Tools
+			}
+			view["agents"] = append(agents, agent)
+		}
+		for _, cmd := range b.Commands {
+			desc := cmd.Descriptor()
+			cmds, _ := view["commands"].([]map[string]any)
+			view["commands"] = append(cmds, map[string]any{"name": desc.Name, "description": desc.Description})
+		}
+		for _, wf := range b.Workflows {
+			wfs, _ := view["workflows"].([]map[string]any)
+			view["workflows"] = append(wfs, map[string]any{"name": wf.Name, "description": wf.Description})
+		}
+		for _, sk := range b.Skills {
+			sks, _ := view["skills"].([]map[string]any)
+			view["skills"] = append(sks, map[string]any{"name": sk.Name, "description": sk.Description})
+		}
+	}
+
 	if err := enc.Encode(view); err != nil {
 		return err
 	}
