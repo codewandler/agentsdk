@@ -28,6 +28,8 @@ match these entries as the project starts publishing releases.
   system to presentation layers.
 - **Terminal UI streaming** — `PrintToolOutputDelta` and `PrintToolStatus`
   render real-time tool output and status in the terminal.
+- **Tool call summaries** — compact tool-start display now shows key parameters
+  (path, pattern, cmd, url, etc.) per tool instead of just the tool name.
 - **`capability.ObservableRuntime`** — wraps a `capability.Runtime` with a
   `ThreadEventObserver` that fires after events are persisted. Enables
   presentation layers to observe all persisted thread events (capability

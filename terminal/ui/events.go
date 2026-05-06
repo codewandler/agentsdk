@@ -210,6 +210,12 @@ func (d *EventDisplay) printToolCall(call unified.ToolCall) {
 	d.lastToolName = call.Name
 	if d.debug[DebugTools] {
 		d.stepDisplay.PrintToolCall(call.Name, args)
+	} else if summarizer, ok := toolSummarizers[call.Name]; ok {
+		if summary := summarizer(args); summary != "" {
+			d.stepDisplay.PrintToolCallSummary(call.Name, summary)
+		} else {
+			d.stepDisplay.PrintToolCallCompact(call.Name)
+		}
 	} else {
 		d.stepDisplay.PrintToolCallCompact(call.Name)
 	}
