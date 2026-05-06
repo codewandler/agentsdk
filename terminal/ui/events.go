@@ -36,6 +36,13 @@ type EventDisplay struct {
 	stepsCompleted int
 	printedCall    map[string]bool
 	lastToolName   string
+	pendingUsage   *pendingStepUsage // deferred until tools finish
+}
+
+type pendingStepUsage struct {
+	step  int
+	rec   usage.Record
+	model string
 }
 
 type EventDisplayOption func(*EventDisplay)
@@ -94,6 +101,7 @@ func (d *EventDisplay) Handle(event runner.Event) {
 	}
 	switch ev := event.(type) {
 	case runner.StepStartEvent:
+		d.flushPendingUsage()
 		PrintStepHeader(d.out, ev.Step, ev.MaxSteps)
 		d.stepDisplay = NewStepDisplay(d.out)
 		d.stepUsage = usage.Record{}
@@ -135,10 +143,10 @@ func (d *EventDisplay) Handle(event runner.Event) {
 			d.stepDisplay.End()
 			d.stepDisplay = nil
 		}
-		if d.debug[DebugUsage] {
-			PrintStepUsageDebug(d.out, ev.Step, d.stepUsage, ev.Model)
-		} else {
-			PrintStepUsage(d.out, ev.Step, d.stepUsage, ev.Model)
+		d.pendingUsage = &pendingStepUsage{
+			step:  ev.Step,
+			rec:   d.stepUsage,
+			model: ev.Model,
 		}
 		d.stepsCompleted++
 		if ev.FinishReason == unified.FinishReasonLength {
@@ -146,11 +154,27 @@ func (d *EventDisplay) Handle(event runner.Event) {
 		}
 	case runner.ThreadEvent:
 		PrintThreadEvent(d.out, ev.Event)
+	case runner.CompletedEvent:
+		d.flushPendingUsage()
 	case runner.ErrorEvent:
+		d.flushPendingUsage()
 		if d.stepDisplay != nil {
 			d.stepDisplay.End()
 			d.stepDisplay = nil
 		}
+	}
+}
+
+func (d *EventDisplay) flushPendingUsage() {
+	if d.pendingUsage == nil {
+		return
+	}
+	p := d.pendingUsage
+	d.pendingUsage = nil
+	if d.debug[DebugUsage] {
+		PrintStepUsageDebug(d.out, p.step, p.rec, p.model)
+	} else {
+		PrintStepUsage(d.out, p.step, p.rec, p.model)
 	}
 }
 
