@@ -2,6 +2,7 @@ package harness
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/codewandler/agentsdk/agent"
@@ -19,18 +20,26 @@ func (p CommandHelpPayload) Display(command.DisplayMode) (string, error) {
 	if len(p.Descriptors) == 0 && len(p.AppCommands) == 0 {
 		return "No commands registered.", nil
 	}
+
+	// Merge all descriptors into a single sorted list.
+	all := make([]command.Descriptor, 0, len(p.Descriptors)+len(p.AppCommands))
+	all = append(all, p.Descriptors...)
+	all = append(all, p.AppCommands...)
+	sort.Slice(all, func(i, j int) bool {
+		ni := all[i].Name
+		if len(all[i].Path) > 0 {
+			ni = strings.Join(all[i].Path, " ")
+		}
+		nj := all[j].Name
+		if len(all[j].Path) > 0 {
+			nj = strings.Join(all[j].Path, " ")
+		}
+		return ni < nj
+	})
+
 	b.WriteString("Commands:")
-	for _, d := range p.Descriptors {
+	for _, d := range all {
 		writeCommandDescriptor(&b, d)
-	}
-	for _, spec := range p.AppCommands {
-		fmt.Fprintf(&b, "\n/%s", spec.Name)
-		if spec.ArgumentHint != "" {
-			fmt.Fprintf(&b, " %s", spec.ArgumentHint)
-		}
-		if spec.Description != "" {
-			fmt.Fprintf(&b, " - %s", spec.Description)
-		}
 	}
 	return b.String(), nil
 }
@@ -43,7 +52,12 @@ func writeCommandDescriptor(b *strings.Builder, d command.Descriptor) {
 	if d.Description != "" {
 		fmt.Fprintf(b, " - %s", d.Description)
 	}
-	for _, sub := range d.Subcommands {
+	sorted := make([]command.Descriptor, len(d.Subcommands))
+	copy(sorted, d.Subcommands)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Name < sorted[j].Name
+	})
+	for _, sub := range sorted {
 		writeCommandDescriptor(b, sub)
 	}
 }
