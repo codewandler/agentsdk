@@ -106,6 +106,15 @@ func printPlannerEvent(w io.Writer, dispatched capability.StateEventDispatched) 
 	}
 }
 
+// PrintToolResultCompact prints a one-line ok/err status for a tool call.
+func PrintToolResultCompact(w io.Writer, name string, isError bool) {
+	if isError {
+		fmt.Fprintf(w, "%serr%s\n", BrightRed, Reset)
+	} else {
+		fmt.Fprintf(w, "%sok%s\n", BrightGreen, Reset)
+	}
+}
+
 func PrintToolResult(w io.Writer, output string, isError bool) {
 	prefix := BrightGreen + "ok" + Reset
 	if isError {

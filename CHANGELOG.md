@@ -41,6 +41,12 @@ match these entries as the project starts publishing releases.
 - **Terminal planner rendering** — `PrintThreadEvent` renders planner
   capability state changes (plan created, step added/removed, status
   changes, current step) in the terminal UI.
+- **`--debug` CLI flag** — `--debug=tools` enables verbose tool output
+  (streaming chunks, full result text, detailed arguments). Without it,
+  tool calls show only the tool name and ok/err status.
+- **`ui.DebugCategories`** — `map[string]bool` controlling which event
+  categories render verbose output. Passed via `WithDebugCategories`
+  option to `EventDisplay`.
 
 ### Changed
 

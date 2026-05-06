@@ -14,6 +14,7 @@ import (
 	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/app"
 	"github.com/codewandler/agentsdk/resource"
+	"github.com/codewandler/agentsdk/terminal/ui"
 	"github.com/codewandler/llmadapter/unified"
 	"github.com/spf13/cobra"
 )
@@ -96,6 +97,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 		sessionsDir      string
 		verbose          bool
 		debugMessage     bool
+		debugFlags       []string
 		includeGlobal    bool
 		discoverPaths    []string
 		pluginNames      []string
@@ -243,6 +245,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 				TotalTimeout:       totalTimeout,
 				Verbose:            verbose,
 				DebugMessage:       debugMessage,
+				DebugCategories:    parseDebugFlags(debugFlags),
 				Prompt:             cfg.Prompt,
 				AgentOptions:       append([]agent.Option(nil), cfg.AgentOptions...),
 				AppOptions:         appOpts,
@@ -264,7 +267,7 @@ func NewCommand(cfg CommandConfig) *cobra.Command {
 	addRuntimeFlags(cmd, cfg, &maxSteps, &totalTimeout, &toolTimeout)
 	addSessionFlags(cmd, cfg, &session, &continueLast, &sessionsDir)
 	addModelCompatibilityFlags(cmd, cfg, &useCaseFlag, &approvedOnly, &allowDegraded, &allowUntested, &compatEvidence)
-	addDebugFlags(cmd, cfg, &verbose, &debugMessage)
+	addDebugFlags(cmd, cfg, &verbose, &debugMessage, &debugFlags)
 	applyProfileFlagVisibility(cmd, cfg.Profile)
 	_ = cmd.RegisterFlagCompletionFunc("model", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeModels(cfg.ModelCompleter, toComplete), cobra.ShellCompDirectiveNoFileComp
@@ -459,7 +462,7 @@ func addModelCompatibilityFlags(cmd *cobra.Command, cfg CommandConfig, useCaseFl
 	annotateFlags(cmd, GroupModelCompatibility, names...)
 }
 
-func addDebugFlags(cmd *cobra.Command, cfg CommandConfig, verbose *bool, debugMessage *bool) {
+func addDebugFlags(cmd *cobra.Command, cfg CommandConfig, verbose *bool, debugMessage *bool, debugFlags *[]string) {
 	if !cfg.Profile.groupEnabled(GroupDebug) {
 		return
 	}
@@ -473,7 +476,22 @@ func addDebugFlags(cmd *cobra.Command, cfg CommandConfig, verbose *bool, debugMe
 		f.BoolVar(debugMessage, "debug-message", false, "Render the messages that would be sent and exit without calling the model")
 		names = append(names, "debug-message")
 	}
+	if !cfg.Profile.flagDisabled("debug") {
+		f.StringSliceVar(debugFlags, "debug", nil, "Enable debug output for categories: tools")
+		names = append(names, "debug")
+	}
 	annotateFlags(cmd, GroupDebug, names...)
+}
+
+func parseDebugFlags(flags []string) ui.DebugCategories {
+	if len(flags) == 0 {
+		return nil
+	}
+	categories := make(ui.DebugCategories, len(flags))
+	for _, f := range flags {
+		categories[f] = true
+	}
+	return categories
 }
 
 func CompletionCommand(root *cobra.Command, name string) *cobra.Command {

@@ -50,6 +50,7 @@ type Config struct {
 	TotalTimeout     time.Duration
 	Verbose          bool
 	DebugMessage     bool
+	DebugCategories  ui.DebugCategories
 	Prompt           string
 
 	PluginNames      []string
@@ -244,8 +245,12 @@ func sourceAPIOption(cfg Config) (adapt.ApiKind, bool, error) {
 }
 
 func appOptions(cfg Config, env loadEnvironment) []app.Option {
+	var displayOpts []ui.EventDisplayOption
+	if len(cfg.DebugCategories) > 0 {
+		displayOpts = append(displayOpts, ui.WithDebugCategories(cfg.DebugCategories))
+	}
 	appOpts := []app.Option{
-		app.WithAgentOptions(agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(env.Out))),
+		app.WithAgentOptions(agent.WithEventHandlerFactory(ui.AgentEventHandlerFactory(env.Out, displayOpts...))),
 	}
 	// Risk gate: log-only mode — observes all tool calls, always approves.
 	// Write to stderr so TUI doesn't overwrite the output.

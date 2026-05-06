@@ -73,6 +73,23 @@ func (d *StepDisplay) PrintToolCall(name string, args map[string]any) {
 	fmt.Fprintf(d.w, "  %s%s%s\n", Dim, data, Reset)
 }
 
+// PrintToolCallCompact prints just the tool name without arguments.
+func (d *StepDisplay) PrintToolCallCompact(name string) {
+	switch d.state {
+	case StateReasoning:
+		_ = d.sr.Flush()
+		d.sr = newLiveMarkdownRenderer(d.w)
+		fmt.Fprintf(d.w, "%s\n", Reset)
+	case StateText:
+		_ = d.sr.Flush()
+		d.sr = newLiveMarkdownRenderer(d.w)
+		fmt.Fprint(d.w, "\n")
+	}
+	d.state = StateIdle
+	d.rendered = false
+	fmt.Fprintf(d.w, "\n%s> %s%s ", BrightYellow, name, Reset)
+}
+
 func (d *StepDisplay) End() {
 	switch d.state {
 	case StateReasoning:

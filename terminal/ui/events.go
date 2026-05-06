@@ -9,6 +9,17 @@ import (
 	"github.com/codewandler/llmadapter/unified"
 )
 
+// DebugCategories controls verbose output for specific event categories.
+// When a category is true, detailed output is shown; otherwise a compact
+// summary is rendered.
+type DebugCategories map[string]bool
+
+const (
+	// DebugTools enables verbose tool output: streaming chunks, full result
+	// text, and detailed tool call arguments.
+	DebugTools = "tools"
+)
+
 // EventDisplay renders runner events for one agent turn.
 type EventDisplay struct {
 	out            io.Writer
@@ -17,10 +28,12 @@ type EventDisplay struct {
 	sessionID      string
 	fallbackModel  string
 	route          usage.RouteState
+	debug          DebugCategories
 	stepDisplay    *StepDisplay
 	stepUsage      usage.Record
 	stepsCompleted int
 	printedCall    map[string]bool
+	lastToolName   string
 }
 
 type EventDisplayOption func(*EventDisplay)
@@ -43,6 +56,11 @@ func WithFallbackModel(model string) EventDisplayOption {
 
 func WithRouteState(route usage.RouteState) EventDisplayOption {
 	return func(d *EventDisplay) { d.route = route }
+}
+
+// WithDebugCategories sets which event categories show verbose output.
+func WithDebugCategories(categories DebugCategories) EventDisplayOption {
+	return func(d *EventDisplay) { d.debug = categories }
 }
 
 func NewEventDisplay(out io.Writer, opts ...EventDisplayOption) *EventDisplay {
@@ -90,11 +108,17 @@ func (d *EventDisplay) Handle(event runner.Event) {
 	case runner.ToolCallEvent:
 		d.printToolCall(ev.Call)
 	case runner.ToolOutputDeltaEvent:
-		PrintToolOutputDelta(d.out, ev.Chunk)
+		if d.debug[DebugTools] {
+			PrintToolOutputDelta(d.out, ev.Chunk)
+		}
 	case runner.ToolStatusEvent:
 		PrintToolStatus(d.out, ev.Message)
 	case runner.ToolResultEvent:
-		PrintToolResult(d.out, ev.Output, ev.IsError)
+		if d.debug[DebugTools] {
+			PrintToolResult(d.out, ev.Output, ev.IsError)
+		} else {
+			PrintToolResultCompact(d.out, ev.Name, ev.IsError)
+		}
 	case runner.UsageEvent:
 		rec := usage.FromRunnerEvent(ev, usage.RunnerEventOptions{
 			TurnID:        d.turnID,
@@ -134,10 +158,18 @@ func (d *EventDisplay) printToolCall(call unified.ToolCall) {
 	if key == "" {
 		key = fmt.Sprintf("%s:%d", call.Name, call.Index)
 	}
+	if d.printedCall[key] {
+		return
+	}
 	args, _ := runner.ToolCallArgsMap(call)
-	if len(args) == 0 || d.printedCall[key] {
+	if len(args) == 0 {
 		return
 	}
 	d.printedCall[key] = true
-	d.stepDisplay.PrintToolCall(call.Name, args)
+	d.lastToolName = call.Name
+	if d.debug[DebugTools] {
+		d.stepDisplay.PrintToolCall(call.Name, args)
+	} else {
+		d.stepDisplay.PrintToolCallCompact(call.Name)
+	}
 }
