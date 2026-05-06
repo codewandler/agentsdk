@@ -46,7 +46,10 @@ match these entries as the project starts publishing releases.
   tool calls show only the tool name and ok/err status.
 - **`ui.DebugCategories`** — `map[string]bool` controlling which event
   categories render verbose output. Passed via `WithDebugCategories`
-  option to `EventDisplay`.
+  option to `EventDisplay`. Supported categories: `tools`, `usage`.
+- **Compact step usage** — step usage now renders as a single line
+  (`step 1 · in: 9.6k (87% cached) · out: 87 · $0.0023`). Detailed
+  dims/usage/cost breakdowns require `--debug=usage`.
 
 ### Changed
 

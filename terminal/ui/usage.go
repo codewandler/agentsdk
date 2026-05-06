@@ -127,21 +127,26 @@ func PrintToolResult(w io.Writer, output string, isError bool) {
 	fmt.Fprintf(w, "%s %s\n", prefix, display)
 }
 
+// PrintStepUsage renders a compact step usage summary line.
+// When debug is true, additional detail lines are printed.
 func PrintStepUsage(w io.Writer, step int, rec usage.Record, model string) {
+	printStepUsageWithDebug(w, step, rec, model, false)
+}
+
+// PrintStepUsageDebug renders step usage with full detail lines.
+func PrintStepUsageDebug(w io.Writer, step int, rec usage.Record, model string) {
+	printStepUsageWithDebug(w, step, rec, model, true)
+}
+
+func printStepUsageWithDebug(w io.Writer, step int, rec usage.Record, model string, debug bool) {
 	parts := FormatUsageParts(rec)
-	modelPart := ""
-	if model != "" {
-		modelPart = fmt.Sprintf("  model: %s", model)
-	}
-	if parts == "" && modelPart == "" {
+	if parts == "" {
 		return
 	}
-	if parts == "" {
-		fmt.Fprintf(w, "%s   -- step %d --%s%s\n", Dim, step, modelPart, Reset)
-	} else {
-		fmt.Fprintf(w, "%s   -- step %d -- %s%s%s\n", Dim, step, parts, modelPart, Reset)
+	fmt.Fprintf(w, "%s   step %d \u00b7 %s%s\n", Dim, step, parts, Reset)
+	if debug {
+		printStepUsageDetails(w, rec)
 	}
-	printStepUsageDetails(w, rec)
 }
 
 func PrintTurnUsage(w io.Writer, turnID int, rec usage.Record) {

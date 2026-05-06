@@ -18,6 +18,8 @@ const (
 	// DebugTools enables verbose tool output: streaming chunks, full result
 	// text, and detailed tool call arguments.
 	DebugTools = "tools"
+	// DebugUsage enables detailed usage/cost breakdown per step.
+	DebugUsage = "usage"
 )
 
 // EventDisplay renders runner events for one agent turn.
@@ -133,7 +135,11 @@ func (d *EventDisplay) Handle(event runner.Event) {
 			d.stepDisplay.End()
 			d.stepDisplay = nil
 		}
-		PrintStepUsage(d.out, ev.Step, d.stepUsage, ev.Model)
+		if d.debug[DebugUsage] {
+			PrintStepUsageDebug(d.out, ev.Step, d.stepUsage, ev.Model)
+		} else {
+			PrintStepUsage(d.out, ev.Step, d.stepUsage, ev.Model)
+		}
 		d.stepsCompleted++
 		if ev.FinishReason == unified.FinishReasonLength {
 			fmt.Fprintf(d.out, "\n%s! model hit output token limit%s\n", BrightYellow, Reset)
