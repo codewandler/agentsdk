@@ -87,7 +87,7 @@ func (d *StepDisplay) PrintToolCallCompact(name string) {
 	}
 	d.state = StateIdle
 	d.rendered = false
-	fmt.Fprintf(d.w, "\n%s> %s%s ", BrightYellow, name, Reset)
+	fmt.Fprintf(d.w, "\n%s> %s%s\n", BrightYellow, name, Reset)
 }
 
 func (d *StepDisplay) End() {
