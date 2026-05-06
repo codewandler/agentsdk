@@ -54,14 +54,15 @@ Within a skill directory, agentsdk also recognizes optional reference files unde
 For runtime skill activation, only exact relative paths under `references/` are
 eligible as activatable skill references.
 
-## Agentsdk Native App Manifests
+## Agentsdk Native Appconfig
 
-Agentsdk supports `app.manifest.json` and `agentsdk.app.json` as native app
-manifests. These are agentsdk-specific composition files, not an external
-standard. They intentionally point at external resource formats rather than
-inventing new agent/command/skill file formats.
+Agentsdk supports `agentsdk.app.yaml`, `agentsdk.app.yml`, and
+`agentsdk.app.json` as native appconfig entry files. This is an agentsdk-specific
+composition format, not an external standard. It intentionally points at
+resource roots and appconfig documents rather than inventing new
+agent/command/skill file formats.
 
-Current manifest keys:
+Current appconfig keys:
 
 ```json
 {
@@ -82,22 +83,22 @@ Current manifest keys:
   },
   "sources": [
     ".agents",
-    "file:///absolute/path/to/plugin",
-    "git+https://github.com/codewandler/agentplugins.git#main",
-    "git+ssh://git@github.com/codewandler/agentplugins.git#main"
+    "resources/shared.yaml",
+    "resources/*.yaml"
   ]
 }
 ```
 
-`sources` entries load the same `.agents`, `.claude`, or plugin-root resource
-layouts from local directories or git materialized directories.
+`sources` entries load additional `.agents`, `.claude`, plugin-root resource
+layouts, or appconfig documents from local paths or glob patterns. Local
+`.agents` and `.claude` directories next to the entry file are loaded by default.
 
 `model_policy` is an agentsdk runtime policy, not a resource format. It can ask
 agentsdk to evaluate or enforce llmadapter compatibility evidence for a use case
 such as `agentic_coding`. `source_api: "auto"` allows route selection across
 supported source APIs; explicit source APIs restrict both selection and runtime
-routing. Relative `evidence_path` values are resolved relative to the manifest
-directory.
+routing. Relative `evidence_path` values are resolved relative to the appconfig entry
+file directory.
 
 ## Agentsdk Native Declarative Resources
 
@@ -112,7 +113,7 @@ YAML resources from native `.agents` layouts:
 .agents/commands/*.yaml
 ```
 
-When a manifest source points directly at a resource root such as `.agents`, the
+When an appconfig source points directly at a resource root such as `.agents`, the
 same resources are loaded from the corresponding plugin-root layout:
 
 ```text

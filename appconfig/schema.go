@@ -14,12 +14,13 @@ type AppDocument struct {
 	Kind Kind `json:"kind,omitempty" jsonschema:"enum=config,enum=agent,enum=command,enum=workflow,enum=action,enum=datasource,enum=trigger,default=config,description=Document kind discriminator"`
 
 	// Config fields (kind=config)
-	Name         string            `json:"name,omitempty" jsonschema:"description=Application name"`
-	DefaultAgent string            `json:"default_agent,omitempty" jsonschema:"description=Default agent to use when none is specified"`
-	Include      []string          `json:"include,omitempty" jsonschema:"description=Glob patterns for additional config files to include"`
-	Resolution   *ResolutionConfig `json:"resolution,omitempty" jsonschema:"description=Resource resolution configuration"`
-	Discovery    *DiscoveryConfig  `json:"discovery,omitempty" jsonschema:"description=Resource discovery policy"`
-	Plugins      []PluginRef       `json:"plugins,omitempty" jsonschema:"description=Plugins to load"`
+	Name         string             `json:"name,omitempty" jsonschema:"description=Application name"`
+	DefaultAgent string             `json:"default_agent,omitempty" jsonschema:"description=Default agent to use when none is specified"`
+	Sources      []string           `json:"sources,omitempty" jsonschema:"description=Glob patterns for additional resource roots or config files to load"`
+	Resolution   *ResolutionConfig  `json:"resolution,omitempty" jsonschema:"description=Resource resolution configuration"`
+	Discovery    *DiscoveryConfig   `json:"discovery,omitempty" jsonschema:"description=Resource discovery policy"`
+	ModelPolicy  *ModelPolicyConfig `json:"model_policy,omitempty" jsonschema:"description=Model compatibility routing policy"`
+	Plugins      []PluginRef        `json:"plugins,omitempty" jsonschema:"description=Plugins to load"`
 
 	// Agent fields (kind=agent)
 	Description  string   `json:"description,omitempty" jsonschema:"description=Human-readable description"`

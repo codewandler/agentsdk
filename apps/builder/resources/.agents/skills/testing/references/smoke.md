@@ -9,7 +9,7 @@ Target app test sessions are isolated under `.agentsdk/builder/target-sessions`.
 
 `builder_discover_target` resolves the target project's resource bundle and reports:
 
-- Sources found (`.agents`, manifest entries)
+- Sources found (`.agents`, appconfig entries)
 - Agent specs (names)
 - Commands, workflows, actions, triggers, datasources
 - Diagnostics (parse errors, missing references, etc.)
@@ -51,7 +51,7 @@ agentsdk run .
 |---------|-------------|
 | No agents found | Missing `.agents/agents/*.md` or bad frontmatter |
 | Discovery diagnostics | YAML parse errors, missing referenced actions |
-| Harness load fails | Invalid manifest, missing sources directory |
+| Harness load fails | Invalid appconfig, missing sources directory |
 | Workflow list empty | No `.agents/workflows/*.yaml` files, or YAML errors |
 | Tool not found | Agent spec `tools:` references a tool not in the catalog |
 

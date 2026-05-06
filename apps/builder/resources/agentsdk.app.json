@@ -6,6 +6,10 @@
     "allow_remote": false,
     "trust_store_dir": ".agentsdk"
   },
+  "model_policy": {
+    "use_case": "agentic_coding",
+    "source_api": "auto"
+  },
   "sources": [
     ".agents"
   ]

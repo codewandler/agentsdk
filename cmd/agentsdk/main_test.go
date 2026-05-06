@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codewandler/agentsdk/plugins/configplugin"
 	"github.com/codewandler/llmadapter/adapt"
 	"github.com/codewandler/llmadapter/adapterconfig"
 	"github.com/codewandler/llmadapter/compatibility"
@@ -509,6 +510,68 @@ func TestConfigDiscoverJSONUsesSharedDiscoveryPayload(t *testing.T) {
 	require.Len(t, payload.Agents, 1)
 	require.Equal(t, "coder", payload.Agents[0].Name)
 	require.Equal(t, "Test coder", payload.Agents[0].Description)
+}
+
+func TestConfigPrintRendersMaterializedSources(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "kind: config\nname: test-app\nsources:\n  - .agents\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"config", "print", dir})
+	require.NoError(t, cmd.Execute())
+
+	text := out.String()
+	require.Contains(t, text, "sources:")
+	require.Contains(t, text, filepath.Join(dir, "agentsdk.app.yaml"))
+	require.Contains(t, text, filepath.Join(dir, ".agents"))
+}
+
+func TestConfigDiscoverUsesSameSourcesAsRootDiscover(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "kind: config\nname: test-app\nsources:\n  - .agents\n")
+	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
+
+	var rootOut bytes.Buffer
+	root := rootCmd()
+	root.SetOut(&rootOut)
+	root.SetErr(&rootOut)
+	root.SetArgs([]string{"discover", dir})
+	require.NoError(t, root.Execute())
+
+	var configOut bytes.Buffer
+	config := rootCmd()
+	config.SetOut(&configOut)
+	config.SetErr(&configOut)
+	config.SetArgs([]string{"config", "discover", dir})
+	require.NoError(t, config.Execute())
+
+	require.Equal(t, rootOut.String(), configOut.String())
+}
+
+func TestConfigDiscoverAppliesAppConfigModelPolicy(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), `kind: config
+name: test-app
+model_policy:
+  use_case: agentic_coding
+  approved_only: true
+---
+kind: agent
+name: coder
+system: test
+`)
+
+	result, err := loadConfig([]string{dir}, nil)
+	require.NoError(t, err)
+	resolved, err := configplugin.ResolutionFromAppConfig(result)
+	require.NoError(t, err)
+	require.True(t, resolved.HasModelPolicy)
+	require.Equal(t, "agentic_coding", string(resolved.ModelPolicy.UseCase))
+	require.True(t, resolved.ModelPolicy.ApprovedOnly)
 }
 
 func TestConfigSchemaWritesToStdout(t *testing.T) {

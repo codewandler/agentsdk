@@ -1,6 +1,6 @@
 # Discover / introspection
 
-`agentsdk discover` is the debugging surface for understanding what a resource directory, app manifest, and plugin set contribute before anything is run.
+`agentsdk discover` is the debugging surface for understanding what the canonical appconfig load path contributes before anything is run. `agentsdk config discover` uses the same loader and renders the same resource tree.
 
 ## Human-readable discovery
 
@@ -12,10 +12,12 @@
 - executable command descriptors, including caller/safety policy labels when present;
 - skill definitions and skill references with trigger metadata;
 - datasource, workflow, action, trigger, and structured command resource descriptors;
-- manifest plugin refs and whether structured config is present;
+- appconfig plugin refs and whether structured config is present;
 - disabled suggestions and diagnostics.
 
 This command is intentionally a debugging surface, not a runtime API. Channels that need machine-readable command execution should use harness/session command APIs instead of parsing this text.
+
+`agentsdk config print [path]` renders the merged appconfig as Markdown with a fenced `yaml` block. Its materialized `sources` list is the same concrete source list reported by `agentsdk discover [path]` and `agentsdk config discover [path]`.
 
 ## Machine-readable discovery
 
@@ -50,7 +52,7 @@ agentsdk discover --local --json .
 - `commands` are executable slash-command descriptors from the loaded app command registry.
 - `structuredCommands` are declarative command resources from `.agents/commands/*.yaml`; they are metadata until a harness/channel projects them into an execution surface.
 - `workflows`, `actions`, `triggers`, and `datasources` are declarative resource descriptors from the resolved bundle.
-- `plugins` reports manifest refs and whether config was provided; it does not expose resolved runtime internals or secrets.
+- `plugins` reports appconfig refs and whether config was provided; it does not expose resolved runtime internals or secrets.
 - `capabilities` reports configured agent attachments from specs. Live runtime state remains a session/harness concern.
 
 ## Compatibility notes

@@ -84,7 +84,7 @@ func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Re
 	fmt.Fprintln(&b, "```yaml")
 	enc := yaml.NewEncoder(&b)
 	enc.SetIndent(2)
-	if err := enc.Encode(result.Config); err != nil {
+	if err := enc.Encode(result.MaterializedConfig()); err != nil {
 		return command.Result{}, err
 	}
 	fmt.Fprintln(&b, "```")
@@ -110,7 +110,7 @@ func (p *Plugin) validateCommand(_ context.Context, _ configValidateInput) (comm
 	fmt.Fprintf(&b, "Actions: %d\n", len(result.Actions))
 	fmt.Fprintf(&b, "Datasources: %d\n", len(result.Datasources))
 	fmt.Fprintf(&b, "Triggers: %d\n", len(result.Triggers))
-	fmt.Fprintf(&b, "Includes: %d\n", len(result.Config.Include))
+	fmt.Fprintf(&b, "Sources: %d\n", len(result.Config.Sources))
 	fmt.Fprintf(&b, "Plugins: %d\n", len(result.Config.Plugins))
 	fmt.Fprintln(&b, "\n✓ configuration is valid")
 	return command.Display(command.TextPayload{Text: b.String()}), nil

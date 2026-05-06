@@ -57,7 +57,7 @@ max-steps: 100
 System prompt goes here.
 ```
 
-## Manifest template
+## Appconfig template
 
 ```json
 {
@@ -68,6 +68,10 @@ System prompt goes here.
     "allow_remote": false,
     "trust_store_dir": ".agentsdk"
   },
+  "model_policy": {
+    "use_case": "agentic_coding",
+    "source_api": "auto"
+  },
   "sources": [".agents"]
 }
 ```
@@ -75,7 +79,7 @@ System prompt goes here.
 ## Scaffolding workflow
 
 1. Gather requirements (use `refine_requirements` workflow).
-2. Create `agentsdk.app.json` with appropriate discovery settings.
+2. Create `agentsdk.app.json` with appropriate appconfig settings.
 3. Create `.agents/agents/main.md` with tools, skills, and system prompt.
 4. Add skills under `.agents/skills/` for domain knowledge.
 5. Add workflows under `.agents/workflows/` for repeatable processes.

@@ -115,7 +115,7 @@ func configCmd() *cobra.Command {
 			fmt.Fprintf(out, "Actions: %d\n", len(result.Actions))
 			fmt.Fprintf(out, "Datasources: %d\n", len(result.Datasources))
 			fmt.Fprintf(out, "Triggers: %d\n", len(result.Triggers))
-			fmt.Fprintf(out, "Includes: %d\n", len(result.Config.Include))
+			fmt.Fprintf(out, "Sources: %d\n", len(result.Config.Sources))
 			fmt.Fprintf(out, "Plugins: %d\n", len(result.Config.Plugins))
 			fmt.Fprintln(out, "\n\u2713 configuration is valid")
 			return nil
@@ -190,10 +190,18 @@ func configCmd() *cobra.Command {
 }
 
 func loadConfig(args []string, extraSources []string) (appconfig.LoadResult, error) {
+	dir := "."
 	var opts []appconfig.LoadOption
 	if len(args) == 1 {
-		opts = append(opts, appconfig.WithConfigRoots(args[0]))
+		arg := args[0]
+		if info, err := os.Stat(arg); err == nil && !info.IsDir() {
+			dir = filepath.Dir(arg)
+			opts = append(opts, appconfig.WithConfigRoots(arg))
+		} else {
+			dir = arg
+		}
 	}
+	opts = append(opts, appconfig.WithWorkDir(dir), appconfig.WithoutUserConfig())
 	if len(extraSources) > 0 {
 		opts = append(opts, appconfig.WithConfigRoots(extraSources...))
 	}
@@ -206,7 +214,7 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 	fmt.Fprintln(&buf, "```yaml")
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-	if err := enc.Encode(result.Config); err != nil {
+	if err := enc.Encode(result.MaterializedConfig()); err != nil {
 		return err
 	}
 	fmt.Fprintln(&buf, "```")

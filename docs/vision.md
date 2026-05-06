@@ -75,7 +75,7 @@ Integrations should be adapters, plugins, resources, examples, first-party apps,
 | Surface | Purpose |
 | --- | --- |
 | `agentsdk run` | Run a resource or Go-composed app in the terminal. |
-| `agentsdk discover` | Inspect resources and app manifests without running an agent. |
+| `agentsdk discover` | Inspect resources and appconfig entries without running an agent. |
 | `agentsdk serve` | Run a daemon/service-style harness host. |
 | `agentsdk build` | Use the builder dogfood app to scaffold/refine agent apps. |
 | `harness.Service` / `harness.Session` | Programmatic host/session APIs for turns, commands, workflows, events, and persistence. |

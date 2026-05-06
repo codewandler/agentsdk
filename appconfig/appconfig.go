@@ -1,9 +1,10 @@
 // Package appconfig provides a declarative YAML/JSON application configuration
-// format. A single entry file (agentsdk.app.yaml or agentsdk.app.json) defines
-// the application, with include globs to pull in additional resource files.
+// format. A single entry file (agentsdk.app.yaml, agentsdk.app.yml, or
+// agentsdk.app.json) defines the application, with sources to load additional
+// resource roots or config files.
 //
 // Documents use a "kind" field to distinguish types:
-//   - config (default): root application config with includes, resolution, plugins
+//   - config (default): root application config with sources, resolution, plugins
 //   - agent: agent specification
 //   - command: command definition
 //   - workflow: workflow definition
@@ -55,12 +56,13 @@ type Document struct {
 
 // Config is the root application configuration (kind=config).
 type Config struct {
-	Name         string            `yaml:"name,omitempty" json:"name,omitempty"`
-	DefaultAgent string            `yaml:"default_agent,omitempty" json:"default_agent,omitempty"`
-	Include      []string          `yaml:"include,omitempty" json:"include,omitempty"`
-	Resolution   *ResolutionConfig `yaml:"resolution,omitempty" json:"resolution,omitempty"`
-	Discovery    *DiscoveryConfig  `yaml:"discovery,omitempty" json:"discovery,omitempty"`
-	Plugins      []PluginRef       `yaml:"plugins,omitempty" json:"plugins,omitempty"`
+	Name         string             `yaml:"name,omitempty" json:"name,omitempty"`
+	DefaultAgent string             `yaml:"default_agent,omitempty" json:"default_agent,omitempty"`
+	Sources      []string           `yaml:"sources,omitempty" json:"sources,omitempty"`
+	Resolution   *ResolutionConfig  `yaml:"resolution,omitempty" json:"resolution,omitempty"`
+	Discovery    *DiscoveryConfig   `yaml:"discovery,omitempty" json:"discovery,omitempty"`
+	ModelPolicy  *ModelPolicyConfig `yaml:"model_policy,omitempty" json:"model_policy,omitempty"`
+	Plugins      []PluginRef        `yaml:"plugins,omitempty" json:"plugins,omitempty"`
 }
 
 // AgentDoc is an agent document (kind=agent).
@@ -137,6 +139,60 @@ type DiscoveryConfig struct {
 	AllowRemote                bool `yaml:"allow_remote,omitempty" json:"allow_remote,omitempty"`
 }
 
+// ModelPolicyConfig configures model compatibility routing for the app.
+type ModelPolicyConfig struct {
+	UseCase       string `yaml:"use_case,omitempty" json:"use_case,omitempty"`
+	SourceAPI     string `yaml:"source_api,omitempty" json:"source_api,omitempty"`
+	ApprovedOnly  *bool  `yaml:"approved_only,omitempty" json:"approved_only,omitempty"`
+	AllowDegraded *bool  `yaml:"allow_degraded,omitempty" json:"allow_degraded,omitempty"`
+	AllowUntested *bool  `yaml:"allow_untested,omitempty" json:"allow_untested,omitempty"`
+	EvidencePath  string `yaml:"evidence_path,omitempty" json:"evidence_path,omitempty"`
+}
+
+// AgentPolicy converts the appconfig model policy into runtime agent config.
+func (p ModelPolicyConfig) AgentPolicy(baseDir string) (agentconfig.ModelPolicy, bool, error) {
+	configured := strings.TrimSpace(p.UseCase) != "" ||
+		strings.TrimSpace(p.SourceAPI) != "" ||
+		p.ApprovedOnly != nil ||
+		p.AllowDegraded != nil ||
+		p.AllowUntested != nil ||
+		strings.TrimSpace(p.EvidencePath) != ""
+	if !configured {
+		return agentconfig.ModelPolicy{}, false, nil
+	}
+	var out agentconfig.ModelPolicy
+	if strings.TrimSpace(p.UseCase) != "" {
+		useCase, err := agentconfig.ParseModelUseCase(p.UseCase)
+		if err != nil {
+			return agentconfig.ModelPolicy{}, false, err
+		}
+		out.UseCase = useCase
+	}
+	if strings.TrimSpace(p.SourceAPI) != "" {
+		sourceAPI, err := agentconfig.ParseSourceAPI(p.SourceAPI)
+		if err != nil {
+			return agentconfig.ModelPolicy{}, false, err
+		}
+		out.SourceAPI = sourceAPI
+	}
+	if p.ApprovedOnly != nil {
+		out.ApprovedOnly = *p.ApprovedOnly
+	}
+	if p.AllowDegraded != nil {
+		out.AllowDegraded = *p.AllowDegraded
+	}
+	if p.AllowUntested != nil {
+		out.AllowUntested = *p.AllowUntested
+	}
+	if strings.TrimSpace(p.EvidencePath) != "" {
+		out.EvidencePath = p.EvidencePath
+		if !filepath.IsAbs(out.EvidencePath) {
+			out.EvidencePath = filepath.Join(baseDir, out.EvidencePath)
+		}
+	}
+	return out, true, nil
+}
+
 // PluginRef references a plugin to load.
 type PluginRef struct {
 	Name   string         `yaml:"name" json:"name"`
@@ -154,12 +210,12 @@ func FindEntryFile(dir string) (string, bool) {
 	return "", false
 }
 
-// Load finds the entry file in dir and loads it with all includes.
+// Load finds the entry file in dir and loads it with all sources.
 func Load(dir string) (LoadResult, error) {
 	return NewLoader().Load(WithWorkDir(dir), WithoutUserConfig())
 }
 
-// LoadFile loads a specific config file with all its includes.
+// LoadFile loads a specific config file with all its sources.
 func LoadFile(path string) (LoadResult, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -170,6 +226,23 @@ func LoadFile(path string) (LoadResult, error) {
 		WithWorkDir(filepath.Dir(abs)),
 		WithoutUserConfig(),
 	)
+}
+
+// MaterializedConfig returns the merged config with sources expanded to the
+// concrete source paths loaded by the loader. This is the config-print view and
+// intentionally matches discovery source reporting.
+func (r LoadResult) MaterializedConfig() Config {
+	cfg := r.Config
+	cfg.Sources = nil
+	seen := make(map[string]bool, len(r.Sources))
+	for _, source := range r.Sources {
+		if source.Path == "" || seen[source.Path] {
+			continue
+		}
+		seen[source.Path] = true
+		cfg.Sources = append(cfg.Sources, source.Path)
+	}
+	return cfg
 }
 
 // ToAppOptions converts the LoadResult into []app.Option for app.New.
@@ -382,6 +455,11 @@ func parseDocuments(data []byte, source string) ([]Document, error) {
 
 // applyDocument routes a parsed document to the appropriate field in LoadResult.
 func applyDocument(result *LoadResult, doc Document, source string) error {
+	if doc.Kind == KindConfig {
+		if _, ok := doc.Raw["include"]; ok {
+			return fmt.Errorf("config: unsupported field \"include\"; use \"sources\"")
+		}
+	}
 	raw, err := yaml.Marshal(doc.Raw)
 	if err != nil {
 		return err
@@ -501,13 +579,16 @@ func mergeConfig(base, overlay Config) Config {
 	if overlay.DefaultAgent != "" {
 		base.DefaultAgent = overlay.DefaultAgent
 	}
-	base.Include = append(base.Include, overlay.Include...)
+	base.Sources = append(base.Sources, overlay.Sources...)
 	base.Plugins = append(base.Plugins, overlay.Plugins...)
 	if overlay.Resolution != nil {
 		base.Resolution = overlay.Resolution
 	}
 	if overlay.Discovery != nil {
 		base.Discovery = overlay.Discovery
+	}
+	if overlay.ModelPolicy != nil {
+		base.ModelPolicy = overlay.ModelPolicy
 	}
 	return base
 }

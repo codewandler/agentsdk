@@ -277,7 +277,7 @@ Question: where should trigger definitions live?
 
 Options:
 
-- app manifest only;
+- appconfig entry only;
 - `.agents/triggers/*.yaml`;
 - host/daemon config only;
 - Go/plugin-only initially.
@@ -456,11 +456,11 @@ Use `--sessions-dir` for explicit deployments. Daemon-owned sessions should be t
 
 ## Config/resource conventions
 
-`agentsdk serve` uses the same resource path and manifest loading behavior as `agentsdk run`:
+`agentsdk serve` uses the same resource path and appconfig/resource loading behavior as `agentsdk run`:
 
 - resource path argument defaults to `.`;
-- app manifests such as `agentsdk.app.json` are resolved by the existing agentdir/resource loader;
-- manifest plugin refs and explicit `--plugin` refs flow through the existing plugin factory path;
+- appconfig entry files such as `agentsdk.app.yaml` and `agentsdk.app.json` describe resource `sources`;
+- appconfig plugin refs and explicit `--plugin` refs flow through the existing plugin factory path;
 - `--no-default-plugins` disables only the built-in local CLI fallback plugin, not manifest or explicit plugin refs.
 
 ## Verification

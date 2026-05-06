@@ -157,11 +157,11 @@ Conventions:
   `app.PluginFactory`; it can be repeated.
 - `--no-default-plugins` disables only the terminal host's built-in `local_cli`
   fallback policy.
-- `--no-default-plugins` does not disable manifest plugin refs or explicit
+- `--no-default-plugins` does not disable appconfig plugin refs or explicit
   `--plugin` refs.
 - Unknown plugin names should fail during load with a plugin-resolution error.
 
-App manifests can declare plugin refs too:
+Appconfig entries can declare plugin refs too:
 
 ```json
 {
@@ -173,7 +173,7 @@ App manifests can declare plugin refs too:
 }
 ```
 
-Manifest plugin refs are resource/app configuration. CLI `--plugin` refs are
+Appconfig plugin refs are resource/app configuration. CLI `--plugin` refs are
 operator overrides. Both flow through the same plugin factory path.
 
 ## Model/source API policy flags
@@ -222,7 +222,7 @@ agentsdk run . /workflow list
 agentsdk discover .
 ```
 
-`agentsdk discover` is the debugging surface for resource/app manifests. It
+`agentsdk discover` is the debugging surface for resource/appconfig entries. It
 should distinguish:
 
 - Markdown/app commands (`Commands`);

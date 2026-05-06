@@ -60,7 +60,7 @@ You are initialized from embedded builder resources, not from the current workin
 
 ## agentsdk resource format knowledge
 
-### App manifest (`agentsdk.app.json`)
+### App config (`agentsdk.app.json`)
 
 ```json
 {
@@ -71,6 +71,10 @@ You are initialized from embedded builder resources, not from the current workin
     "allow_remote": false,
     "trust_store_dir": ".agentsdk"
   },
+  "model_policy": {
+    "use_case": "agentic_coding",
+    "source_api": "auto"
+  },
   "sources": [".agents"]
 }
 ```
@@ -79,7 +83,7 @@ You are initialized from embedded builder resources, not from the current workin
 
 ```text
 project/
-  agentsdk.app.json          # app manifest
+  agentsdk.app.json          # appconfig entry
   README.md
   .agents/
     agents/<name>.md          # agent specs (frontmatter + system prompt)

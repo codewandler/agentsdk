@@ -10,7 +10,7 @@ This directory contains small examples that exercise the blessed agentsdk paths.
 | `resource-only-app/` | Resource-only workflow/command/trigger sample. | `.agents` resources |
 | `workflow-app/` | Declarative workflow with command exposure. | workflows + commands |
 | `command-tree/` | Structured YAML and Markdown command resources. | command resources |
-| `hybrid-app/` | Resource bundle plus manifest plugin composition. | manifest + plugins |
+| `hybrid-app/` | Resource bundle plus appconfig plugin composition. | appconfig + plugins |
 | `datasource/` | Go-native datasource definition/registry example. | `datasource` package |
 | `action-tool-adapter/` | Go-native action/tool adapter example. | `action` + `tool` packages |
 | `devops-cli/` | Branded embedded CLI using `terminal/cli.NewCommand`. | separate Go module |

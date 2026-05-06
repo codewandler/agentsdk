@@ -27,7 +27,7 @@ type discoveryWriter interface {
 }
 
 // DiscoverResources loads resources through appconfig so discovery follows the
-// same config/include expansion path as config inspection.
+// same config/source expansion path as config inspection.
 func DiscoverResources(dir string) (agentdir.Resolution, *appconfig.LoadResult, error) {
 	cfgResult, err := appconfig.Load(dir)
 	if err != nil {
@@ -69,7 +69,7 @@ func ResolutionFromAppConfig(cfgResult appconfig.LoadResult) (agentdir.Resolutio
 	}
 	// Merge inline appconfig resources.
 	resolved.Bundle.Append(cfgResult.ToContributionBundle())
-	// Merge agentdir bundles loaded via include directives.
+	// Merge agentdir bundles loaded via source directives.
 	for _, b := range cfgResult.Bundles {
 		resolved.Bundle.Append(b)
 		if resolved.Bundle.Source.ID == "" && b.Source.ID != "" {
@@ -89,8 +89,18 @@ func ResolutionFromAppConfig(cfgResult appconfig.LoadResult) (agentdir.Resolutio
 			return agentdir.Resolution{}, fmt.Errorf("plugin name is required")
 		}
 	}
-	// Populate manifest for backward compatibility with JSON output and plugin refs.
+	// Populate the agentdir manifest adapter used by discovery JSON output and plugin refs.
 	manifest := &agentdir.AppManifest{DefaultAgent: cfgResult.Config.DefaultAgent}
+	if cfgResult.Config.ModelPolicy != nil {
+		policy, ok, err := cfgResult.Config.ModelPolicy.AgentPolicy(filepath.Dir(cfgResult.EntryPath))
+		if err != nil {
+			return agentdir.Resolution{}, err
+		}
+		if ok {
+			resolved.ModelPolicy = policy
+			resolved.HasModelPolicy = true
+		}
+	}
 	for _, p := range cfgResult.Config.Plugins {
 		manifest.Plugins = append(manifest.Plugins, agentdir.PluginRef{
 			Name:   p.Name,

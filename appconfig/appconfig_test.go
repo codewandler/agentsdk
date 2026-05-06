@@ -12,7 +12,7 @@ func TestParseConfigKind(t *testing.T) {
 	data := []byte(`
 name: my-app
 default_agent: main
-include:
+sources:
   - .agents/**/*.yaml
 `)
 	docs, err := parseDocuments(data, "test.yaml")
@@ -101,7 +101,7 @@ func TestLoadFileJSON(t *testing.T) {
 
 func TestLoadFindsJSONEntryFile(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"include":[".agents"],"plugins":[{"name":"local_cli","config":{"mode":"safe"}}]}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"sources":[".agents"],"plugins":[{"name":"local_cli","config":{"mode":"safe"}}]}`), 0o644))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".agents", "agents"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".agents", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
 
@@ -112,7 +112,7 @@ func TestLoadFindsJSONEntryFile(t *testing.T) {
 	require.Equal(t, "main", result.Bundles[0].AgentSpecs[0].Name)
 }
 
-func TestLoadIgnoresJSONSourcesField(t *testing.T) {
+func TestLoadJSONSourcesField(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"sources":["resources"]}`), 0o644))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources", "agents"), 0o755))
@@ -120,23 +120,84 @@ func TestLoadIgnoresJSONSourcesField(t *testing.T) {
 
 	result, err := Load(dir)
 	require.NoError(t, err)
-	require.Empty(t, result.Bundles)
+	require.Len(t, result.Bundles, 1)
+	require.Equal(t, "main", result.Bundles[0].AgentSpecs[0].Name)
 }
 
-func TestLoadWithIncludes(t *testing.T) {
+func TestLoadRejectsIncludeField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"include":["resources"]}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
+
+	_, err := Load(dir)
+	require.ErrorContains(t, err, `unsupported field "include"`)
+}
+
+func TestLoadYAMLSourcesField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte("sources:\n  - resources\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, result.Bundles, 1)
+	require.Equal(t, "main", result.Bundles[0].AgentSpecs[0].Name)
+}
+
+func TestLoadModelPolicy(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte(`model_policy:
+  use_case: agentic_coding
+  source_api: anthropic.messages
+  approved_only: true
+  allow_degraded: true
+  allow_untested: false
+  evidence_path: .agentsdk/compatibility/agentic_coding.json
+`), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	require.NotNil(t, result.Config.ModelPolicy)
+	policy, ok, err := result.Config.ModelPolicy.AgentPolicy(dir)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "agentic_coding", string(policy.UseCase))
+	require.Equal(t, "anthropic.messages", string(policy.SourceAPI))
+	require.True(t, policy.ApprovedOnly)
+	require.True(t, policy.AllowDegraded)
+	require.False(t, policy.AllowUntested)
+	require.Equal(t, filepath.Join(dir, ".agentsdk", "compatibility", "agentic_coding.json"), policy.EvidencePath)
+}
+
+func TestMaterializedConfigSourcesMatchLoadedSources(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte("sources:\n  - resources\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	cfg := result.MaterializedConfig()
+	require.Contains(t, cfg.Sources, filepath.Join(dir, "agentsdk.app.yaml"))
+	require.Contains(t, cfg.Sources, filepath.Join(dir, "resources"))
+}
+
+func TestLoadWithSources(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources"), 0o755))
 
-	// Entry file with include glob.
+	// Entry file with source glob.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte(`
 kind: config
-name: include-test
+name: source-test
 default_agent: main
-include:
+sources:
   - resources/*.yaml
 `), 0o644))
 
-	// Included agent file.
+	// Sourced agent file.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agent.yaml"), []byte(`
 kind: agent
 name: main
@@ -144,7 +205,7 @@ description: Main agent
 system: Hello.
 `), 0o644))
 
-	// Included workflow file.
+	// Sourced workflow file.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "deploy.yaml"), []byte(`
 kind: workflow
 name: deploy
@@ -156,7 +217,7 @@ description: Deploy
 
 	result, err := Load(dir)
 	require.NoError(t, err)
-	require.Equal(t, "include-test", result.Config.Name)
+	require.Equal(t, "source-test", result.Config.Name)
 	require.Len(t, result.Agents, 1)
 	require.Equal(t, "main", result.Agents[0].Name)
 	require.Len(t, result.Workflows, 1)

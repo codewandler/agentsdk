@@ -12,7 +12,7 @@ go run ./cmd/agentsdk run apps/engineer
 
 The bundled `main` agent is configured with `max-steps: 100` so longer multi-step coding and review sessions do not stop at the SDK default of 30.
 
-This app also includes an `agentsdk.app.json` manifest that enables global user skill discovery, so `~/.agents/skills` and `~/.claude/skills` participate in `/skills` without requiring `--include-global`.
+This app also includes an `agentsdk.app.json` appconfig entry that enables global user skill discovery, so `~/.agents/skills` and `~/.claude/skills` participate in `/skills` without requiring `--include-global`.
 
 ## Tools
 

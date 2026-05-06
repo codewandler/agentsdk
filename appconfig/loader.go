@@ -32,7 +32,7 @@ func WithConfigRoots(roots ...string) LoadOption {
 }
 
 // WithWorkDir sets the working directory. It is probed for entry files
-// and used as the base for relative include paths. Defaults to os.Getwd().
+// and used as the base for relative source paths. Defaults to os.Getwd().
 func WithWorkDir(dir string) LoadOption {
 	return func(lc *loadConfig) { lc.workDir = dir }
 }
@@ -69,7 +69,7 @@ const UserConfigDir = ".agentsdk"
 var UserConfigNames = []string{"default.config.yaml", "default.config.yml", "default.config.json"}
 
 // Loader loads and merges appconfig documents from multiple roots with
-// cycle detection and include expansion.
+// cycle detection and source expansion.
 type Loader struct {
 	visited map[string]bool
 	result  LoadResult
@@ -88,8 +88,8 @@ func NewLoader() *Loader {
 //  3. Explicit roots (WithConfigRoots) — probed for entry files
 //  4. Working directory (WithWorkDir or $PWD) — probed for entry files
 //
-// Each root is probed for entry files (agentsdk.app.yaml, agentsdk.app.yml).
-// Include directives are recursively expanded with cycle detection.
+// Each root is probed for entry files (agentsdk.app.yaml, agentsdk.app.yml,
+// agentsdk.app.json). Source directives are recursively expanded with cycle detection.
 func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	cfg := &loadConfig{}
 	for _, opt := range opts {
@@ -101,9 +101,9 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	// Apply defaults.
 	l.result.Config = cfg.defaults
 
-	// Process includes from defaults.
-	defaultIncludes := l.result.Config.Include
-	l.result.Config.Include = nil
+	// Process sources from defaults.
+	defaultSources := l.result.Config.Sources
+	l.result.Config.Sources = nil
 
 	// Resolve work dir.
 	workDir := cfg.workDir
@@ -116,17 +116,17 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	}
 	workDir, _ = filepath.Abs(workDir)
 
-	// 0. Default agentdir includes — add .agents and .claude in workdir to config.
+	// 0. Default agentdir sources — add .agents and .claude in workdir to config.
 	for _, name := range []string{".agents", ".claude"} {
 		dir := filepath.Join(workDir, name)
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			l.result.Config.Include = append(l.result.Config.Include, dir)
+			l.result.Config.Sources = append(l.result.Config.Sources, dir)
 		}
 	}
-	// Load the default includes.
-	for _, inc := range l.result.Config.Include {
-		if err := l.loadInclude(inc, inc); err != nil {
-			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", inc, err)
+	// Load the default sources.
+	for _, src := range l.result.Config.Sources {
+		if err := l.loadSource(src, src); err != nil {
+			return LoadResult{}, fmt.Errorf("appconfig: default source %s: %w", src, err)
 		}
 	}
 
@@ -173,11 +173,11 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 		}
 	}
 
-	// 4. Process includes from defaults (after workDir is known).
-	for _, pattern := range defaultIncludes {
+	// 4. Process sources from defaults (after workDir is known).
+	for _, pattern := range defaultSources {
 		expanded := expandVars(pattern, workDir)
-		if err := l.loadInclude(expanded, pattern); err != nil {
-			return LoadResult{}, fmt.Errorf("appconfig: default include %s: %w", pattern, err)
+		if err := l.loadSource(expanded, pattern); err != nil {
+			return LoadResult{}, fmt.Errorf("appconfig: default source %s: %w", pattern, err)
 		}
 	}
 
@@ -189,7 +189,7 @@ func (l *Loader) Load(opts ...LoadOption) (LoadResult, error) {
 	return l.result, nil
 }
 
-// loadRoot loads a single file with cycle detection, then processes includes.
+// loadRoot loads a single file with cycle detection, then processes sources.
 func (l *Loader) loadRoot(path string) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -206,22 +206,26 @@ func (l *Loader) loadRoot(path string) error {
 		return err
 	}
 
+	if l.result.EntryPath == "" {
+		l.result.EntryPath = abs
+	}
+
 	// Record source.
 	l.result.Sources = append(l.result.Sources, LoadSource{
 		Path:   abs,
 		Config: l.result.Config,
 	})
 
-	// Process new includes from this file. The visited map prevents
-	// re-processing includes that were already loaded.
+	// Process new sources from this file. The visited map prevents
+	// re-processing sources that were already loaded.
 	_ = before
 
 	baseDir := filepath.Dir(abs)
-	for _, pattern := range l.result.Config.Include {
+	for _, pattern := range l.result.Config.Sources {
 		expanded := expandVars(pattern, baseDir)
 		if !isGlob(expanded) {
-			if err := l.loadInclude(expanded, pattern); err != nil {
-				return fmt.Errorf("include %s: %w", pattern, err)
+			if err := l.loadSource(expanded, pattern); err != nil {
+				return fmt.Errorf("source %s: %w", pattern, err)
 			}
 			continue
 		}
@@ -231,8 +235,8 @@ func (l *Loader) loadRoot(path string) error {
 		}
 		sort.Strings(matches)
 		for _, match := range matches {
-			if err := l.loadInclude(match, pattern); err != nil {
-				return fmt.Errorf("include %s: %w", match, err)
+			if err := l.loadSource(match, pattern); err != nil {
+				return fmt.Errorf("source %s: %w", match, err)
 			}
 		}
 	}
@@ -240,9 +244,9 @@ func (l *Loader) loadRoot(path string) error {
 	return nil
 }
 
-// loadInclude loads a single include path. Directories are loaded as agentdir
+// loadSource loads a single source path. Directories are loaded as agentdir
 // roots. Files are loaded as appconfig documents.
-func (l *Loader) loadInclude(path string, pattern string) error {
+func (l *Loader) loadSource(path string, pattern string) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("resolve %s: %w", path, err)
@@ -253,7 +257,7 @@ func (l *Loader) loadInclude(path string, pattern string) error {
 	info, err := os.Stat(abs)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil // skip missing includes silently
+			return nil // skip missing sources silently
 		}
 		return err
 	}

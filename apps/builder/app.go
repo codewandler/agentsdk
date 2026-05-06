@@ -359,6 +359,10 @@ func ScaffoldResourceApp(ctx context.Context, cfg Config, input ScaffoldResource
     "include_external_ecosystems": false,
     "allow_remote": false
   },
+  "model_policy": {
+    "use_case": "agentic_coding",
+    "source_api": "auto"
+  },
   "sources": [".agents"]
 }
 `

@@ -17,9 +17,9 @@ agentsdk discover --local .          # discover resources in current directory
 agentsdk discover --local --json .   # JSON output for programmatic use
 ```
 
-Discovery reads `agentsdk.app.json` (or `app.manifest.json`) and resolves all
-`sources` entries. Each source can be a local directory path, `file://` URI, or
-`git+https://`/`git+ssh://` remote.
+Discovery reads `agentsdk.app.yaml`, `agentsdk.app.yml`, or `agentsdk.app.json`,
+default local `.agents`/`.claude` directories, and explicit appconfig `sources`
+entries. Each source can be a local resource directory, config document, or glob.
 
 ## Tool selection in agent specs
 
@@ -50,7 +50,7 @@ capabilities:
 Use `agentsdk` naming in all new code and resources. Do not introduce new `flai` references.
 The predecessor project name appears in some existing constants for downstream compatibility.
 
-## Manifest keys reference
+## Appconfig keys reference
 
 ```json
 {

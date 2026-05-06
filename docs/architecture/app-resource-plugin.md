@@ -1,8 +1,8 @@
 # App, resources, and plugins
 
-## Resource and manifest model
+## Resource and appconfig model
 
-Resource and manifest discovery now covers workflows, actions, triggers, and structured commands.
+Resource and appconfig discovery now covers workflows, actions, triggers, and structured commands.
 
 ## Resource bundle coverage
 
@@ -15,7 +15,7 @@ Native `.agents` resource discovery now includes:
 .agents/commands/*.yaml
 ```
 
-Plugin-root manifest sources support the same layouts without the `.agents/` prefix:
+Plugin-root source paths support the same layouts without the `.agents/` prefix:
 
 ```text
 workflows/*.yaml
@@ -32,9 +32,9 @@ Trigger resources are declarative trigger definitions. `agentsdk serve` converts
 
 Structured command YAML resources live alongside Markdown commands in `commands/`. They describe command path/tree placement, input/output schema metadata, caller policy, and a target (`workflow`, `action`, or `prompt`). Command targets may reference an existing workflow or declare an inline workflow that is normalized before execution surfaces consume it.
 
-## Manifest plugin refs
+## Appconfig plugin refs
 
-App manifests support both short and structured plugin refs:
+Appconfig entries support structured plugin refs:
 
 ```json
 {
@@ -55,16 +55,16 @@ Plugin refs now validate that every ref has a non-empty name. Path-based plugin 
 - actions;
 - triggers;
 - structured command resources;
-- manifest plugin refs and whether structured config is present.
+- appconfig plugin refs and whether structured config is present.
 
-Invalid resources and invalid manifest plugin refs return clearer read/parse/validate errors with file context.
+Invalid resources and invalid appconfig plugin refs return clearer read/parse/validate errors with file context.
 
 ## Examples
 
 Added examples:
 
 - `examples/resource-only-app` — `.agents` resources only, including a trigger targeting a workflow.
-- `examples/hybrid-app` — manifest + `.agents` resources + structured plugin config.
+- `examples/hybrid-app` — appconfig + `.agents` resources + structured plugin config.
 
 ## Datasource ordering
 
@@ -100,7 +100,7 @@ The SDK has four related but different concepts:
 | Concept | Owner | Purpose |
 | --- | --- | --- |
 | `app.Plugin` | `app` package | Runtime/Go contribution bundle for app-level definitions and registries, with optional facets such as actions, tools, workflows, context providers, skills, and command handlers. |
-| `resource.ContributionBundle` | `resource` + `agentdir` | Declarative contribution metadata loaded from `.agents`, compatibility roots, plugin roots, or manifests. |
+| `resource.ContributionBundle` | `resource` + `agentdir` | Declarative contribution metadata loaded from `.agents`, compatibility roots, plugin roots, or appconfig entries. |
 | Session projections | `harness.Session` | Session-aware adapters that bind live session capabilities into command trees, agent tools, and context providers. |
 | Host/daemon wiring | `daemon` and channel packages | Process, config, scheduling, storage, and presentation policy around a harness service. |
 
@@ -121,7 +121,7 @@ execution boundary for session-aware behavior.
   catch-all `standard` plugin should not return.
 - Add new app plugin facets only when a real Go/plugin contribution cannot be
   represented by an existing facet.
-- Add declarative resource contribution types when users need files/manifests to
+- Add declarative resource contribution types when users need files/appconfig entries to
   describe app behavior or deployment metadata.
 
 ## Current plugin facets
@@ -166,7 +166,7 @@ Declarative resources are normalized into `resource.ContributionBundle`:
 - `Triggers`
 - `DataSources`
 - `Skills` / `SkillSources`
-- plugin refs from app manifests
+- plugin refs from appconfig entries
 
 A resource bundle can be consumed by `app.New(app.WithResourceBundle(...))`, by
 `harness.LoadSession(...)`, or by daemon/channel hosts. It should not require a

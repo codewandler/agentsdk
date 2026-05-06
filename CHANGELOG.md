@@ -117,11 +117,11 @@ match these entries as the project starts publishing releases.
 - **`appconfig`** — new package providing declarative YAML-based application
   configuration as an alternative to the agentdir directory convention.
   Supports kind-discriminated multi-doc YAML (`config`, `agent`, `command`,
-  `workflow`, `action`, `datasource`, `trigger`), include globs with `~`,
+  `workflow`, `action`, `datasource`, `trigger`), source globs with `~`,
   `$HOME`, `$PWD` expansion, cycle detection, and multi-path loading.
   Produces `[]app.Option` via `LoadResult.ToAppOptions()`.
 - **`agentsdk config print`** — prints expanded configuration as markdown YAML,
-  merging entry file and all includes.
+  merging entry file and all sources.
 - **`agentsdk config validate`** — validates configuration structure and prints
   resource counts.
 - **`--source` flag** on `config print` and `config validate` to load
@@ -131,9 +131,16 @@ match these entries as the project starts publishing releases.
 
 ### Changed
 
-- **`agentsdk discover`** now loads resources through `appconfig.Load`, so
-  app config entry files and default `.agents`/`.claude` includes share one
+- **Appconfig sources** — `appconfig.Config` now uses `sources` as the only
+  resource source list field. Config files containing the old `include` field
+  now fail fast instead of being treated as compatible.
+- **`agentsdk discover` and `agentsdk config discover`** now load resources through `appconfig.Load`, so
+  app config entry files and default `.agents`/`.claude` sources share one
   discovery path.
+- **`agentsdk config print`** now renders the merged appconfig with the same
+  materialized `sources` list reported by discovery.
+- **Appconfig model policies** — `model_policy` is now part of `appconfig.Config`
+  and is applied when appconfig resources are converted into resource resolutions.
 - **`agentsdk build` prompt** changed from `builder> ` to `build> ` to match
   the command name consistently.
 - First-party app wiring (`devCmd`, `buildCmd`, `devAppOptions`,

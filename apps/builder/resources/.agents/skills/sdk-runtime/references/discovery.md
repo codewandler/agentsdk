@@ -1,32 +1,33 @@
 # Discovery deep dive
 
-## Manifest resolution order
+## Appconfig resolution order
 
-1. `agentsdk.app.json` (preferred)
-2. `app.manifest.json` (legacy)
-3. No manifest → fallback to `.agents/` and `.claude/` directory scan
+1. `agentsdk.app.yaml`
+2. `agentsdk.app.yml`
+3. `agentsdk.app.json`
+4. No appconfig entry → fallback to `.agents/` and `.claude/` directory scan
 
-## Manifest `sources` field
+## Appconfig `sources` field
 
-Each entry in `sources` is resolved as a resource directory:
+Each entry in `sources` is resolved as a local resource directory, config
+document, or glob pattern:
 
 ```json
 {
   "sources": [
-    ".agents",                                    // local relative path
-    "file:///absolute/path/to/plugin",            // absolute local path
-    "git+https://github.com/org/repo.git#main"   // remote git (if allow_remote)
+    ".agents",
+    "resources/shared.yaml",
+    "resources/*.yaml"
   ]
 }
 ```
 
-Without `sources`, discovery falls back to scanning `.agents/` and `.claude/`
-in the app directory. This fallback is silent — the app appears to work but
-the manifest is not driving discovery.
+Discovery also scans `.agents/` and `.claude/` in the app directory by default.
+Use `sources` for additional resource directories or config documents.
 
 ## Global user resources
 
-Controlled by `discovery.include_global_user_resources` in the manifest:
+Controlled by `discovery.include_global_user_resources` in appconfig:
 
 ```json
 {
