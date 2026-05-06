@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/runner"
 	"github.com/codewandler/agentsdk/usage"
 	"github.com/codewandler/llmadapter/unified"
@@ -37,6 +38,8 @@ type EventDisplay struct {
 	printedCall    map[string]bool
 	lastToolName   string
 	pendingUsage   *pendingStepUsage // deferred until tools finish
+	plan           planner.Plan
+	planCreated    bool
 }
 
 type pendingStepUsage struct {
@@ -153,7 +156,7 @@ func (d *EventDisplay) Handle(event runner.Event) {
 			fmt.Fprintf(d.out, "\n%s! model hit output token limit%s\n", BrightYellow, Reset)
 		}
 	case runner.ThreadEvent:
-		PrintThreadEvent(d.out, ev.Event)
+		d.handleThreadEvent(ev)
 	case runner.CompletedEvent:
 		d.flushPendingUsage()
 	case runner.ErrorEvent:
@@ -163,6 +166,16 @@ func (d *EventDisplay) Handle(event runner.Event) {
 			d.stepDisplay = nil
 		}
 	}
+}
+
+func (d *EventDisplay) handleThreadEvent(ev runner.ThreadEvent) {
+	updated := applyPlanEvent(&d.plan, &d.planCreated, ev.Event)
+	if !updated {
+		// Not a planner event or failed to decode — fall through to generic.
+		PrintThreadEvent(d.out, ev.Event)
+		return
+	}
+	PrintPlan(d.out, d.plan)
 }
 
 func (d *EventDisplay) flushPendingUsage() {

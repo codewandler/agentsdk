@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/thread"
 	"github.com/codewandler/agentsdk/usage"
@@ -39,70 +41,123 @@ func PrintToolStatus(w io.Writer, message string) {
 	fmt.Fprintf(w, "%s  ⟳ %s%s\n", Dim+Italic, message, Reset)
 }
 
-// PrintThreadEvent renders a persisted thread event. Currently handles
-// planner capability state events; other event kinds are silently ignored.
+// PrintThreadEvent renders a persisted thread event that is not handled
+// by a specific capability renderer. Currently a no-op for unrecognized
+// event kinds.
 func PrintThreadEvent(w io.Writer, event thread.Event) {
+	// Non-planner thread events are silently ignored for now.
+	// Planner events are handled by EventDisplay.handleThreadEvent.
+}
+
+// applyPlanEvent decodes a thread event as a planner state event and applies
+// it to the plan. Returns true if the event was a planner event.
+func applyPlanEvent(plan *planner.Plan, created *bool, event thread.Event) bool {
 	if event.Kind != capability.EventStateEventDispatched {
-		return
+		return false
 	}
 	var dispatched capability.StateEventDispatched
 	if err := json.Unmarshal(event.Payload, &dispatched); err != nil {
-		return
+		return false
 	}
 	if dispatched.CapabilityName != "planner" {
-		return
+		return false
 	}
-	printPlannerEvent(w, dispatched)
-}
-
-func printPlannerEvent(w io.Writer, dispatched capability.StateEventDispatched) {
 	switch dispatched.EventName {
 	case "plan_created":
-		var p struct {
-			Title string `json:"title"`
+		var p planner.PlanCreated
+		if json.Unmarshal(dispatched.Body, &p) != nil {
+			return false
 		}
-		_ = json.Unmarshal(dispatched.Body, &p)
-		if p.Title != "" {
-			fmt.Fprintf(w, "%s  \U0001F4CB Plan: %s%s\n", Dim, p.Title, Reset)
-		}
+		*plan = planner.Plan{ID: p.PlanID, Title: p.Title}
+		*created = true
 	case "step_added":
-		var s struct {
-			Step struct {
-				Title string `json:"title"`
-			} `json:"step"`
+		var s planner.StepAdded
+		if json.Unmarshal(dispatched.Body, &s) != nil {
+			return false
 		}
-		_ = json.Unmarshal(dispatched.Body, &s)
-		if s.Step.Title != "" {
-			fmt.Fprintf(w, "%s  + %s%s\n", Dim, s.Step.Title, Reset)
+		if s.Step.Status == "" {
+			s.Step.Status = planner.StepPending
+		}
+		plan.Steps = append(plan.Steps, s.Step)
+	case "step_removed":
+		var s planner.StepRemoved
+		if json.Unmarshal(dispatched.Body, &s) != nil {
+			return false
+		}
+		for i, step := range plan.Steps {
+			if step.ID == s.StepID {
+				plan.Steps = append(plan.Steps[:i], plan.Steps[i+1:]...)
+				break
+			}
 		}
 	case "step_status_changed":
-		var s struct {
-			StepID string `json:"step_id"`
-			Status string `json:"status"`
+		var s planner.StepStatusChanged
+		if json.Unmarshal(dispatched.Body, &s) != nil {
+			return false
 		}
-		_ = json.Unmarshal(dispatched.Body, &s)
-		icon := "o"
-		switch s.Status {
-		case "in_progress":
-			icon = ">"
-		case "completed":
-			icon = "v"
+		for i := range plan.Steps {
+			if plan.Steps[i].ID == s.StepID {
+				plan.Steps[i].Status = s.Status
+				break
+			}
 		}
-		fmt.Fprintf(w, "%s  %s %s -> %s%s\n", Dim, icon, s.StepID, s.Status, Reset)
-	case "step_removed":
-		var s struct {
-			StepID string `json:"step_id"`
+	case "step_title_changed":
+		var s planner.StepTitleChanged
+		if json.Unmarshal(dispatched.Body, &s) != nil {
+			return false
 		}
-		_ = json.Unmarshal(dispatched.Body, &s)
-		fmt.Fprintf(w, "%s  - %s%s\n", Dim, s.StepID, Reset)
+		for i := range plan.Steps {
+			if plan.Steps[i].ID == s.StepID {
+				plan.Steps[i].Title = s.Title
+				break
+			}
+		}
 	case "current_step_changed":
-		var s struct {
-			StepID string `json:"step_id"`
+		var s planner.CurrentStepChanged
+		if json.Unmarshal(dispatched.Body, &s) != nil {
+			return false
 		}
-		_ = json.Unmarshal(dispatched.Body, &s)
-		if s.StepID != "" {
-			fmt.Fprintf(w, "%s  >> current: %s%s\n", Dim, s.StepID, Reset)
+		plan.CurrentStepID = s.StepID
+	default:
+		return false
+	}
+	return true
+}
+
+// PrintPlan renders the full plan as a markdown checklist.
+func PrintPlan(w io.Writer, plan planner.Plan) {
+	var md strings.Builder
+	title := plan.Title
+	if title == "" {
+		title = plan.ID
+	}
+	fmt.Fprintf(&md, "**Plan: %s**\n\n", title)
+	for _, step := range plan.Steps {
+		box := "[ ]"
+		switch step.Status {
+		case planner.StepCompleted:
+			box = "[x]"
+		case planner.StepInProgress:
+			box = "[>]"
 		}
+		prefix := ""
+		if step.ParentID != "" {
+			prefix = "  "
+		}
+		cursor := ""
+		if step.ID == plan.CurrentStepID {
+			cursor = " <<"
+		}
+		fmt.Fprintf(&md, "%s- %s %s%s\n", prefix, box, step.Title, cursor)
+	}
+
+	var buf bytes.Buffer
+	sr := newLiveMarkdownRenderer(&buf)
+	_, _ = sr.Write([]byte(md.String()))
+	_ = sr.Flush()
+	rendered := TrimOuterRenderedBlankLines(buf.String())
+	if rendered != "" {
+		fmt.Fprintf(w, "\n%s\n\n", rendered)
 	}
 }
 
