@@ -82,10 +82,22 @@ func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Re
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Config: %s\n\n", result.EntryPath)
 	fmt.Fprintln(&b, "```yaml")
-	enc := yaml.NewEncoder(&b)
-	enc.SetIndent(2)
-	if err := enc.Encode(result.MaterializedConfig()); err != nil {
+	docs, err := result.MaterializedDocuments()
+	if err != nil {
 		return command.Result{}, err
+	}
+	for i, doc := range docs {
+		if i > 0 {
+			fmt.Fprintln(&b, "---")
+		}
+		enc := yaml.NewEncoder(&b)
+		enc.SetIndent(2)
+		if err := enc.Encode(doc); err != nil {
+			return command.Result{}, err
+		}
+		if err := enc.Close(); err != nil {
+			return command.Result{}, err
+		}
 	}
 	fmt.Fprintln(&b, "```")
 	rendered, err := markdown.RenderString(b.String())

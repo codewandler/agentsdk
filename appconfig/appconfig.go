@@ -245,6 +245,78 @@ func (r LoadResult) MaterializedConfig() Config {
 	return cfg
 }
 
+// MaterializedDocuments returns the merged root config plus inline appconfig
+// resource documents as kind-discriminated documents suitable for multi-doc YAML
+// rendering. Agentdir-loaded bundles are represented by MaterializedConfig().Sources;
+// they are not reverse-engineered back into appconfig documents.
+func (r LoadResult) MaterializedDocuments() ([]map[string]any, error) {
+	docs := make([]map[string]any, 0, 1+len(r.Agents)+len(r.Commands)+len(r.Workflows)+len(r.Actions)+len(r.Datasources)+len(r.Triggers))
+	cfgDoc, err := materializedDocument("config", r.MaterializedConfig())
+	if err != nil {
+		return nil, err
+	}
+	docs = append(docs, cfgDoc)
+	for _, doc := range r.Agents {
+		m, err := materializedDocument("agent", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	for _, doc := range r.Commands {
+		m, err := materializedDocument("command", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	for _, doc := range r.Workflows {
+		m, err := materializedDocument("workflow", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	for _, doc := range r.Actions {
+		m, err := materializedDocument("action", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	for _, doc := range r.Datasources {
+		m, err := materializedDocument("datasource", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	for _, doc := range r.Triggers {
+		m, err := materializedDocument("trigger", doc)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, m)
+	}
+	return docs, nil
+}
+
+func materializedDocument(kind string, value any) (map[string]any, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		doc = make(map[string]any)
+	}
+	doc["kind"] = kind
+	return doc, nil
+}
+
 // ToAppOptions converts the LoadResult into []app.Option for app.New.
 func (r LoadResult) ToAppOptions() []app.Option {
 	var opts []app.Option

@@ -61,6 +61,30 @@ func TestRootDiscoverCommandRendersResourceTree(t *testing.T) {
 	assertDiscoverTree(t, text)
 }
 
+func TestPrintCommandRendersInlineResourceDocuments(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigPluginTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), `kind: config
+name: test-app
+---
+kind: command
+name: review
+target:
+  prompt: Review this repository.
+`)
+
+	plugin := New(WithWorkspace(dir))
+	configCommand := requireCommand(t, plugin.Commands(), "config")
+
+	result, err := configCommand.Execute(context.Background(), command.Params{Raw: "print", Args: []string{"print"}})
+	require.NoError(t, err)
+
+	text, err := command.Render(result, command.DisplayTerminal)
+	require.NoError(t, err)
+	require.Contains(t, text, "kind: command")
+	require.Contains(t, text, "name: review")
+	require.Contains(t, text, "prompt: Review this repository.")
+}
+
 func TestDiscoverJSONAndYAMLRenderMachineReadablePayload(t *testing.T) {
 	dir := t.TempDir()
 	writeConfigPluginTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "name: test-app\n---\nkind: agent\nname: coder\ndescription: Test coder\nsystem: test\n")

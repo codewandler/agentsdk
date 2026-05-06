@@ -138,7 +138,8 @@ match these entries as the project starts publishing releases.
   app config entry files and default `.agents`/`.claude` sources share one
   discovery path.
 - **`agentsdk config print`** now renders the merged appconfig with the same
-  materialized `sources` list reported by discovery.
+  materialized `sources` list reported by discovery and includes inline
+  appconfig resource documents in multi-doc YAML output.
 - **Appconfig model policies** — `model_policy` is now part of `appconfig.Config`
   and is applied when appconfig resources are converted into resource resolutions.
 - **`agentsdk build` prompt** changed from `builder> ` to `build> ` to match

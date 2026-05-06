@@ -184,6 +184,35 @@ func TestMaterializedConfigSourcesMatchLoadedSources(t *testing.T) {
 	require.Contains(t, cfg.Sources, filepath.Join(dir, "resources"))
 }
 
+func TestMaterializedDocumentsIncludesInlineResources(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.yaml"), []byte(`kind: config
+name: materialized-test
+---
+kind: command
+name: review
+description: Review code
+target:
+  prompt: Review this repository.
+---
+kind: agent
+name: coder
+system: test
+`), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	docs, err := result.MaterializedDocuments()
+	require.NoError(t, err)
+	require.Len(t, docs, 3)
+	require.Equal(t, "config", docs[0]["kind"])
+	require.Equal(t, "materialized-test", docs[0]["name"])
+	require.Equal(t, "agent", docs[1]["kind"])
+	require.Equal(t, "coder", docs[1]["name"])
+	require.Equal(t, "command", docs[2]["kind"])
+	require.Equal(t, "review", docs[2]["name"])
+}
+
 func TestLoadWithSources(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources"), 0o755))

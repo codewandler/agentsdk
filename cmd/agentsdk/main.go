@@ -212,10 +212,22 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 	var buf strings.Builder
 	fmt.Fprintf(&buf, "# Config: %s\n\n", result.EntryPath)
 	fmt.Fprintln(&buf, "```yaml")
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(result.MaterializedConfig()); err != nil {
+	docs, err := result.MaterializedDocuments()
+	if err != nil {
 		return err
+	}
+	for i, doc := range docs {
+		if i > 0 {
+			fmt.Fprintln(&buf, "---")
+		}
+		enc := yaml.NewEncoder(&buf)
+		enc.SetIndent(2)
+		if err := enc.Encode(doc); err != nil {
+			return err
+		}
+		if err := enc.Close(); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(&buf, "```")
 	return markdown.RenderToWriter(out, buf.String())

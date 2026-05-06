@@ -17,7 +17,7 @@
 
 This command is intentionally a debugging surface, not a runtime API. Channels that need machine-readable command execution should use harness/session command APIs instead of parsing this text.
 
-`agentsdk config print [path]` renders the merged appconfig as Markdown with a fenced `yaml` block. Its materialized `sources` list is the same concrete source list reported by `agentsdk discover [path]` and `agentsdk config discover [path]`.
+`agentsdk config print [path]` renders the merged appconfig as Markdown with a fenced `yaml` block. Its materialized `sources` list is the same concrete source list reported by `agentsdk discover [path]` and `agentsdk config discover [path]`, and inline appconfig resource documents are included as multi-doc YAML.
 
 ## Machine-readable discovery
 

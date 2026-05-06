@@ -512,9 +512,18 @@ func TestConfigDiscoverJSONUsesSharedDiscoveryPayload(t *testing.T) {
 	require.Equal(t, "Test coder", payload.Agents[0].Description)
 }
 
-func TestConfigPrintRendersMaterializedSources(t *testing.T) {
+func TestConfigPrintRendersMaterializedSourcesAndInlineResources(t *testing.T) {
 	dir := t.TempDir()
-	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "kind: config\nname: test-app\nsources:\n  - .agents\n")
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), `kind: config
+name: test-app
+sources:
+  - .agents
+---
+kind: command
+name: review
+target:
+  prompt: Review this repository.
+`)
 	writeTestFile(t, filepath.Join(dir, ".agents", "agents", "coder.md"), "---\nname: coder\n---\nsystem")
 
 	cmd := rootCmd()
@@ -528,6 +537,9 @@ func TestConfigPrintRendersMaterializedSources(t *testing.T) {
 	require.Contains(t, text, "sources:")
 	require.Contains(t, text, filepath.Join(dir, "agentsdk.app.yaml"))
 	require.Contains(t, text, filepath.Join(dir, ".agents"))
+	require.Contains(t, text, "kind: command")
+	require.Contains(t, text, "name: review")
+	require.Contains(t, text, "prompt: Review this repository.")
 }
 
 func TestConfigDiscoverUsesSameSourcesAsRootDiscover(t *testing.T) {
