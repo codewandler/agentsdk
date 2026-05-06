@@ -21,6 +21,7 @@ import (
 	"github.com/codewandler/agentsdk/agentconfig"
 	"github.com/codewandler/agentsdk/agentdir"
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/appconfig"
 	builderapp "github.com/codewandler/agentsdk/apps/builder"
 	engineerapp "github.com/codewandler/agentsdk/apps/engineer"
 	"github.com/codewandler/agentsdk/apps/runapp"
@@ -667,10 +668,11 @@ func discoverCmd() *cobra.Command {
 				policy.IncludeGlobalUserResources = false
 				policy.AllowRemote = false
 			}
-			resolved, err := agentdir.ResolveDirWithOptions(dir, agentdir.ResolveOptions{Policy: policy, LocalOnly: localOnly})
+			resolved, appCfg, err := discoverResources(dir, policy, localOnly)
 			if err != nil {
 				return err
 			}
+			_ = appCfg // available for future use (resolution config, etc.)
 			switch outputFormat {
 			case "json":
 				return printDiscoveryJSON(cmd.OutOrStdout(), resolved)
@@ -684,6 +686,92 @@ func discoverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&localOnly, "local", false, "Only inspect the specified workspace/path")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pretty", "Output format: pretty|json|yaml")
 	return cmd
+}
+
+// discoverResources loads resources from both appconfig (if entry file exists)
+// and agentdir. The appconfig.Config.Sources are loaded as agentdir roots and
+// merged into the resolution. Returns the merged resolution and the appconfig
+// result (which may be zero if no entry file was found).
+func discoverResources(dir string, policy resource.DiscoveryPolicy, localOnly bool) (agentdir.Resolution, *appconfig.LoadResult, error) {
+	// Try appconfig entry file first.
+	if entryPath, ok := appconfig.FindEntryFile(dir); ok {
+		cfgResult, err := appconfig.LoadFile(entryPath)
+		if err != nil {
+			return agentdir.Resolution{}, nil, err
+		}
+		// Load agentdir sources listed in the config.
+		var resolved agentdir.Resolution
+		resolved.Sources = append(resolved.Sources, cfgResult.EntryPath)
+		for _, source := range cfgResult.Config.Sources {
+			sourcePath := source
+			if !filepath.IsAbs(sourcePath) {
+				sourcePath = filepath.Join(dir, sourcePath)
+			}
+			srcResolved, err := agentdir.ResolveDirWithOptions(sourcePath, agentdir.ResolveOptions{Policy: policy, LocalOnly: localOnly})
+			if err != nil {
+				return agentdir.Resolution{}, nil, fmt.Errorf("load source %q: %w", source, err)
+			}
+			resolved.Bundle.Append(srcResolved.Bundle)
+			if resolved.Bundle.Source.ID == "" && srcResolved.Bundle.Source.ID != "" {
+				resolved.Bundle.Source = srcResolved.Bundle.Source
+			}
+			resolved.Sources = append(resolved.Sources, srcResolved.Sources...)
+		}
+		// Set a source for the appconfig bundle so agent ResourceIDs
+		// derive correctly. Ecosystem="config" with no scope makes
+		// DeriveOrigin return "config". Root is the config name so
+		// DeriveNamespace returns it as the namespace.
+		if resolved.Bundle.Source.ID == "" {
+			cfgNS := cfgResult.Config.Name
+			if cfgNS == "" {
+				cfgNS = filepath.Base(filepath.Dir(cfgResult.EntryPath))
+			}
+			resolved.Bundle.Source = resource.SourceRef{
+				ID:        "appconfig:" + cfgResult.EntryPath,
+				Ecosystem: "config",
+				Root:      cfgNS,
+				Path:      cfgResult.EntryPath,
+				Trust:     resource.TrustDeclarative,
+			}
+		}
+		// Merge inline appconfig resources.
+		cfgBundle := cfgResult.ToContributionBundle()
+		resolved.Bundle.Append(cfgBundle)
+		// Merge inline agent specs into the bundle.
+		for _, spec := range cfgResult.ToAgentSpecs() {
+			resolved.Bundle.AgentSpecs = append(resolved.Bundle.AgentSpecs, spec)
+		}
+		if cfgResult.Config.DefaultAgent != "" {
+			resolved.DefaultAgent = cfgResult.Config.DefaultAgent
+		}
+		// Validate plugin refs.
+		for _, p := range cfgResult.Config.Plugins {
+			if strings.TrimSpace(p.Name) == "" {
+				return agentdir.Resolution{}, nil, fmt.Errorf("plugin name is required")
+			}
+		}
+		// Populate manifest for backward compat with JSON output and plugin refs.
+		if len(cfgResult.Config.Plugins) > 0 || resolved.Manifest == nil {
+			manifest := &agentdir.AppManifest{
+				DefaultAgent: cfgResult.Config.DefaultAgent,
+				Sources:      cfgResult.Config.Sources,
+			}
+			for _, p := range cfgResult.Config.Plugins {
+				manifest.Plugins = append(manifest.Plugins, agentdir.PluginRef{
+					Name:   p.Name,
+					Config: p.Config,
+				})
+			}
+			resolved.Manifest = manifest
+		}
+		return resolved, &cfgResult, nil
+	}
+	// Fall back to agentdir-only resolution.
+	resolved, err := agentdir.ResolveDirWithOptions(dir, agentdir.ResolveOptions{Policy: policy, LocalOnly: localOnly})
+	if err != nil {
+		return agentdir.Resolution{}, nil, err
+	}
+	return resolved, nil, nil
 }
 
 func validateCmd() *cobra.Command {
