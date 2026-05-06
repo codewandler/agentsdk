@@ -119,7 +119,7 @@ func configCmd() *cobra.Command {
 			fmt.Fprintf(out, "Actions: %d\n", len(result.Actions))
 			fmt.Fprintf(out, "Datasources: %d\n", len(result.Datasources))
 			fmt.Fprintf(out, "Triggers: %d\n", len(result.Triggers))
-			fmt.Fprintf(out, "Sources: %d\n", len(result.Config.Sources))
+			fmt.Fprintf(out, "Includes: %d\n", len(result.Config.Include))
 			fmt.Fprintf(out, "Plugins: %d\n", len(result.Config.Plugins))
 			fmt.Fprintln(out, "\n\u2713 configuration is valid")
 			return nil
@@ -171,8 +171,8 @@ func printConfigYAML(out io.Writer, result appconfig.LoadResult) error {
 	if result.Config.DefaultAgent != "" {
 		view["default_agent"] = result.Config.DefaultAgent
 	}
-	if len(result.Config.Sources) > 0 {
-		view["sources"] = result.Config.Sources
+	if len(result.Config.Include) > 0 {
+		view["include"] = result.Config.Include
 	}
 	if len(result.Config.Plugins) > 0 {
 		plugins := make([]map[string]any, len(result.Config.Plugins))
@@ -879,24 +879,8 @@ func discoverResources(dir string, policy resource.DiscoveryPolicy, localOnly bo
 		if err != nil {
 			return agentdir.Resolution{}, nil, err
 		}
-		// Load agentdir sources listed in the config.
 		var resolved agentdir.Resolution
 		resolved.Sources = append(resolved.Sources, cfgResult.EntryPath)
-		for _, source := range cfgResult.Config.Sources {
-			sourcePath := source
-			if !filepath.IsAbs(sourcePath) {
-				sourcePath = filepath.Join(dir, sourcePath)
-			}
-			srcResolved, err := agentdir.ResolveDirWithOptions(sourcePath, agentdir.ResolveOptions{Policy: policy, LocalOnly: localOnly})
-			if err != nil {
-				return agentdir.Resolution{}, nil, fmt.Errorf("load source %q: %w", source, err)
-			}
-			resolved.Bundle.Append(srcResolved.Bundle)
-			if resolved.Bundle.Source.ID == "" && srcResolved.Bundle.Source.ID != "" {
-				resolved.Bundle.Source = srcResolved.Bundle.Source
-			}
-			resolved.Sources = append(resolved.Sources, srcResolved.Sources...)
-		}
 		// Set a source for the appconfig bundle so agent ResourceIDs
 		// derive correctly. Ecosystem="config" with no scope makes
 		// DeriveOrigin return "config". Root is the config name so
@@ -941,7 +925,6 @@ func discoverResources(dir string, policy resource.DiscoveryPolicy, localOnly bo
 		if len(cfgResult.Config.Plugins) > 0 || resolved.Manifest == nil {
 			manifest := &agentdir.AppManifest{
 				DefaultAgent: cfgResult.Config.DefaultAgent,
-				Sources:      cfgResult.Config.Sources,
 			}
 			for _, p := range cfgResult.Config.Plugins {
 				manifest.Plugins = append(manifest.Plugins, agentdir.PluginRef{

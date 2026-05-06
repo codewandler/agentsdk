@@ -92,7 +92,7 @@ func (p *Plugin) validateCommand(_ context.Context, _ configValidateInput) (comm
 	fmt.Fprintf(&b, "Actions: %d\n", len(result.Actions))
 	fmt.Fprintf(&b, "Datasources: %d\n", len(result.Datasources))
 	fmt.Fprintf(&b, "Triggers: %d\n", len(result.Triggers))
-	fmt.Fprintf(&b, "Sources: %d\n", len(result.Config.Sources))
+	fmt.Fprintf(&b, "Includes: %d\n", len(result.Config.Include))
 	fmt.Fprintf(&b, "Plugins: %d\n", len(result.Config.Plugins))
 	fmt.Fprintln(&b, "\n✓ configuration is valid")
 	return command.Display(command.TextPayload{Text: b.String()}), nil
@@ -114,8 +114,8 @@ func buildConfigView(result appconfig.LoadResult) map[string]any {
 	if result.Config.DefaultAgent != "" {
 		view["default_agent"] = result.Config.DefaultAgent
 	}
-	if len(result.Config.Sources) > 0 {
-		view["sources"] = result.Config.Sources
+	if len(result.Config.Include) > 0 {
+		view["include"] = result.Config.Include
 	}
 	if len(result.Config.Plugins) > 0 {
 		plugins := make([]map[string]any, len(result.Config.Plugins))

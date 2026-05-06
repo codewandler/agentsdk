@@ -60,7 +60,6 @@ type Config struct {
 	Name         string            `yaml:"name,omitempty" json:"name,omitempty"`
 	DefaultAgent string            `yaml:"default_agent,omitempty" json:"default_agent,omitempty"`
 	Include      []string          `yaml:"include,omitempty" json:"include,omitempty"`
-	Sources      []string          `yaml:"sources,omitempty" json:"sources,omitempty"`
 	Resolution   *ResolutionConfig `yaml:"resolution,omitempty" json:"resolution,omitempty"`
 	Discovery    *DiscoveryConfig  `yaml:"discovery,omitempty" json:"discovery,omitempty"`
 	Plugins      []PluginRef       `yaml:"plugins,omitempty" json:"plugins,omitempty"`
@@ -505,7 +504,6 @@ func mergeConfig(base, overlay Config) Config {
 		base.DefaultAgent = overlay.DefaultAgent
 	}
 	base.Include = append(base.Include, overlay.Include...)
-	base.Sources = append(base.Sources, overlay.Sources...)
 	base.Plugins = append(base.Plugins, overlay.Plugins...)
 	if overlay.Resolution != nil {
 		base.Resolution = overlay.Resolution
