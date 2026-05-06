@@ -42,7 +42,7 @@ require (
 	github.com/chromedp/chromedp v0.15.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000 // indirect
-	github.com/codewandler/llmadapter v1.0.0-rc.32 // indirect
+	github.com/codewandler/llmadapter v1.0.0-rc.34 // indirect
 	github.com/codewandler/markdown v0.46.2 // indirect
 	github.com/codewandler/modeldb v0.15.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect

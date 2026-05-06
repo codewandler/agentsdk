@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -276,6 +277,42 @@ func TestRunTurnCancellationEmitsCanceledForRemainingToolCalls(t *testing.T) {
 	require.Len(t, messages, 3)
 	require.Len(t, messages[1].ToolCalls, 2)
 	require.Len(t, messages[2].ToolResults, 2)
+}
+
+func TestRunTurnExecutesMultipleToolCallsSerially(t *testing.T) {
+	client := runnertest.NewClient(runnertest.ToolCallStream("resp_tool",
+		runnertest.ToolCall("first", "call_1", 0, `{}`),
+		runnertest.ToolCall("second", "call_2", 1, `{}`),
+		runnertest.ToolCall("third", "call_3", 2, `{}`),
+	))
+	var active int32
+	var maxActive int32
+	executor := ToolExecutorFunc(func(_ context.Context, call unified.ToolCall) unified.ToolResult {
+		current := atomic.AddInt32(&active, 1)
+		for {
+			max := atomic.LoadInt32(&maxActive)
+			if current <= max || atomic.CompareAndSwapInt32(&maxActive, max, current) {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+		atomic.AddInt32(&active, -1)
+		return toolResult(call, call.Name, false)
+	})
+
+	result, err := RunTurn(context.Background(), newTestHistory(""), client, conversation.NewRequest().User("use tools").Build(),
+		WithToolExecutor(executor),
+		WithMaxSteps(1),
+	)
+	require.ErrorIs(t, err, ErrMaxStepsReached)
+	require.EqualValues(t, 1, atomic.LoadInt32(&maxActive))
+	var outputs []string
+	for _, event := range result.Events {
+		if ev, ok := event.(ToolResultEvent); ok {
+			outputs = append(outputs, ev.Output)
+		}
+	}
+	require.Equal(t, []string{"first", "second", "third"}, outputs)
 }
 
 func TestRunTurnPassesThroughWarningsAndRawEvents(t *testing.T) {

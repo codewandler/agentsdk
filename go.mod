@@ -10,7 +10,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 	github.com/codewandler/cmdrisk v0.0.0-00010101000000-000000000000
-	github.com/codewandler/llmadapter v1.0.0-rc.32
+	github.com/codewandler/llmadapter v1.0.0-rc.34
 	github.com/codewandler/markdown v0.46.2
 	github.com/codewandler/modeldb v0.15.0
 	github.com/emiago/diago v0.28.0
