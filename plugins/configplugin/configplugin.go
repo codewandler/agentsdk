@@ -68,10 +68,9 @@ func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Re
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Config: %s\n\n", result.EntryPath)
 	fmt.Fprintln(&b, "```yaml")
-	view := buildConfigView(result)
 	enc := yaml.NewEncoder(&b)
 	enc.SetIndent(2)
-	if err := enc.Encode(view); err != nil {
+	if err := enc.Encode(result.Config); err != nil {
 		return command.Result{}, err
 	}
 	fmt.Fprintln(&b, "```")
@@ -111,86 +110,7 @@ func (p *Plugin) loadConfig() (appconfig.LoadResult, error) {
 	return appconfig.Load(dir)
 }
 
-func buildConfigView(result appconfig.LoadResult) map[string]any {
-	view := map[string]any{}
-	if result.Config.Name != "" {
-		view["name"] = result.Config.Name
-	}
-	if result.Config.DefaultAgent != "" {
-		view["default_agent"] = result.Config.DefaultAgent
-	}
-	if len(result.Config.Include) > 0 {
-		view["include"] = result.Config.Include
-	}
-	if len(result.Config.Plugins) > 0 {
-		plugins := make([]map[string]any, len(result.Config.Plugins))
-		for i, p := range result.Config.Plugins {
-			plugins[i] = map[string]any{"name": p.Name}
-			if len(p.Config) > 0 {
-				plugins[i]["config"] = p.Config
-			}
-		}
-		view["plugins"] = plugins
-	}
-	if result.Config.Resolution != nil {
-		view["resolution"] = result.Config.Resolution
-	}
-	if len(result.Agents) > 0 {
-		agents := make([]map[string]any, 0, len(result.Agents))
-		for _, a := range result.Agents {
-			agent := map[string]any{"name": a.Name}
-			if a.Description != "" {
-				agent["description"] = a.Description
-			}
-			if a.Model != "" {
-				agent["model"] = a.Model
-			}
-			if len(a.Tools) > 0 {
-				agent["tools"] = a.Tools
-			}
-			if a.System != "" {
-				agent["system"] = a.System
-			}
-			agents = append(agents, agent)
-		}
-		view["agents"] = agents
-	}
-	if len(result.Workflows) > 0 {
-		workflows := make([]map[string]any, 0, len(result.Workflows))
-		for _, w := range result.Workflows {
-			wf := map[string]any{"name": w.Name}
-			if w.Description != "" {
-				wf["description"] = w.Description
-			}
-			workflows = append(workflows, wf)
-		}
-		view["workflows"] = workflows
-	}
-	if len(result.Commands) > 0 {
-		commands := make([]map[string]any, 0, len(result.Commands))
-		for _, c := range result.Commands {
-			cmd := map[string]any{"name": c.Name}
-			if c.Description != "" {
-				cmd["description"] = c.Description
-			}
-			if c.Target != nil {
-				cmd["target"] = c.Target
-			}
-			commands = append(commands, cmd)
-		}
-		view["commands"] = commands
-	}
-	if len(result.Actions) > 0 {
-		view["actions"] = result.Actions
-	}
-	if len(result.Datasources) > 0 {
-		view["datasources"] = result.Datasources
-	}
-	if len(result.Triggers) > 0 {
-		view["triggers"] = result.Triggers
-	}
-	return view
-}
+
 
 // Compile-time interface checks.
 var (
