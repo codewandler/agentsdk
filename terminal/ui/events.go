@@ -108,9 +108,7 @@ func (d *EventDisplay) Handle(event runner.Event) {
 	case runner.ToolCallEvent:
 		d.printToolCall(ev.Call)
 	case runner.ToolOutputDeltaEvent:
-		if d.debug[DebugTools] {
-			PrintToolOutputDelta(d.out, ev.Chunk)
-		}
+		PrintToolOutputDelta(d.out, ev.Chunk)
 	case runner.ToolStatusEvent:
 		PrintToolStatus(d.out, ev.Message)
 	case runner.ToolResultEvent:
