@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/codewandler/agentsdk/app"
+	"github.com/codewandler/agentsdk/plugins/configplugin"
 )
 
 // Spec returns the app.Spec for the builder application.
@@ -31,6 +32,7 @@ func Spec() app.Spec {
 				app.WithDefaultAgent("builder"),
 				app.WithoutDefaultPlugins(),
 				app.WithPlugin(Plugin{cfg: cfg}),
+				app.WithPlugin(configplugin.New(configplugin.WithWorkspace(workspace))),
 			}, nil
 		},
 	}
