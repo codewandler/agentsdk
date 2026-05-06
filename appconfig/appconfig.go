@@ -191,7 +191,8 @@ func LoadFile(path string) (LoadResult, error) {
 	// Process includes from the config.
 	baseDir := filepath.Dir(absPath)
 	for _, pattern := range result.Config.Include {
-		expanded := expandVars(pattern, baseDir)
+		filePath, fragment := splitFragment(pattern)
+		expanded := expandVars(filePath, baseDir)
 		matches, err := filepath.Glob(expanded)
 		if err != nil {
 			return LoadResult{}, fmt.Errorf("appconfig: glob %q (expanded: %q): %w", pattern, expanded, err)
@@ -201,8 +202,14 @@ func LoadFile(path string) (LoadResult, error) {
 			if match == absPath {
 				continue // skip self
 			}
-			if err := loadFileInto(&result, match); err != nil {
-				return LoadResult{}, fmt.Errorf("appconfig: include %s: %w", match, err)
+			if fragment != nil {
+				if err := loadFileFragmentInto(&result, match, fragment); err != nil {
+					return LoadResult{}, fmt.Errorf("appconfig: include %s#%s: %w", match, strings.Join(fragment, "."), err)
+				}
+			} else {
+				if err := loadFileInto(&result, match); err != nil {
+					return LoadResult{}, fmt.Errorf("appconfig: include %s: %w", match, err)
+				}
 			}
 		}
 	}
@@ -339,6 +346,32 @@ func (r LoadResult) ToContributionBundle() resource.ContributionBundle {
 	return bundle
 }
 
+// loadFileFragmentInto loads a file, extracts a subtree via the dot-separated
+// fragment path, and applies it as a single document.
+func loadFileFragmentInto(result *LoadResult, path string, fragment []string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	// Parse the whole file into a raw structure.
+	var raw any
+	if isJSON(data) {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse JSON %s: %w", path, err)
+		}
+	} else {
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse YAML %s: %w", path, err)
+		}
+	}
+	extracted := extractFragment(raw, fragment)
+	if extracted == nil {
+		return fmt.Errorf("fragment %s not found in %s", strings.Join(fragment, "."), path)
+	}
+	doc := Document{Kind: docKind(extracted), Raw: extracted}
+	return applyDocument(result, doc, path)
+}
+
 // loadFileInto parses a YAML/JSON file (supporting multi-doc YAML) and
 // appends the parsed documents to the result.
 func loadFileInto(result *LoadResult, path string) error {
@@ -453,6 +486,39 @@ func docKind(raw map[string]any) Kind {
 func isJSON(data []byte) bool {
 	trimmed := bytes.TrimSpace(data)
 	return len(trimmed) > 0 && trimmed[0] == '{'
+}
+
+// splitFragment splits a path#fragment reference. Returns the path and
+// the dot-separated fragment segments (nil if no fragment).
+func splitFragment(ref string) (string, []string) {
+	if i := strings.IndexByte(ref, '#'); i >= 0 {
+		frag := ref[i+1:]
+		if frag == "" {
+			return ref[:i], nil
+		}
+		return ref[:i], strings.Split(frag, ".")
+	}
+	return ref, nil
+}
+
+// extractFragment walks a dot-separated path into a YAML structure and
+// returns the subtree as a map. Returns nil if the path doesn't exist.
+func extractFragment(root any, path []string) map[string]any {
+	current := root
+	for _, key := range path {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current, ok = m[key]
+		if !ok {
+			return nil
+		}
+	}
+	if m, ok := current.(map[string]any); ok {
+		return m
+	}
+	return nil
 }
 
 // expandVars expands ~, $PWD, $HOME, and ${VAR} in a path pattern.
