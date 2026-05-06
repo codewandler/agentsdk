@@ -110,9 +110,16 @@ match these entries as the project starts publishing releases.
   resolution summary.
 - **`appconfig`** — new package providing declarative YAML-based application
   configuration as an alternative to the agentdir directory convention.
-  Supports inline agents, commands, workflows, actions, datasources,
-  triggers, resolution settings, and plugin references. Produces
-  `[]app.Option` via `Config.ToAppOptions()`.
+  Supports kind-discriminated multi-doc YAML (`config`, `agent`, `command`,
+  `workflow`, `action`, `datasource`, `trigger`), include globs with `~`,
+  `$HOME`, `$PWD` expansion, cycle detection, and multi-path loading.
+  Produces `[]app.Option` via `LoadResult.ToAppOptions()`.
+- **`agentsdk config print`** — prints expanded configuration as markdown YAML,
+  merging entry file and all includes.
+- **`agentsdk config validate`** — validates configuration structure and prints
+  resource counts.
+- **`--source` flag** on `config print` and `config validate` to load
+  additional source files.
 
 ### Changed
 
