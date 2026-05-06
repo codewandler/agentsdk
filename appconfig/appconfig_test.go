@@ -99,6 +99,30 @@ func TestLoadFileJSON(t *testing.T) {
 	require.Equal(t, "json-test", result.Config.Name)
 }
 
+func TestLoadFindsJSONEntryFile(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"include":[".agents"],"plugins":[{"name":"local_cli","config":{"mode":"safe"}}]}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".agents", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".agents", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	require.Equal(t, "local_cli", result.Config.Plugins[0].Name)
+	require.Len(t, result.Bundles, 1)
+	require.Equal(t, "main", result.Bundles[0].AgentSpecs[0].Name)
+}
+
+func TestLoadIgnoresJSONSourcesField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentsdk.app.json"), []byte(`{"sources":["resources"]}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources", "agents"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources", "agents", "main.md"), []byte("---\nname: main\n---\nsystem"), 0o644))
+
+	result, err := Load(dir)
+	require.NoError(t, err)
+	require.Empty(t, result.Bundles)
+}
+
 func TestLoadWithIncludes(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "resources"), 0o755))
@@ -155,8 +179,8 @@ func TestFindEntryFile(t *testing.T) {
 
 func TestToAppOptions(t *testing.T) {
 	result := LoadResult{
-		Config: Config{Name: "test", DefaultAgent: "main"},
-		Agents: []AgentDoc{{Name: "main", Description: "Main", System: "Hi"}},
+		Config:    Config{Name: "test", DefaultAgent: "main"},
+		Agents:    []AgentDoc{{Name: "main", Description: "Main", System: "Hi"}},
 		Workflows: []WorkflowDoc{{Name: "deploy", Description: "Deploy"}},
 	}
 
@@ -166,7 +190,7 @@ func TestToAppOptions(t *testing.T) {
 
 func TestToContributionBundle(t *testing.T) {
 	result := LoadResult{
-		Config: Config{Name: "test-app"},
+		Config:    Config{Name: "test-app"},
 		Workflows: []WorkflowDoc{{Name: "deploy", Description: "Deploy"}},
 		Commands:  []CommandDoc{{Name: "run", Description: "Run", Target: &CommandTarget{Workflow: "deploy"}}},
 		Actions:   []ActionDoc{{Name: "notify", Description: "Notify"}},

@@ -468,6 +468,49 @@ func TestValidateJSONFailsBrokenApp(t *testing.T) {
 	require.Contains(t, out.String(), "\"found\": true")
 }
 
+func TestConfigDiscoverRendersResourceTree(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "name: test-app\n---\nkind: agent\nname: coder\nsystem: test\n")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"config", "discover", dir})
+	require.NoError(t, cmd.Execute())
+
+	text := out.String()
+	require.Contains(t, text, "Sources:")
+	require.Contains(t, text, "agents")
+	require.Contains(t, text, "coder")
+	require.Contains(t, text, "Resolution:")
+}
+
+func TestConfigDiscoverJSONUsesSharedDiscoveryPayload(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "agentsdk.app.yaml"), "name: test-app\n---\nkind: agent\nname: coder\ndescription: Test coder\nsystem: test\n")
+
+	cmd := rootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"config", "discover", "-o", "json", dir})
+	require.NoError(t, cmd.Execute())
+
+	var payload struct {
+		Sources []string `json:"sources"`
+		Agents  []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &payload))
+	require.NotEmpty(t, payload.Sources)
+	require.Len(t, payload.Agents, 1)
+	require.Equal(t, "coder", payload.Agents[0].Name)
+	require.Equal(t, "Test coder", payload.Agents[0].Description)
+}
+
 func TestConfigSchemaWritesToStdout(t *testing.T) {
 	cmd := rootCmd()
 	var out bytes.Buffer

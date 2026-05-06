@@ -10,6 +10,7 @@ import (
 	"github.com/codewandler/agentsdk/capabilities/planner"
 	"github.com/codewandler/agentsdk/capability"
 	"github.com/codewandler/agentsdk/plugins/browserplugin"
+	"github.com/codewandler/agentsdk/plugins/configplugin"
 	"github.com/codewandler/agentsdk/plugins/plannerplugin"
 	"github.com/codewandler/agentsdk/tool"
 	"github.com/codewandler/agentsdk/tools/filesystem"
@@ -84,6 +85,8 @@ func (Factory) PluginForName(_ context.Context, name string, config map[string]a
 		return New(), nil
 	case plannerplugin.PluginName:
 		return plannerplugin.New(), nil
+	case "config":
+		return configplugin.New(), nil
 	case "browser":
 		return newBrowserPlugin(config), nil
 	default:

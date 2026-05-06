@@ -12,6 +12,10 @@ match these entries as the project starts publishing releases.
 
 ### Added
 
+- **`/config discover` slash command and `agentsdk config discover` CLI** —
+  config plugin sessions and config CLI users can now render configured resource
+  discovery and ResourceID resolution diagnostics from the same implementation
+  used by `agentsdk discover`.
 - **`action.Ctx` streaming** — `action.Ctx` now exposes `Output() io.Writer`
   for streaming unstructured output and `Emit(event)` for dispatching structured
   events (e.g. `action.StatusEvent`, `action.OutputEvent`) during execution.
@@ -127,6 +131,9 @@ match these entries as the project starts publishing releases.
 
 ### Changed
 
+- **`agentsdk discover`** now loads resources through `appconfig.Load`, so
+  app config entry files and default `.agents`/`.claude` includes share one
+  discovery path.
 - **`agentsdk build` prompt** changed from `builder> ` to `build> ` to match
   the command name consistently.
 - First-party app wiring (`devCmd`, `buildCmd`, `devAppOptions`,

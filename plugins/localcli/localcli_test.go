@@ -33,6 +33,10 @@ func TestPluginForName(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "planner", plugin.Name())
 
+	plugin, err = PluginForName(t.Context(), "config", nil)
+	require.NoError(t, err)
+	require.Equal(t, "config", plugin.Name())
+
 	_, err = PluginForName(t.Context(), "missing", nil)
 	require.ErrorContains(t, err, "not registered")
 }

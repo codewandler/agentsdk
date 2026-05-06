@@ -1,0 +1,10 @@
+kind: config
+name: agentsdk
+---
+kind: command
+name: foo
+description: Run foo command
+target:
+  prompt: |
+    Run foo command:
+    echo "FOO!"

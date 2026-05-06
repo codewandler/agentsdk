@@ -50,6 +50,9 @@ func (p *Plugin) Commands() []command.Command {
 		Sub("validate", command.Typed(p.validateCommand),
 			command.Description("Validate configuration structure"),
 		).
+		Sub("discover", command.Typed(p.discoverCommand),
+			command.Description("Discover configured resources and show ResourceID diagnostics"),
+		).
 		Sub("schema", command.Typed(schemaCommand),
 			command.Description("Show app config JSON Schema"),
 		).
@@ -57,11 +60,18 @@ func (p *Plugin) Commands() []command.Command {
 	if err != nil {
 		return nil
 	}
-	return []command.Command{tree}
+	rootDiscover := command.New(command.Descriptor{
+		Name:        "discover",
+		Description: "Discover configured resources and show ResourceID diagnostics",
+	}, func(ctx context.Context, _ command.Params) (command.Result, error) {
+		return p.discoverCommand(ctx, configDiscoverInput{})
+	})
+	return []command.Command{tree, rootDiscover}
 }
 
 type configPrintInput struct{}
 type configValidateInput struct{}
+type configDiscoverInput struct{}
 type configSchemaInput struct{}
 
 func (p *Plugin) printCommand(_ context.Context, _ configPrintInput) (command.Result, error) {
@@ -103,6 +113,22 @@ func (p *Plugin) validateCommand(_ context.Context, _ configValidateInput) (comm
 	fmt.Fprintf(&b, "Includes: %d\n", len(result.Config.Include))
 	fmt.Fprintf(&b, "Plugins: %d\n", len(result.Config.Plugins))
 	fmt.Fprintln(&b, "\n✓ configuration is valid")
+	return command.Display(command.TextPayload{Text: b.String()}), nil
+}
+
+func (p *Plugin) discoverCommand(_ context.Context, _ configDiscoverInput) (command.Result, error) {
+	dir := p.workspace
+	if dir == "" {
+		dir = "."
+	}
+	resolved, _, err := DiscoverResources(dir)
+	if err != nil {
+		return command.Result{}, err
+	}
+	var b strings.Builder
+	if err := PrintDiscoveryTree(&b, resolved); err != nil {
+		return command.Result{}, err
+	}
 	return command.Display(command.TextPayload{Text: b.String()}), nil
 }
 
